@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: agentscrape-pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: agentscrape
+      POSTGRES_PASSWORD: agentscrape
+      POSTGRES_DB: agentscrape
+    ports:
+      - "5433:5432"
+    volumes:
+      - agentscrape-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentscrape -d agentscrape"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  agentscrape-pgdata:
