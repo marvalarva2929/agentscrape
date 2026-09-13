@@ -9,13 +9,9 @@ from datetime import UTC, datetime
 
 import pytest_asyncio
 
-from agentscrape.db.enums import ExportStatus, ExtractionMethod, FetchMode, RecordRole
+from agentscrape.db.enums import ExportStatus, ExtractionMethod, FetchMode, PersonCategory
 from agentscrape.db.models import Export, Record, RecordVersion, Run, Site
-from agentscrape.export.service import (
-    BASE_COLUMNS,
-    EMAILED_COLUMN,
-    run_export,
-)
+from agentscrape.export.service import BASE_COLUMNS, run_export
 from agentscrape.orchestrator.events import Event, EventBus, EventType
 
 
@@ -29,12 +25,12 @@ async def populated(session):
     await session.flush()
     now = datetime.now(UTC)
     for i, (name, role, pgy) in enumerate(
-        [("Ann Riley", RecordRole.RESIDENT, 2), ("Ben Cole", RecordRole.FELLOW, None)]
+        [("Ann Riley", PersonCategory.RESIDENT, 2), ("Ben Cole", PersonCategory.FELLOW, None)]
     ):
         record = Record(
             site_id=site.id, identity_key=f"email:p{i}@med.example.edu",
             identity_kind="email", full_name=name, email=f"p{i}@med.example.edu",
-            role=role, specialty_normalized="Internal Medicine",
+            category=role, position="Resident", specialty_normalized="Internal Medicine",
             pgy_at_capture=pgy, pgy_capture_date=now.date(), class_of=2028,
             status="active", confidence=0.9, version_count=1,
         )
@@ -77,7 +73,6 @@ class TestExport:
         rows = _read(absolute_path(export.file_path))
         for column in BASE_COLUMNS:
             assert column in rows[0]
-        assert EMAILED_COLUMN not in rows[0]
 
         by_name = {r["Full Name"]: r for r in rows}
         assert by_name["Ann Riley"]["R/F"] == "R"      # resident
@@ -85,43 +80,10 @@ class TestExport:
         assert by_name["Ann Riley"]["Specialty"] == "Internal Medicine"
         assert by_name["Ann Riley"]["Hospital"] == "Example Teaching Hospital"
         assert by_name["Ann Riley"]["Class of"] == "2028"
-
-    async def test_emailed_column_is_present_but_empty_when_requested(
-        self, session, populated
-    ):
-        """Outreach state is the client's to track; the backend only leaves room."""
-        export = Export(
-            status=ExportStatus.PENDING, filters={}, include_emailed_column=True
-        )
-        session.add(export)
-        await session.commit()
-        await run_export(export.id)
-
-        from agentscrape.storage.artifacts import absolute_path
-
-        await session.refresh(export)
-        rows = _read(absolute_path(export.file_path))
-        assert EMAILED_COLUMN in rows[0]
-        assert all(row[EMAILED_COLUMN] == "" for row in rows)
-
-    async def test_provenance_columns_are_optional(self, session, populated):
-        export = Export(
-            status=ExportStatus.PENDING, filters={}, include_provenance=True
-        )
-        session.add(export)
-        await session.commit()
-        await run_export(export.id)
-
-        from agentscrape.storage.artifacts import absolute_path
-
-        await session.refresh(export)
-        rows = _read(absolute_path(export.file_path))
-        assert rows[0]["Source URL"] == "https://med.example.edu/residents"
-        assert rows[0]["Extraction Method"] == "known_path"
-        assert rows[0]["Screenshot Available"] == "True"
+        assert by_name["Ann Riley"]["Position"] == "Resident"
 
     async def test_export_respects_the_active_filters(self, session, populated):
-        export = Export(status=ExportStatus.PENDING, filters={"role": ["fellow"]})
+        export = Export(status=ExportStatus.PENDING, filters={"category": ["fellow"]})
         session.add(export)
         await session.commit()
         await run_export(export.id)

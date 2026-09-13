@@ -5,14 +5,17 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..db.enums import RecordRole
+from ..db.enums import PersonCategory
 
 
 @dataclass
 class ExtractedPerson:
     full_name: str | None = None
     email: str | None = None
-    role: RecordRole = RecordRole.UNKNOWN
+    # Coarse bucket for filtering.
+    category: PersonCategory = PersonCategory.UNKNOWN
+    # The title exactly as the page printed it.
+    position: str | None = None
     pgy: int | None = None
     class_of: int | None = None
     specialty_raw: str | None = None
@@ -31,7 +34,8 @@ class ExtractedPerson:
         return {
             "full_name": self.full_name,
             "email": self.email,
-            "role": str(self.role),
+            "category": str(self.category),
+            "position": self.position,
             "pgy": self.pgy,
             "class_of": self.class_of,
             "specialty_raw": self.specialty_raw,

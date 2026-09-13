@@ -1,4 +1,8 @@
-"""Record query, stats, versions, provenance and export endpoints."""
+"""People: query, stats, single person, versions, provenance and export.
+
+Named "people" to match the frontend's domain language. Internally a person is a
+`Record` with a `RecordVersion` history.
+"""
 
 from __future__ import annotations
 
@@ -9,6 +13,7 @@ from fastapi import APIRouter, Query
 from fastapi.responses import FileResponse
 
 from ...db.repositories import query as q
+from ...db.repositories.query import RecordFilters, query_records
 from ...domain.schemas import (
     ExportCreate,
     ExportOut,
@@ -22,8 +27,9 @@ from ...domain.schemas import (
 from ...storage.artifacts import absolute_path
 from ..deps import AuthedUser, DbSession
 from ..errors import AppError, ErrorCode, NotFoundError
+from ..security import sign_artifact_path
 
-router = APIRouter(tags=["records"])
+router = APIRouter(tags=["people"])
 
 
 def _filters_from_query(
@@ -31,7 +37,9 @@ def _filters_from_query(
     year: Annotated[list[int] | None, Query(description="Class-of year")] = None,
     site_id: Annotated[list[str] | None, Query()] = None,
     status: Annotated[list[str] | None, Query()] = None,
-    role: Annotated[list[str] | None, Query(description="resident|fellow|unknown")] = None,
+    category: Annotated[list[str] | None, Query(
+        description="resident|fellow|faculty|staff|student|alumni|unknown"
+    )] = None,
     pgy: Annotated[list[int] | None, Query(description="Current PGY level")] = None,
     hospital: Annotated[str | None, Query()] = None,
     run_id: Annotated[str | None, Query()] = None,
@@ -42,7 +50,7 @@ def _filters_from_query(
     include_role_accounts: Annotated[bool, Query()] = False,
 ) -> q.RecordFilters:
     return q.RecordFilters.from_query(
-        area=area, year=year, site_id=site_id, status=status, role=role, pgy=pgy,
+        area=area, year=year, site_id=site_id, status=status, category=category, pgy=pgy,
         hospital=hospital, run_id=run_id, changed_since=changed_since, q=q_,
         has_screenshot=has_screenshot, has_email=has_email,
         include_role_accounts=include_role_accounts,
@@ -52,7 +60,7 @@ def _filters_from_query(
 Filters = Annotated[q.RecordFilters, Query()]
 
 
-@router.get("/records", response_model=Page[RecordOut])
+@router.get("/people", response_model=Page[RecordOut])
 async def list_records(
     _: AuthedUser,
     session: DbSession,
@@ -64,7 +72,7 @@ async def list_records(
     year: Annotated[list[int] | None, Query()] = None,
     site_id: Annotated[list[str] | None, Query()] = None,
     status: Annotated[list[str] | None, Query()] = None,
-    role: Annotated[list[str] | None, Query()] = None,
+    category: Annotated[list[str] | None, Query()] = None,
     pgy: Annotated[list[int] | None, Query()] = None,
     hospital: str | None = None,
     run_id: str | None = None,
@@ -75,7 +83,7 @@ async def list_records(
     include_role_accounts: bool = False,
 ) -> Page[RecordOut]:
     filters = _filters_from_query(
-        area, year, site_id, status, role, pgy, hospital, run_id, changed_since,
+        area, year, site_id, status, category, pgy, hospital, run_id, changed_since,
         q_, has_screenshot, has_email, include_role_accounts,
     )
     items, next_cursor, has_more = await q.query_records(
@@ -89,7 +97,7 @@ async def list_records(
     )
 
 
-@router.get("/records/stats", response_model=RecordStats)
+@router.get("/people/stats", response_model=RecordStats)
 async def records_stats(
     _: AuthedUser,
     session: DbSession,
@@ -97,7 +105,7 @@ async def records_stats(
     year: Annotated[list[int] | None, Query()] = None,
     site_id: Annotated[list[str] | None, Query()] = None,
     status: Annotated[list[str] | None, Query()] = None,
-    role: Annotated[list[str] | None, Query()] = None,
+    category: Annotated[list[str] | None, Query()] = None,
     pgy: Annotated[list[int] | None, Query()] = None,
     hospital: str | None = None,
     run_id: str | None = None,
@@ -108,7 +116,7 @@ async def records_stats(
     include_role_accounts: bool = False,
 ) -> RecordStats:
     filters = _filters_from_query(
-        area, year, site_id, status, role, pgy, hospital, run_id, changed_since,
+        area, year, site_id, status, category, pgy, hospital, run_id, changed_since,
         q_, has_screenshot, has_email, include_role_accounts,
     )
     return RecordStats(**await q.record_stats(session, filters))
@@ -122,18 +130,32 @@ def _changes(raw: dict[str, Any] | None) -> list[FieldChange]:
 
 
 def _screenshot_url(version) -> str | None:
+    """A signed, expiring link the browser can put straight in an <img> tag."""
     if not version.screenshot_available or not version.screenshot_path:
         return None
-    return f"/api/v1/artifacts/{version.screenshot_path}"
+    query = sign_artifact_path(version.screenshot_path)
+    return f"/api/v1/artifacts/{version.screenshot_path}?{query}"
 
 
-@router.get("/records/{record_id}/versions", response_model=list[RecordVersionOut])
+@router.get("/people/{record_id}", response_model=RecordOut)
+async def get_person(record_id: str, _: AuthedUser, session: DbSession) -> RecordOut:
+    """One person. The frontend opens this from a table row."""
+    filters = RecordFilters.from_query(include_role_accounts=True)
+    items, _cursor, _more = await query_records(
+        session, filters, record_id=record_id, limit=1
+    )
+    if not items:
+        raise NotFoundError(f"No person with id {record_id!r}.")
+    return RecordOut(**items[0])
+
+
+@router.get("/people/{record_id}/versions", response_model=list[RecordVersionOut])
 async def record_versions(
     record_id: str, _: AuthedUser, session: DbSession
 ) -> list[RecordVersionOut]:
     record = await q.get_record(session, record_id)
     if record is None:
-        raise NotFoundError(f"No record with id {record_id!r}.")
+        raise NotFoundError(f"No person with id {record_id!r}.")
     return [
         RecordVersionOut(
             id=v.id, record_id=v.record_id, version_no=v.version_no, fields=v.fields,
@@ -149,7 +171,7 @@ async def record_versions(
     ]
 
 
-@router.get("/records/{record_id}/source", response_model=SourceOut)
+@router.get("/people/{record_id}/source", response_model=SourceOut)
 async def record_source(
     record_id: str,
     _: AuthedUser,
@@ -163,7 +185,7 @@ async def record_source(
     """
     record = await q.get_record(session, record_id)
     if record is None:
-        raise NotFoundError(f"No record with id {record_id!r}.")
+        raise NotFoundError(f"No person with id {record_id!r}.")
     version = await q.get_version(session, record_id, version_id)
     if version is None:
         raise NotFoundError(
@@ -188,7 +210,7 @@ async def record_source(
     )
 
 
-@router.post("/records/export", response_model=ExportOut, status_code=202)
+@router.post("/people/export", response_model=ExportOut, status_code=202)
 async def start_export(
     body: ExportCreate, _: AuthedUser, session: DbSession
 ) -> ExportOut:
@@ -203,7 +225,7 @@ async def start_export(
     )
 
 
-@router.get("/records/export/{export_id}", response_model=ExportOut)
+@router.get("/people/export/{export_id}", response_model=ExportOut)
 async def export_status(
     export_id: str, _: AuthedUser, session: DbSession
 ) -> ExportOut:
@@ -216,7 +238,7 @@ async def export_status(
     return ExportOut(
         id=export.id, status=export.status, row_count=export.row_count,
         download_url=(
-            f"/api/v1/records/export/{export.id}/download"
+            f"/api/v1/people/export/{export.id}/download"
             if export.status == ExportStatus.COMPLETED
             else None
         ),
@@ -224,7 +246,7 @@ async def export_status(
     )
 
 
-@router.get("/records/export/{export_id}/download")
+@router.get("/people/export/{export_id}/download")
 async def download_export(
     export_id: str, _: AuthedUser, session: DbSession
 ) -> FileResponse:

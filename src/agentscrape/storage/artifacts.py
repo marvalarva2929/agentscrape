@@ -28,6 +28,19 @@ def screenshot_expiry(captured_at: datetime | None = None) -> datetime | None:
     return base + timedelta(days=settings.screenshot_retention_days)
 
 
+def png_dimensions(image: bytes) -> tuple[int | None, int | None]:
+    """Width and height straight from the PNG IHDR chunk.
+
+    Avoids pulling in an image library for eight bytes of header. Returns
+    (None, None) for anything that is not a PNG.
+    """
+    if len(image) < 24 or image[:8] != b"\x89PNG\r\n\x1a\n":
+        return None, None
+    width = int.from_bytes(image[16:20], "big")
+    height = int.from_bytes(image[20:24], "big")
+    return (width or None), (height or None)
+
+
 def save_screenshot(image: bytes, *, site_run_id: str, url_hash: str) -> Path:
     """Write a screenshot under artifacts/screenshots/<site_run>/<url_hash>.png."""
     directory = settings.screenshot_dir / site_run_id
@@ -35,6 +48,60 @@ def save_screenshot(image: bytes, *, site_run_id: str, url_hash: str) -> Path:
     path = directory / f"{url_hash[:32]}.png"
     path.write_bytes(image)
     return path
+
+
+async def replace_school_screenshots(site_id: str, keep_site_run_id: str) -> dict[str, int]:
+    """Drop a school's older screenshots once it has been crawled again.
+
+    Product decision: a school keeps the screenshots from its most recent run
+    only. Provenance rows survive — URL, title, timestamp, method and field
+    boxes stay, and `screenshot_available` flips to false for the older ones.
+    """
+    from sqlalchemy import select, update
+
+    from ..db.models import Record, RecordVersion
+
+    removed = 0
+    async with session_scope() as session:
+        rows = (
+            await session.execute(
+                select(RecordVersion.id, RecordVersion.screenshot_path)
+                .join(Record, Record.id == RecordVersion.record_id)
+                .where(
+                    Record.site_id == site_id,
+                    RecordVersion.screenshot_available.is_(True),
+                    RecordVersion.site_run_id != keep_site_run_id,
+                )
+            )
+        ).all()
+
+        for version_id, stored in rows:
+            if stored:
+                try:
+                    absolute_path(stored).unlink(missing_ok=True)
+                except OSError as exc:
+                    log.warning("could not delete %s: %s", stored, exc)
+            await session.execute(
+                update(RecordVersion)
+                .where(RecordVersion.id == version_id)
+                .values(screenshot_available=False, screenshot_path=None)
+            )
+            removed += 1
+
+    # Sweep now-empty run directories so the artifact tree does not accumulate.
+    root = settings.screenshot_dir
+    if root.exists():
+        for directory in root.iterdir():
+            if directory.is_dir() and directory.name != keep_site_run_id:
+                try:
+                    if not any(directory.iterdir()):
+                        directory.rmdir()
+                except OSError:
+                    pass
+
+    if removed:
+        log.info("replaced %d older screenshots for site %s", removed, site_id)
+    return {"replaced": removed}
 
 
 def relative_path(path: Path) -> str:

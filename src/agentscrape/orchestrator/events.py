@@ -21,6 +21,22 @@ log = logging.getLogger("agentscrape.events")
 SUBSCRIBER_QUEUE_SIZE = 256
 
 
+class RunStage(StrEnum):
+    """Coarse phase, for the monitor's stage indicator.
+
+    Deliberately not one chip per pipeline node: the user wants to know roughly
+    where a crawl is, not which graph node is executing.
+    """
+
+    QUEUED = "queued"
+    DISCOVERING = "discovering"   # validating, skip-checking, finding candidates
+    DIRECTORY = "directory"       # working the candidate list
+    FINALIZING = "finalizing"     # reconciling and closing out
+    COMPLETE = "complete"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
 class EventType(StrEnum):
     RUN_STARTED = "run_started"
     AGENT_SPAWNED = "agent_spawned"

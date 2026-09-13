@@ -27,8 +27,8 @@ def score_record(
         score += 0.10
         if institutional_match(person.email, site_host):
             score += 0.10  # address on the institution's own domain
-    else:
-        score -= 0.20  # no address: not actionable for outreach
+    # No penalty for a missing address: many programmes simply do not publish
+    # them, and a name with a training year is still wanted.
 
     if person.full_name and len(person.full_name.split()) >= 2:
         score += 0.05
@@ -38,8 +38,8 @@ def score_record(
     if person.pgy is not None or person.class_of is not None:
         score += 0.05  # a year corroborates that this is a trainee listing
 
-    if person.role.value in ("resident", "fellow"):
-        score += 0.05
+    if person.position:
+        score += 0.05  # the page stated a title, so this is a real listing
 
     if extraction_method is ExtractionMethod.KNOWN_PATH:
         score += 0.05  # a page with a track record of yielding real people

@@ -33,25 +33,31 @@ class Page[T](BaseModel):
 class RecordOut(ApiModel):
     id: str
     site_id: str
+    program_id: str | None = None
     hospital: str | None = None
     full_name: str | None
     email: str | None
-    role: str = Field(description="resident | fellow | unknown (the R/F column)")
+    category: str = Field(
+        description="resident | fellow | faculty | staff | student | alumni | unknown"
+    )
+    position: str | None = Field(
+        default=None, description="Title exactly as the page printed it"
+    )
     role_account: bool = False
 
     area: str | None = Field(default=None, description="Normalized specialty")
     area_raw: str | None = None
-    year: int | None = Field(default=None, description="Class-of graduation year")
-    year_source: str | None = Field(
-        default=None, description="extracted | derived — how `year` was determined"
+    year: int | None = Field(
+        default=None, description="Class-of year, only when the page stated it"
     )
 
     pgy: int | None = Field(
-        default=None, description="PGY level today, rolled forward from capture"
+        default=None,
+        description="Training year exactly as printed; never rolled forward",
     )
-    pgy_at_capture: int | None = None
-    pgy_capture_date: date | None = None
-    pgy_source: str | None = None
+    pgy_capture_date: date | None = Field(
+        default=None, description="When the PGY above was read from the page"
+    )
 
     status: str
     confidence: float
@@ -113,7 +119,7 @@ class SourceOut(BaseModel):
 class RecordStats(BaseModel):
     total: int
     by_status: dict[str, int]
-    by_role: dict[str, int]
+    by_category: dict[str, int]
     by_area: dict[str, int]
     sites_covered: int
     recently_changed: int = Field(description="Changed in the last 30 days")
@@ -243,6 +249,37 @@ class KnownPathOut(ApiModel):
     is_active: bool
 
 
+class SchoolOut(ApiModel):
+    """Matches the frontend's `School` type."""
+
+    id: str
+    name: str
+    location: str | None = None
+    root_domain: str
+    canonical_url: str
+    program_count: int = 0
+    people_count: int = 0
+    last_updated: datetime | None = None
+    validation_status: str
+    validation_reason: str | None = None
+
+
+class ProgramOut(ApiModel):
+    """Matches the frontend's `Program` type."""
+
+    id: str
+    school_id: str = Field(description="Owning school")
+    name: str
+    specialty: str
+    type: str | None = Field(default=None, description="Residency / Fellowship")
+    resident_count: int = 0
+    fellow_count: int = 0
+    people_count: int = 0
+    last_updated: datetime | None = None
+    start_url: str | None = None
+    directory_url: str | None = None
+
+
 class SiteOut(ApiModel):
     id: str
     root_domain: str
@@ -258,6 +295,11 @@ class SiteOut(ApiModel):
 
 
 class SiteDetail(SiteOut):
+    known_paths: list[KnownPathOut] = Field(default_factory=list)
+    recent_runs: list[SiteRunOut] = Field(default_factory=list)
+
+
+class SchoolDetail(SchoolOut):
     known_paths: list[KnownPathOut] = Field(default_factory=list)
     recent_runs: list[SiteRunOut] = Field(default_factory=list)
 
@@ -316,6 +358,31 @@ class ExportOut(ApiModel):
     error: str | None
     created_at: datetime
     expires_at: datetime | None
+
+
+class SubmissionOut(ApiModel):
+    """A client's CSV request, as staff see it in the admin queue."""
+
+    id: str
+    filename: str | None
+    note: str | None
+    status: str
+    row_count: int
+    valid_count: int
+    rows: list[CsvRowPreview] = Field(default_factory=list)
+    run_id: str | None = None
+    created_at: datetime
+    reviewed_at: datetime | None = None
+
+
+class SubmissionRunRequest(BaseModel):
+    """Staff launching a submitted CSV. One number: the budget."""
+
+    max_spend_usd: float | None = Field(
+        default=None, gt=0, description="Stop the run once estimated spend reaches this"
+    )
+    concurrency: int = Field(default=4, ge=1, le=8)
+    force_rescan: bool = False
 
 
 class MetaValues(BaseModel):

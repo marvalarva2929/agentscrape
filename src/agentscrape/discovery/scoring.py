@@ -25,7 +25,12 @@ _STRONG_SIGNALS: dict[str, float] = {
     "directory": 7.0, "roster": 7.0, "people": 6.5, "our-team": 6.0,
     "profiles": 6.0, "trainees": 8.0, "residency": 5.5, "fellowship": 5.5,
     "gme": 5.0, "graduate-medical-education": 5.5, "who-we-are": 4.5,
-    "team": 4.0, "staff": 4.0, "contact": 3.0, "faculty": 3.0,
+    "team": 4.0, "staff": 4.0, "contact": 3.0,
+    # Everyone on the site is now collected, so faculty and alumni listings are
+    # wanted sources rather than pages to avoid. Ranked below current-trainee
+    # rosters, which are still the densest and most frequently updated.
+    "faculty": 6.5, "faculty-directory": 7.5, "our-faculty": 7.0,
+    "alumni": 5.0, "graduates": 5.0, "former-residents": 5.5,
 }
 # Tokens that make a page less likely to be a roster.
 _NEGATIVE_SIGNALS: dict[str, float] = {
@@ -33,8 +38,7 @@ _NEGATIVE_SIGNALS: dict[str, float] = {
     "donate": -7.0, "login": -8.0, "search": -6.0, "privacy": -8.0, "terms": -8.0,
     "sitemap": -6.0, "rss": -8.0, "feed": -8.0, "archive": -4.0, "tag": -5.0,
     "category": -4.0, "press": -5.0, "media": -4.0, "career": -3.0, "jobs": -3.0,
-    "alumni": -12.0, "alumnae": -12.0, "graduates": -10.0, "graduated": -10.0,
-    "former": -10.0, "placement": -6.0, "placements": -6.0, "outcomes": -4.0,
+    "placement": -2.0, "placements": -2.0, "outcomes": -4.0,
     "history": -5.0, "apply": -2.5, "admissions": -2.0, "research": -1.5,
     "publication": -4.0, "patient": -3.0, "appointment": -4.0, "billing": -7.0,
     "insurance": -6.0, "cart": -8.0, "shop": -8.0, "policy": -6.0,
@@ -129,16 +133,6 @@ def score_url(
     if _YEAR_IN_PATH.search(path) and score > 0:
         score += 1.5
         reasons.append("+1.5 year in path")
-
-    # Faculty-only pages cost budget and yield people we discard, so they rank
-    # below trainee rosters. Applied outside the break-once loop above, where
-    # "directory" would otherwise absorb the whole match for "faculty-directory".
-    combined = f"{hyphenated} {(title or '').lower()}"
-    if "faculty" in combined and not re.search(
-        r"resident|fellow|house ?staff|trainee|pgy", combined
-    ):
-        score -= 4.0
-        reasons.append("-4 faculty-only listing")
 
     depth = path_depth(canonical)
     if depth > 4:

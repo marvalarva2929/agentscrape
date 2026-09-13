@@ -38,6 +38,8 @@ class SiteState(TypedDict, total=False):
     steps_taken: int
     candidates_considered: int
     known_path_hits: int
+    # Consecutive candidate pages that produced nobody new.
+    barren_streak: int
 
     # --- results ---
     records_new: int
@@ -86,6 +88,7 @@ def initial_state(
         steps_taken=0,
         candidates_considered=0,
         known_path_hits=0,
+        barren_streak=0,
         records_new=0,
         records_changed=0,
         records_unchanged=0,

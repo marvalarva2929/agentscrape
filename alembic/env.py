@@ -15,6 +15,18 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
+
+def _database_url() -> str:
+    """The alembic config wins when it names a URL, otherwise app settings.
+
+    Lets a caller (notably the migration test) point a run at a scratch database
+    without mutating process environment, which would leak into the cached
+    application engine.
+    """
+    configured = config.get_main_option("sqlalchemy.url", None)
+    return configured or settings.database_url
+
+
 # Indexes created with raw SQL because SQLAlchemy cannot express them portably:
 # a functional GIN index over to_tsvector, and two pg_trgm indexes. They are not
 # in the model metadata, so autogenerate would otherwise emit DROP INDEX for
@@ -35,7 +47,7 @@ def include_object(obj, name, type_, reflected, compare_to):
 
 def run_migrations_offline() -> None:
     context.configure(
-        url=settings.database_url,
+        url=_database_url(),
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
@@ -56,7 +68,7 @@ def do_run_migrations(connection) -> None:
 
 
 async def run_async_migrations() -> None:
-    engine = create_async_engine(settings.database_url, poolclass=None)
+    engine = create_async_engine(_database_url(), poolclass=None)
     async with engine.connect() as connection:
         await connection.run_sync(do_run_migrations)
     await engine.dispose()

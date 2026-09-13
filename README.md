@@ -1,9 +1,13 @@
 # agentscrape
 
 Backend for a contact-extraction platform. It takes a CSV of teaching-hospital
-and medical-school URLs, finds the **residents and fellows** published on each
-institution's web presence, stores them with full provenance, and tracks how the
-rosters change across repeated runs.
+and medical-school URLs and collects **everyone published on each institution's
+web presence** — residents, fellows, faculty, program directors, coordinators,
+staff, students and alumni — each labelled with their printed title, stored with
+full provenance, and tracked across repeated runs.
+
+Clients do not start crawls: they submit a CSV of the schools they want, and
+staff review and launch it from the admin area (billing is per school).
 
 Everything runs on one box: API, orchestrator, agents, Postgres, file storage.
 The server is started on demand and stopped when idle, so nothing assumes
@@ -46,31 +50,35 @@ uv run pytest -q
 
 The `/api/v1` contract is implemented as specified. Four things you need:
 
-1. **`area` is the normalized specialty; `year` is the class-of year.** The
-   input CSV is only links, so neither is supplied by the upload. Specialty is
-   inferred per record from URL path, subdomain and page title, then collapsed
-   onto a fixed ACGME vocabulary. `/meta/areas` and `/meta/years` return exactly
-   the values these filters accept.
+1. **Navigation is School → Program → Person.** A programme is one training
+   programme at a school, keyed on the normalized specialty and created
+   automatically as people are extracted. `/schools`, `/schools/:id/programs`,
+   `/programs/:id/people`.
 
-2. **Extra `/records` filters, all optional and additive:** `role`
-   (`resident|fellow|unknown` — your R/F column), `pgy`, `hospital`,
-   `has_email`, `include_role_accounts`. `/records/stats` accepts the identical
-   set and returns every aggregate you need, so nothing has to be counted
-   client-side.
+2. **`category` and `position`.** Everyone on a site is collected, so a person
+   has a `category` (`resident|fellow|faculty|staff|student|alumni|unknown`) for
+   filtering and a `position` holding their title exactly as printed
+   ("Program Director", "Associate Professor").
 
-3. **SSE auth.** `EventSource` cannot set an `Authorization` header, so
-   `GET /runs/{id}/events` also accepts `?token=`. It is the only endpoint that
-   does. Everything else requires `Authorization: Bearer <token>`.
+3. **Nothing is inferred.** If a page does not state a value, the field is
+   blank. `pgy` is exactly what was printed, never rolled forward, and
+   `pgy_capture_date` says when it was read. There is no derived class-of.
 
-4. **`pgy` is computed, `pgy_at_capture` is stored.** A PGY-2 in 2026 is a PGY-3
-   in 2027, so the API returns `pgy` rolled forward to today (July 1 rollover)
-   alongside the raw captured value and its date. Filtering on `pgy` means
-   "PGY-n today". Change detection uses the captured value, so the annual
-   rollover never shows up as a data change.
+4. **Two passwords, Bearer tokens.** The client password grants browse, export
+   and CSV submission; a separate admin password grants the submissions queue,
+   launching runs and spend. Tokens rather than cookies because the frontend is
+   served from GitHub Pages — a session cookie would be third-party to this API
+   and blocked by Safari and increasingly Chrome. `GET /runs/{id}/events` also
+   accepts `?token=` since `EventSource` cannot set headers.
 
-`Has Been Emailed?` is deliberately **not** stored. It is your team's state, not
-scraped data. `POST /records/export` takes `include_emailed_column: true` and
-emits the column empty for you to fill in.
+5. **Screenshots use signed links.** `screenshot_url` comes back with `exp` and
+   `sig` query parameters and is valid for an hour, so it can go straight into
+   an `<img src>` without an Authorization header. Each version also carries
+   `screenshot_width`/`screenshot_height` so the stored per-field boxes (in
+   screenshot pixels) can be positioned as percentages.
+
+6. **Missing people sort to the bottom** of any list rather than being filtered
+   out, marked with `status: "missing"`.
 
 ---
 
@@ -84,7 +92,8 @@ validate → skip check → link discovery → rank → extract (loop) → recon
 never silently filtered. Hostname patterns decide the clear cases; homepage
 content decides the rest; the model is consulted only when both are
 inconclusive. A rejection surfaces in `POST /runs/validate` before compute is
-spent, and as `K12_INSTITUTION_REJECTED` on the SiteRun.
+spent, and as `K12_INSTITUTION_REJECTED` on the SiteRun. (Schools are a separate
+project; this backend is for post-secondary institutions only.)
 
 **Skip check.** Two cheap tiers. First, re-fetch the known-good paths and
 compare content hashes — all unchanged means skip without parsing anything.
@@ -113,6 +122,11 @@ pushed far down — they are former trainees, out of scope.
 | Render + screenshot | expensive | JS-rendered page, no addresses in the DOM, or contacts published as images |
 | One interaction | expensive | only when the accessibility tree offers pagination or "load more" |
 
+A site stops early once several consecutive candidate pages yield nobody new
+(`STOP_AFTER_BARREN_PAGES`). Candidates are ranked, so a barren stretch means
+the productive pages are already behind us — the crawl ends when the site stops
+giving rather than at a fixed count.
+
 The method used is recorded on every extraction, as both a debugging and a cost
 signal. When the agent drives the browser it identifies elements from the
 **accessibility tree by role and name** — never by predicting pixel coordinates
@@ -137,11 +151,11 @@ and per-field bounding boxes so the frontend can highlight exactly where on the
 page a value was found. Boxes are measured from the real DOM with
 `getBoundingClientRect`, not guessed by the model.
 
-Screenshots expire on a configurable window; **provenance survives expiry**. The
-sweeper deletes the image and flips `screenshot_available` to false, leaving URL,
-title, timestamp, method and field locations intact. It runs at API startup and
-via `agentscrape sweep`, not cron, because a box that stops when idle would
-never fire a schedule.
+A school keeps only its **most recent run's** screenshots: when a school is
+crawled again, the previous images are deleted and replaced. **Provenance
+survives** — URL, title, timestamp, method and field locations stay, and
+`screenshot_available` flips to false for the superseded versions. Skipped runs
+capture nothing and therefore replace nothing.
 
 ---
 

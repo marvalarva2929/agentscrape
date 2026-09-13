@@ -55,10 +55,26 @@ class RecordStatus(StrEnum):
     MISSING = "missing"
 
 
-class RecordRole(StrEnum):
+class PersonCategory(StrEnum):
+    """Coarse bucket for filtering. The person's printed title is kept verbatim
+    alongside this in `Record.position`.
+
+    Everyone published on an institution's site is collected and labelled; this
+    is a classification, not a filter. It used to be resident/fellow only, with
+    everyone else discarded.
+    """
+
     RESIDENT = "resident"
     FELLOW = "fellow"
+    FACULTY = "faculty"
+    STAFF = "staff"
+    STUDENT = "student"
+    ALUMNI = "alumni"
     UNKNOWN = "unknown"
+
+
+# The trainee categories, used for the resident/fellow counts the UI shows.
+TRAINEE_CATEGORIES = frozenset({PersonCategory.RESIDENT, PersonCategory.FELLOW})
 
 
 class IdentityKind(StrEnum):
@@ -83,17 +99,21 @@ class SkipReason(StrEnum):
     SIMILARITY_THRESHOLD = "similarity_threshold"
 
 
+class SubmissionStatus(StrEnum):
+    """Lifecycle of a client's CSV request."""
+
+    PENDING = "pending"       # submitted, awaiting staff review
+    RUNNING = "running"       # a run was launched from it
+    DONE = "done"
+    REJECTED = "rejected"
+
+
 class ExportStatus(StrEnum):
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
     EXPIRED = "expired"
-
-
-class FieldSource(StrEnum):
-    EXTRACTED = "extracted"
-    DERIVED = "derived"
 
 
 class StopReason(StrEnum):

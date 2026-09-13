@@ -14,53 +14,23 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-# Canonical specialty -> the PGY level a trainee holds in their FINAL year.
-#
-# This is deliberately the final PGY level, not the accredited program length.
-# Radiation Oncology is a four-year program but its residents are PGY-2 through
-# PGY-5, so a page listing "PGY-5" means graduating this year. Storing the
-# accredited length here produced no class year at all for those residents.
-# Fellowship entries count from intern year too (Cardiology after Internal
-# Medicine finishes at PGY-6).
-SPECIALTY_FINAL_PGY: dict[str, int] = {
-    "Anesthesiology": 4,
-    "Cardiology": 6,
-    "Child Neurology": 5,
-    "Dermatology": 4,
-    "Emergency Medicine": 3,
-    "Family Medicine": 3,
-    "Gastroenterology": 6,
-    "General Surgery": 5,
-    "Hematology and Oncology": 6,
-    "Infectious Disease": 5,
-    "Internal Medicine": 3,
-    "Interventional Radiology": 6,
-    "Medical Genetics": 4,
-    "Nephrology": 5,
-    "Neurological Surgery": 7,
-    "Neurology": 4,
-    "Nuclear Medicine": 4,
-    "Obstetrics and Gynecology": 4,
-    "Ophthalmology": 4,
-    "Oral and Maxillofacial Surgery": 6,
-    "Orthopaedic Surgery": 5,
-    "Otolaryngology": 5,
-    "Pathology": 4,
-    "Pediatrics": 3,
-    "Physical Medicine and Rehabilitation": 4,
-    "Plastic Surgery": 6,
-    "Preventive Medicine": 3,
-    "Psychiatry": 4,
-    "Pulmonary and Critical Care": 6,
-    "Radiation Oncology": 5,
-    "Radiology": 5,
-    "Rheumatology": 5,
-    "Thoracic Surgery": 6,
-    "Urology": 5,
-    "Vascular Surgery": 5,
-}
+# The canonical specialty vocabulary. Free-text specialties from pages are
+# collapsed onto these so filtering works.
+CANONICAL_SPECIALTIES_SOURCE: tuple[str, ...] = (
+    "Anesthesiology", "Cardiology", "Child Neurology", "Dermatology",
+    "Emergency Medicine", "Family Medicine", "Gastroenterology",
+    "General Surgery", "Hematology and Oncology", "Infectious Disease",
+    "Internal Medicine", "Interventional Radiology", "Medical Genetics",
+    "Nephrology", "Neurological Surgery", "Neurology", "Nuclear Medicine",
+    "Obstetrics and Gynecology", "Ophthalmology",
+    "Oral and Maxillofacial Surgery", "Orthopaedic Surgery", "Otolaryngology",
+    "Pathology", "Pediatrics", "Physical Medicine and Rehabilitation",
+    "Plastic Surgery", "Preventive Medicine", "Psychiatry",
+    "Pulmonary and Critical Care", "Radiation Oncology", "Radiology",
+    "Rheumatology", "Thoracic Surgery", "Urology", "Vascular Surgery",
+)
 
-CANONICAL_SPECIALTIES: tuple[str, ...] = tuple(sorted(SPECIALTY_FINAL_PGY))
+CANONICAL_SPECIALTIES: tuple[str, ...] = tuple(sorted(CANONICAL_SPECIALTIES_SOURCE))
 
 # Alias -> canonical. Keys are matched after _squash() (lowercased, alnum + single spaces).
 _ALIASES: dict[str, str] = {
@@ -318,14 +288,3 @@ def infer_specialty(
                 return match
 
     return SpecialtyMatch(None, explicit or page_title or "", 0.0)
-
-
-def final_pgy(canonical_specialty: str | None) -> int | None:
-    """PGY level in the final year of this specialty, for class-of derivation."""
-    if not canonical_specialty:
-        return None
-    return SPECIALTY_FINAL_PGY.get(canonical_specialty)
-
-
-# Kept as an alias: callers read better as "how long is this programme".
-program_years = final_pgy

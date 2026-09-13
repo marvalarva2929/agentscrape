@@ -17,6 +17,8 @@ import logging
 
 from langgraph.graph import END, StateGraph
 
+from ..config import settings
+from ..orchestrator.events import RunStage
 from .checkpoint import apply_checkpoint, load_checkpoint
 from .deps import PipelineDeps
 from .nodes.discover import discover_links
@@ -44,15 +46,18 @@ def build_site_graph(deps: PipelineDeps):
         return await validate_institution(state, deps)
 
     async def _skip(state: SiteState) -> SiteState:
+        await deps.emit_stage(state, RunStage.DISCOVERING)
         return await skip_check(state, deps)
 
     async def _discover(state: SiteState) -> SiteState:
         return await discover_links(state, deps)
 
     async def _extract(state: SiteState) -> SiteState:
+        await deps.emit_stage(state, RunStage.DIRECTORY)
         return await extract_batch(state, deps)
 
     async def _finalize(state: SiteState) -> SiteState:
+        await deps.emit_stage(state, RunStage.FINALIZING)
         return await finalize(state, deps)
 
     def _after_entry(state: SiteState) -> str:
@@ -77,6 +82,15 @@ def build_site_graph(deps: PipelineDeps):
             log.info("step budget exhausted for %s", state["root_domain"])
             return "finalize"
         if state.get("cursor", 0) >= len(state.get("candidates", [])):
+            return "finalize"
+        barren = state.get("barren_streak", 0)
+        if barren >= settings.stop_after_barren_pages:
+            # The site has stopped yielding new people. Ranked candidates mean
+            # the remaining ones are the least promising, so keep the budget.
+            log.info(
+                "%s: %d consecutive pages with nobody new; stopping",
+                state["root_domain"], barren,
+            )
             return "finalize"
         return "extract"
 

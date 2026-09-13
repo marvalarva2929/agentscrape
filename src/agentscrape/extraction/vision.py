@@ -11,26 +11,24 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from ..db.enums import RecordRole
+from ..db.enums import PersonCategory
 from ..domain.matching import normalize_email
 from ..domain.pgy import parse_class_of, parse_pgy
 from ..llm.prompts import EXTRACTION_SYSTEM, extraction_user_prompt
 from ..llm.provider import VisionProvider, get_provider
 from ..llm.usage import UsageMeter
 from ..validation.email import is_plausible
-from .html_people import _extract_name, _is_excluded
+from .html_people import _extract_name, page_is_alumni_listing
 from .person import ExtractedPerson
 
 log = logging.getLogger("agentscrape.extract.vision")
 
-_ROLE_MAP = {
-    "resident": RecordRole.RESIDENT,
-    "fellow": RecordRole.FELLOW,
-    "unknown": RecordRole.UNKNOWN,
-}
+_CATEGORY_MAP = {c.value: c for c in PersonCategory}
 
 
-def _coerce_person(raw: dict[str, Any], *, page_text: str) -> ExtractedPerson | None:
+def _coerce_person(
+    raw: dict[str, Any], *, page_text: str, page_is_alumni: bool = False
+) -> ExtractedPerson | None:
     """Validate one model-emitted object. Returns None when it is not usable."""
     if not isinstance(raw, dict):
         return None
@@ -48,7 +46,14 @@ def _coerce_person(raw: dict[str, Any], *, page_text: str) -> ExtractedPerson | 
         log.info("discarding email %r: not present in page text", email)
         email = None
 
-    role = _ROLE_MAP.get(str(raw.get("role", "")).strip().lower(), RecordRole.UNKNOWN)
+    category = _CATEGORY_MAP.get(
+        str(raw.get("category", "")).strip().lower(), PersonCategory.UNKNOWN
+    )
+    position = raw.get("position")
+    position = str(position).strip() if isinstance(position, str) and position.strip() else None
+    # A page-level alumni listing overrides whatever the model said per person.
+    if page_is_alumni:
+        category = PersonCategory.ALUMNI
 
     pgy = raw.get("pgy")
     if isinstance(pgy, str):
@@ -63,12 +68,9 @@ def _coerce_person(raw: dict[str, Any], *, page_text: str) -> ExtractedPerson | 
     specialty = raw.get("specialty")
     specialty = str(specialty).strip() if isinstance(specialty, str) and specialty.strip() else None
 
-    if name and _is_excluded(name):
-        return None
-
     person = ExtractedPerson(
-        full_name=name, email=email, role=role, pgy=pgy, class_of=class_of,
-        specialty_raw=specialty,
+        full_name=name, email=email, category=category, position=position,
+        pgy=pgy, class_of=class_of, specialty_raw=specialty,
         locate_hints=[t for t in (name, email) if t],
         # Vision is inherently less certain than a labelled table.
         confidence=0.7 if (name and email) else 0.5,
@@ -112,6 +114,14 @@ async def extract_with_vision(
     if not isinstance(payload, list):
         return []
 
-    people = [p for p in (_coerce_person(item, page_text=text) for item in payload) if p]
+    page_is_alumni = page_is_alumni_listing(title, url)
+    people = [
+        p
+        for p in (
+            _coerce_person(item, page_text=text, page_is_alumni=page_is_alumni)
+            for item in payload
+        )
+        if p
+    ]
     log.info("vision extraction: %d people from %s", len(people), url)
     return people

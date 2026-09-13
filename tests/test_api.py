@@ -14,7 +14,7 @@ from httpx import ASGITransport, AsyncClient
 from agentscrape.db.enums import (
     ExtractionMethod,
     FetchMode,
-    RecordRole,
+    PersonCategory,
     RecordStatus,
 )
 from agentscrape.db.models import Record, RecordVersion, Run, Site, SiteRun
@@ -23,7 +23,9 @@ API = "/api/v1"
 
 
 @pytest_asyncio.fixture
-async def client():
+async def client(reset_global_engine):
+    """Depends on the engine reset: the app uses the module-level engine, which
+    is bound to whichever event loop first created it."""
     from agentscrape.api.main import create_app
 
     app = create_app()
@@ -62,17 +64,17 @@ async def seeded(session):
     now = datetime.now(UTC)
     made = []
     people = [
-        ("Naomi Goldrich", "naomi@med.example.edu", RecordRole.RESIDENT, 5, 2027, True),
-        ("Chad Caraway", "chad@med.example.edu", RecordRole.RESIDENT, 2, 2030, False),
-        ("Mira Patel", "mira@med.example.edu", RecordRole.FELLOW, None, 2028, True),
+        ("Naomi Goldrich", "naomi@med.example.edu", PersonCategory.RESIDENT, 5, 2027, True),
+        ("Chad Caraway", "chad@med.example.edu", PersonCategory.RESIDENT, 2, 2030, False),
+        ("Mira Patel", "mira@med.example.edu", PersonCategory.FELLOW, None, 2028, True),
     ]
     for name, email, role, pgy, class_of, has_shot in people:
         record = Record(
             site_id=site.id, identity_key=f"email:{email}", identity_kind="email",
-            full_name=name, email=email, role=role,
+            full_name=name, email=email, category=role, position="Resident",
             specialty_normalized="Radiation Oncology", specialty_raw="Radiation Oncology",
-            pgy_at_capture=pgy, pgy_capture_date=now.date(), pgy_source="extracted",
-            class_of=class_of, class_of_source="extracted",
+            pgy_at_capture=pgy, pgy_capture_date=now.date(),
+            class_of=class_of,
             status=RecordStatus.ACTIVE, confidence=0.9, version_count=1,
             last_run_id=run.id, last_changed_at=now,
         )
@@ -108,7 +110,7 @@ class TestAuth:
         assert response.json()["status"] in ("ok", "degraded")
 
     async def test_missing_credential_is_401_with_a_branchable_code(self, client):
-        response = await client.get(f"{API}/records")
+        response = await client.get(f"{API}/people")
         assert response.status_code == 401
         # The frontend shows the login screen on this code, not an error toast.
         assert response.json()["error"]["code"] == "AUTH_REQUIRED"
@@ -120,13 +122,13 @@ class TestAuth:
 
     async def test_garbage_token_is_rejected(self, client):
         response = await client.get(
-            f"{API}/records", headers={"Authorization": "Bearer nonsense"}
+            f"{API}/people", headers={"Authorization": "Bearer nonsense"}
         )
         assert response.status_code == 401
         assert response.json()["error"]["code"] == "AUTH_INVALID_TOKEN"
 
     async def test_valid_token_is_accepted(self, client, auth):
-        assert (await client.get(f"{API}/records", headers=auth)).status_code == 200
+        assert (await client.get(f"{API}/people", headers=auth)).status_code == 200
 
     async def test_sse_accepts_a_query_token(self, client, token, seeded):
         # EventSource cannot set headers, so this endpoint takes ?token=.
@@ -137,7 +139,7 @@ class TestAuth:
 
 class TestErrorEnvelope:
     async def test_not_found_shape(self, client, auth):
-        response = await client.get(f"{API}/records/rec_missing/versions", headers=auth)
+        response = await client.get(f"{API}/people/rec_missing/versions", headers=auth)
         assert response.status_code == 404
         error = response.json()["error"]
         assert error["code"] == "NOT_FOUND"
@@ -150,7 +152,7 @@ class TestErrorEnvelope:
 
     async def test_bad_cursor_is_a_clean_code(self, client, auth):
         response = await client.get(
-            f"{API}/records", params={"cursor": "!!!bad!!!"}, headers=auth
+            f"{API}/people", params={"cursor": "!!!bad!!!"}, headers=auth
         )
         assert response.status_code == 400
         assert response.json()["error"]["code"] == "INVALID_CURSOR"
@@ -158,49 +160,49 @@ class TestErrorEnvelope:
 
 class TestRecordsQuery:
     async def test_lists_records_with_contract_field_names(self, client, auth, seeded):
-        response = await client.get(f"{API}/records", headers=auth)
+        response = await client.get(f"{API}/people", headers=auth)
         assert response.status_code == 200
         body = response.json()
         assert len(body["items"]) == 3
         row = body["items"][0]
         # `area` is the normalized specialty and `year` the class-of year.
-        for field in ("id", "area", "year", "pgy", "role", "hospital", "status",
-                      "screenshot_available", "confidence"):
+        for field in ("id", "area", "year", "pgy", "category", "position",
+                      "hospital", "status", "screenshot_available", "confidence"):
             assert field in row
         assert row["area"] == "Radiation Oncology"
         assert row["hospital"] == "Example Teaching Hospital"
 
     async def test_filter_by_area_and_year(self, client, auth, seeded):
         response = await client.get(
-            f"{API}/records", params={"area": "Radiation Oncology", "year": 2027},
+            f"{API}/people", params={"area": "Radiation Oncology", "year": 2027},
             headers=auth,
         )
         items = response.json()["items"]
         assert len(items) == 1 and items[0]["year"] == 2027
 
-    async def test_filter_by_role(self, client, auth, seeded):
-        response = await client.get(f"{API}/records", params={"role": "fellow"}, headers=auth)
+    async def test_filter_by_category(self, client, auth, seeded):
+        response = await client.get(f"{API}/people", params={"category": "fellow"}, headers=auth)
         items = response.json()["items"]
-        assert len(items) == 1 and items[0]["role"] == "fellow"
+        assert len(items) == 1 and items[0]["category"] == "fellow"
 
     async def test_filter_by_screenshot_availability(self, client, auth, seeded):
         available = await client.get(
-            f"{API}/records", params={"has_screenshot": True}, headers=auth
+            f"{API}/people", params={"has_screenshot": True}, headers=auth
         )
         expired = await client.get(
-            f"{API}/records", params={"has_screenshot": False}, headers=auth
+            f"{API}/people", params={"has_screenshot": False}, headers=auth
         )
         assert len(available.json()["items"]) == 2
         assert len(expired.json()["items"]) == 1
 
     async def test_free_text_search(self, client, auth, seeded):
-        response = await client.get(f"{API}/records", params={"q": "Goldrich"}, headers=auth)
+        response = await client.get(f"{API}/people", params={"q": "Goldrich"}, headers=auth)
         items = response.json()["items"]
         assert len(items) == 1 and items[0]["full_name"] == "Naomi Goldrich"
 
     async def test_pgy_filter_uses_the_derived_current_level(self, client, auth, seeded):
         # Seeded today, so current PGY equals the captured PGY.
-        response = await client.get(f"{API}/records", params={"pgy": 5}, headers=auth)
+        response = await client.get(f"{API}/people", params={"pgy": 5}, headers=auth)
         items = response.json()["items"]
         assert len(items) == 1 and items[0]["pgy"] == 5
 
@@ -211,7 +213,7 @@ class TestRecordsQuery:
             params = {"limit": 1}
             if cursor:
                 params["cursor"] = cursor
-            body = (await client.get(f"{API}/records", params=params, headers=auth)).json()
+            body = (await client.get(f"{API}/people", params=params, headers=auth)).json()
             seen.extend(item["id"] for item in body["items"])
             cursor = body["next_cursor"]
             if not cursor:
@@ -223,10 +225,10 @@ class TestStats:
     async def test_aggregates_so_the_frontend_never_computes_them(
         self, client, auth, seeded
     ):
-        response = await client.get(f"{API}/records/stats", headers=auth)
+        response = await client.get(f"{API}/people/stats", headers=auth)
         body = response.json()
         assert body["total"] == 3
-        assert body["by_role"]["resident"] == 2
+        assert body["by_category"]["resident"] == 2
         assert body["by_area"]["Radiation Oncology"] == 3
         assert body["sites_covered"] == 1
         assert body["with_email"] == 3
@@ -234,7 +236,7 @@ class TestStats:
 
     async def test_stats_honour_the_same_filters_as_the_list(self, client, auth, seeded):
         response = await client.get(
-            f"{API}/records/stats", params={"role": "fellow"}, headers=auth
+            f"{API}/people/stats", params={"category": "fellow"}, headers=auth
         )
         assert response.json()["total"] == 1
 
@@ -242,7 +244,7 @@ class TestStats:
 class TestProvenance:
     async def test_source_returns_full_provenance(self, client, auth, seeded):
         record_id = seeded["records"][0].id
-        body = (await client.get(f"{API}/records/{record_id}/source", headers=auth)).json()
+        body = (await client.get(f"{API}/people/{record_id}/source", headers=auth)).json()
         assert body["source_url"] == "https://med.example.edu/residents"
         assert body["page_title"] == "Current Residents"
         assert body["extraction_method"] == "discovery"
@@ -262,7 +264,7 @@ class TestProvenance:
         )
         await session.commit()
 
-        body = (await client.get(f"{API}/records/{record.id}/source", headers=auth)).json()
+        body = (await client.get(f"{API}/people/{record.id}/source", headers=auth)).json()
         assert body["screenshot_available"] is False
         assert body["screenshot_url"] is None
         assert body["source_url"] == "https://med.example.edu/residents"
@@ -289,7 +291,7 @@ class TestProvenance:
         await session.commit()
 
         body = (
-            await client.get(f"{API}/records/{record.id}/versions", headers=auth)
+            await client.get(f"{API}/people/{record.id}/versions", headers=auth)
         ).json()
         assert len(body) == 2
         latest = body[0]

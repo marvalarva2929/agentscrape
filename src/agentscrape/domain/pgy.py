@@ -14,8 +14,7 @@ Residency years run July 1 - June 30. Academic year N means July N .. June N+1.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import date
 
 ACADEMIC_YEAR_START_MONTH = 7  # July 1
 
@@ -74,79 +73,11 @@ def parse_class_of(text: str | None) -> int | None:
     return None
 
 
-def current_pgy(
-    pgy_at_capture: int | None, capture_date: date | None, *, today: date | None = None
-) -> int | None:
-    """Roll a captured PGY forward to today across July 1 boundaries.
-
-    Returns None once the person would have finished any plausible program
-    (>9), rather than reporting a nonsense level for stale data.
-    """
-    if pgy_at_capture is None or capture_date is None:
-        return None
-    today = today or datetime.now(UTC).date()
-    advanced = pgy_at_capture + (academic_year(today) - academic_year(capture_date))
-    if advanced < 1 or advanced > 9:
-        return None
-    return advanced
-
-
-def class_of_from_pgy(
-    pgy_at_capture: int, capture_date: date, final_pgy: int
-) -> int | None:
-    """Graduation calendar year implied by a PGY level seen on a given date.
-
-    `final_pgy` is the PGY level held in the last year of the programme (see
-    SPECIALTY_FINAL_PGY). A PGY-k in academic year AY has (final_pgy - k) years
-    left, and academic year AY ends in calendar year AY+1.
-    """
-    if pgy_at_capture < 1 or final_pgy < pgy_at_capture:
-        return None
-    return academic_year(capture_date) + 1 + (final_pgy - pgy_at_capture)
-
-
-def pgy_from_class_of(
-    class_of: int, capture_date: date, final_pgy: int
-) -> int | None:
-    """Inverse of `class_of_from_pgy`: PGY level at capture time."""
-    level = final_pgy - class_of + academic_year(capture_date) + 1
-    if 1 <= level <= final_pgy:
-        return level
-    return None
-
-
-@dataclass(frozen=True)
-class YearFields:
-    pgy_at_capture: int | None
-    pgy_source: str | None  # "extracted" | "derived"
-    class_of: int | None
-    class_of_source: str | None
-
-
-def resolve_year_fields(
-    *,
-    pgy_at_capture: int | None,
-    class_of: int | None,
-    capture_date: date,
-    program_years: int | None,
-) -> YearFields:
-    """Fill in whichever of PGY / class-of is missing, tagging derived values.
-
-    Back-fill needs the program length, so it only happens once the specialty is
-    known and mapped. Derived values are marked so the frontend and any downstream
-    consumer can tell an inference from something the page actually said.
-    """
-    pgy_source = "extracted" if pgy_at_capture is not None else None
-    class_source = "extracted" if class_of is not None else None
-
-    if program_years:
-        if pgy_at_capture is None and class_of is not None:
-            derived = pgy_from_class_of(class_of, capture_date, program_years)
-            if derived is not None:
-                pgy_at_capture, pgy_source = derived, "derived"
-        elif class_of is None and pgy_at_capture is not None:
-            derived = class_of_from_pgy(pgy_at_capture, capture_date, program_years)
-            if derived is not None:
-                class_of, class_source = derived, "derived"
-
-    return YearFields(pgy_at_capture, pgy_source, class_of, class_source)
+# Deliberately no inference lives here any more.
+#
+# We previously rolled a captured PGY forward each 1 July, and back-filled
+# class-of from PGY (and vice versa) using typical programme lengths. Product
+# decided that anything the page does not state should stay blank: institutions
+# update their sites whenever they like, so a value we compute is a value we can
+# be wrong about. What we store and display is exactly what was published, with
+# the capture date beside it.

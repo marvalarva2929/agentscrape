@@ -11,11 +11,10 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import Select, and_, func, or_, select, text
+from sqlalchemy import Select, and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...api.pagination import Cursor, clamp_limit
-from ...domain.pgy import current_pgy
 from ..enums import RecordStatus
 from ..models import Record, RecordVersion, Site
 
@@ -36,8 +35,9 @@ class RecordFilters:
     area: list[str] = field(default_factory=list)          # normalized specialty
     year: list[int] = field(default_factory=list)          # class-of year
     site_id: list[str] = field(default_factory=list)
+    program_id: str | None = None
     status: list[str] = field(default_factory=list)
-    role: list[str] = field(default_factory=list)          # additive: R/F/unknown
+    category: list[str] = field(default_factory=list)      # resident/fellow/faculty/...
     pgy: list[int] = field(default_factory=list)           # additive: current PGY
     hospital: str | None = None                            # additive
     run_id: str | None = None
@@ -58,8 +58,9 @@ class RecordFilters:
             area=as_list(kwargs.get("area")),
             year=[int(y) for y in as_list(kwargs.get("year"))],
             site_id=as_list(kwargs.get("site_id")),
+            program_id=kwargs.get("program_id"),
             status=as_list(kwargs.get("status")),
-            role=as_list(kwargs.get("role")),
+            category=as_list(kwargs.get("category")),
             pgy=[int(p) for p in as_list(kwargs.get("pgy"))],
             hospital=kwargs.get("hospital"),
             run_id=kwargs.get("run_id"),
@@ -73,34 +74,14 @@ class RecordFilters:
     def to_dict(self) -> dict[str, Any]:
         return {
             "area": self.area, "year": self.year, "site_id": self.site_id,
-            "status": self.status, "role": self.role, "pgy": self.pgy,
+            "program_id": self.program_id,
+            "status": self.status, "category": self.category, "pgy": self.pgy,
             "hospital": self.hospital, "run_id": self.run_id,
             "changed_since": self.changed_since.isoformat() if self.changed_since else None,
             "q": self.q, "has_screenshot": self.has_screenshot,
             "has_email": self.has_email,
             "include_role_accounts": self.include_role_accounts,
         }
-
-
-def _pgy_capture_bounds(target_pgy: int, today: date) -> list[tuple[int, int, int]]:
-    """PGY is derived, so filtering on it means translating back to storage.
-
-    A record matches `pgy = n` when pgy_at_capture + (AY(today) - AY(captured))
-    equals n. Expanded into concrete (stored_pgy, academic_year) pairs so the
-    filter runs as an indexed SQL predicate rather than in Python.
-    """
-    from ...domain.pgy import ACADEMIC_YEAR_START_MONTH, academic_year
-
-    current_ay = academic_year(today)
-    pairs: list[tuple[int, int, int]] = []
-    # Captures older than nine academic years can never still be in-programme.
-    for offset in range(0, 10):
-        stored = target_pgy - offset
-        if stored < 1:
-            break
-        capture_ay = current_ay - offset
-        pairs.append((stored, capture_ay, ACADEMIC_YEAR_START_MONTH))
-    return pairs
 
 
 def apply_filters(
@@ -114,10 +95,12 @@ def apply_filters(
         statement = statement.where(Record.class_of.in_(filters.year))
     if filters.site_id:
         statement = statement.where(Record.site_id.in_(filters.site_id))
+    if filters.program_id:
+        statement = statement.where(Record.program_id == filters.program_id)
     if filters.status:
         statement = statement.where(Record.status.in_(filters.status))
-    if filters.role:
-        statement = statement.where(Record.role.in_(filters.role))
+    if filters.category:
+        statement = statement.where(Record.category.in_(filters.category))
     if filters.run_id:
         statement = statement.where(Record.last_run_id == filters.run_id)
     if filters.changed_since:
@@ -139,17 +122,9 @@ def apply_filters(
         )
 
     if filters.pgy:
-        clauses = []
-        for target in filters.pgy:
-            for stored, capture_ay, start_month in _pgy_capture_bounds(target, today):
-                clauses.append(
-                    and_(
-                        Record.pgy_at_capture == stored,
-                        Record.pgy_capture_date >= date(capture_ay, start_month, 1),
-                        Record.pgy_capture_date < date(capture_ay + 1, start_month, 1),
-                    )
-                )
-        statement = statement.where(or_(*clauses) if clauses else text("false"))
+        # Years are stored exactly as the page printed them and are never rolled
+        # forward, so this is a straight match rather than a date translation.
+        statement = statement.where(Record.pgy_at_capture.in_(filters.pgy))
 
     if filters.q:
         needle = filters.q.strip()
@@ -213,6 +188,7 @@ async def query_records(
     limit: int | None = None,
     sort: str = "last_seen_at",
     descending: bool = True,
+    record_id: str | None = None,
 ) -> tuple[list[dict[str, Any]], str | None, bool]:
     """Return (rows, next_cursor, has_more). Keyset paginated; never OFFSET."""
     limit = clamp_limit(limit)
@@ -229,6 +205,8 @@ async def query_records(
         .outerjoin(RecordVersion, RecordVersion.id == Record.current_version_id)
     )
     statement = apply_filters(statement, filters)
+    if record_id:
+        statement = statement.where(Record.id == record_id)
 
     decoded = Cursor.decode(cursor)
     if decoded is not None:
@@ -250,7 +228,14 @@ async def query_records(
                 )
             )
 
-    order = (column.desc(), Record.id.desc()) if descending else (column.asc(), Record.id.asc())
+    # Product decision: people who dropped off the site stay in the main table
+    # but sort to the bottom, so the live roster reads first.
+    missing_last = case((Record.status == RecordStatus.MISSING, 1), else_=0)
+    order = (
+        (missing_last, column.desc(), Record.id.desc())
+        if descending
+        else (missing_last, column.asc(), Record.id.asc())
+    )
     statement = statement.order_by(*order).limit(limit + 1)
 
     result = (await session.execute(statement)).all()
@@ -281,20 +266,19 @@ def _to_dict(
     return {
         "id": record.id,
         "site_id": record.site_id,
+        "program_id": record.program_id,
         "hospital": hospital or domain,
         "full_name": record.full_name,
         "email": record.email,
-        "role": record.role,
+        "category": record.category,
+        "position": record.position,
         "role_account": record.role_account,
         "area": record.specialty_normalized,
         "area_raw": record.specialty_raw,
         "year": record.class_of,
-        "year_source": record.class_of_source,
-        # Derived on read so a saved PGY filter keeps meaning "PGY-n today".
-        "pgy": current_pgy(record.pgy_at_capture, record.pgy_capture_date, today=today),
-        "pgy_at_capture": record.pgy_at_capture,
+        # Exactly as the page printed it, with the capture date beside it.
+        "pgy": record.pgy_at_capture,
         "pgy_capture_date": record.pgy_capture_date,
-        "pgy_source": record.pgy_source,
         "status": record.status,
         "confidence": record.confidence,
         "version_count": record.version_count,
@@ -329,7 +313,7 @@ async def record_stats(session: AsyncSession, filters: RecordFilters) -> dict[st
     return {
         "total": total,
         "by_status": await grouped(Record.status),
-        "by_role": await grouped(Record.role),
+        "by_category": await grouped(Record.category),
         "by_area": await grouped(Record.specialty_normalized),
         "sites_covered": await scalar(
             select(func.count(func.distinct(Record.site_id))).where(

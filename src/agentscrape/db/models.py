@@ -30,10 +30,12 @@ from . import enums as e
 from .ids import (
     export_id,
     path_id,
+    program_id,
     record_id,
     run_id,
     site_id,
     site_run_id,
+    submission_id,
     version_id,
 )
 
@@ -73,6 +75,9 @@ class Site(TimestampMixin, Base):
     root_domain: Mapped[str] = mapped_column(String(253), nullable=False, unique=True)
     canonical_url: Mapped[str] = mapped_column(Text, nullable=False)
     hospital_name: Mapped[str | None] = mapped_column(Text)
+    # Display fields for the school list. `name` falls back to the domain.
+    name: Mapped[str | None] = mapped_column(Text)
+    location: Mapped[str | None] = mapped_column(Text)
 
     validation_status: Mapped[str] = mapped_column(
         _enum(e.ValidationStatus, "validation_status"),
@@ -219,6 +224,41 @@ class SiteRunVisit(Base):
     )
 
 
+class Program(TimestampMixin, Base):
+    """One training programme at a school, e.g. Internal Medicine Residency.
+
+    Keyed on (site, normalized specialty). Rows are created automatically as
+    people are extracted, and can also be created directly so a newly added
+    school can be configured before it has any data.
+    """
+
+    __tablename__ = "programs"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=program_id)
+    site_id: Mapped[str] = mapped_column(
+        ForeignKey("sites.id", ondelete="CASCADE"), nullable=False
+    )
+    specialty: Mapped[str] = mapped_column(String(128), nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    program_type: Mapped[str | None] = mapped_column(String(64))
+
+    # Entry points for a targeted re-crawl of just this programme.
+    start_url: Mapped[str | None] = mapped_column(Text)
+    directory_url: Mapped[str | None] = mapped_column(Text)
+
+    people_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    resident_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    fellow_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    site: Mapped[Site] = relationship()
+
+    __table_args__ = (
+        UniqueConstraint("site_id", "specialty", name="uq_programs_site_specialty"),
+        Index("ix_programs_site", "site_id"),
+    )
+
+
 class Record(TimestampMixin, Base):
     """A person found at a site. Stable identity across runs. Never deleted."""
 
@@ -228,6 +268,9 @@ class Record(TimestampMixin, Base):
     site_id: Mapped[str] = mapped_column(
         ForeignKey("sites.id", ondelete="CASCADE"), nullable=False
     )
+    program_id: Mapped[str | None] = mapped_column(
+        ForeignKey("programs.id", ondelete="SET NULL")
+    )
     identity_key: Mapped[str] = mapped_column(String(320), nullable=False)
     identity_kind: Mapped[str] = mapped_column(
         _enum(e.IdentityKind, "identity_kind"), nullable=False
@@ -236,23 +279,25 @@ class Record(TimestampMixin, Base):
 
     full_name: Mapped[str | None] = mapped_column(Text)
     email: Mapped[str | None] = mapped_column(String(320))
-    role: Mapped[str] = mapped_column(
-        _enum(e.RecordRole, "record_role"), default=e.RecordRole.UNKNOWN, nullable=False
+    # Coarse bucket for filtering: resident / fellow / faculty / staff /
+    # student / alumni / unknown. Everyone published on the site is stored.
+    category: Mapped[str] = mapped_column(
+        _enum(e.PersonCategory, "person_category"),
+        default=e.PersonCategory.UNKNOWN,
+        nullable=False,
     )
+    # The person's title exactly as the page printed it.
+    position: Mapped[str | None] = mapped_column(Text)
 
     # `area` in the API contract.
     specialty_normalized: Mapped[str | None] = mapped_column(String(128))
     specialty_raw: Mapped[str | None] = mapped_column(Text)
 
-    # PGY is stored as captured; `pgy_current` is derived on read (July 1 rollover).
+    # Stored exactly as the page printed it. Nothing is inferred or rolled
+    # forward, so the capture date beside it is what gives it meaning.
     pgy_at_capture: Mapped[int | None] = mapped_column(Integer)
     pgy_capture_date: Mapped[date | None] = mapped_column(Date)
-    pgy_source: Mapped[str | None] = mapped_column(_enum(e.FieldSource, "pgy_source"))
-    # `year` in the API contract.
     class_of: Mapped[int | None] = mapped_column(Integer)
-    class_of_source: Mapped[str | None] = mapped_column(
-        _enum(e.FieldSource, "class_of_source")
-    )
 
     status: Mapped[str] = mapped_column(
         _enum(e.RecordStatus, "record_status"), default=e.RecordStatus.NEW, nullable=False
@@ -280,9 +325,10 @@ class Record(TimestampMixin, Base):
     __table_args__ = (
         UniqueConstraint("site_id", "identity_key", name="uq_records_site_identity"),
         Index("ix_records_site_status", "site_id", "status"),
+        Index("ix_records_program", "program_id"),
         Index("ix_records_specialty", "specialty_normalized"),
         Index("ix_records_class_of", "class_of"),
-        Index("ix_records_role", "role"),
+        Index("ix_records_category", "category"),
         Index("ix_records_last_changed", "last_changed_at"),
         Index("ix_records_last_seen", "last_seen_at"),
         Index("ix_records_email", "email"),
@@ -318,6 +364,10 @@ class RecordVersion(Base):
         Boolean, default=False, nullable=False
     )
     screenshot_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Natural pixel size of the screenshot. The frontend needs it to place the
+    # field boxes below, which are stored in screenshot pixel coordinates.
+    screenshot_width: Mapped[int | None] = mapped_column(Integer)
+    screenshot_height: Mapped[int | None] = mapped_column(Integer)
     captured_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -375,6 +425,34 @@ class KnownPath(TimestampMixin, Base):
         UniqueConstraint("site_id", "url_hash", name="uq_known_paths_site_url"),
         Index("ix_known_paths_site_active", "site_id", "is_active", "score"),
     )
+
+
+class CsvSubmission(TimestampMixin, Base):
+    """A client's request for schools to be crawled.
+
+    Clients cannot start runs — billing is per school, so staff review a
+    submission and launch it from the admin area.
+    """
+
+    __tablename__ = "csv_submissions"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=submission_id)
+    filename: Mapped[str | None] = mapped_column(Text)
+    note: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(
+        _enum(e.SubmissionStatus, "submission_status"),
+        default=e.SubmissionStatus.PENDING,
+        nullable=False,
+    )
+    # Parsed rows: [{"row": 1, "input": "...", "url": "...", "valid": true, ...}]
+    rows: Mapped[list[Any]] = mapped_column(JSONType, default=list, nullable=False)
+    row_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    valid_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    submitted_by: Mapped[str | None] = mapped_column(String(64))
+    run_id: Mapped[str | None] = mapped_column(String(64))
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (Index("ix_submissions_status", "status", "created_at"),)
 
 
 class Export(TimestampMixin, Base):

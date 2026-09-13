@@ -41,3 +41,36 @@ class PipelineDeps:
 
     def stop_requested(self) -> bool:
         return bool(self.should_stop and self.should_stop())
+
+    async def emit_stage(self, state: dict, stage: str) -> None:
+        """Tell the monitor roughly where this site has got to."""
+        from ..orchestrator.events import EventType
+
+        candidates = len(state.get("candidates") or [])
+        cursor = int(state.get("cursor") or 0)
+        # Progress is the share of the ranked candidate list worked through;
+        # discovery counts as the first slice so the bar is never stuck at zero.
+        if stage == "discovering":
+            progress = 10
+        elif stage == "finalizing":
+            progress = 95
+        elif stage == "complete":
+            progress = 100
+        elif candidates:
+            progress = 10 + int(min(cursor / candidates, 1.0) * 80)
+        else:
+            progress = 10
+
+        await self.emitter.emit(
+            EventType.SITE_STEP,
+            site_id=state.get("site_id"),
+            site_run_id=state.get("site_run_id"),
+            domain=state.get("root_domain"),
+            stage=stage,
+            progress=progress,
+            records_found=(
+                state.get("records_new", 0)
+                + state.get("records_changed", 0)
+                + state.get("records_unchanged", 0)
+            ),
+        )

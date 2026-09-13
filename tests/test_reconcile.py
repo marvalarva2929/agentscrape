@@ -10,7 +10,7 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 
-from agentscrape.db.enums import ExtractionMethod, FetchMode, RecordRole, RecordStatus
+from agentscrape.db.enums import ExtractionMethod, FetchMode, PersonCategory, RecordStatus
 from agentscrape.db.models import Record, RecordVersion, Site
 from agentscrape.db.repositories.records import (
     ExtractionContext,
@@ -53,8 +53,13 @@ def _context(site: Site, **overrides) -> ExtractionContext:
 
 def _person(name="Jane Doe", email="jane@med.example.edu", **kw) -> ExtractedPerson:
     return ExtractedPerson(
-        full_name=name, email=email, role=kw.pop("role", RecordRole.RESIDENT),
-        pgy=kw.pop("pgy", 2), class_of=kw.pop("class_of", None), **kw
+        full_name=name,
+        email=email,
+        category=kw.pop("category", PersonCategory.RESIDENT),
+        position=kw.pop("position", "Resident"),
+        pgy=kw.pop("pgy", 2),
+        class_of=kw.pop("class_of", None),
+        **kw,
     )
 
 

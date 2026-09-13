@@ -45,6 +45,34 @@ NO_EMAIL_ROSTER = (
 )
 
 
+MIXED_DIRECTORY = """
+<html><head><title>Internal Medicine Residency</title></head><body>
+<h1>Our Team</h1>
+<table>
+ <tr><th>Name</th><th>Position</th><th>PGY</th><th>Email</th></tr>
+ <tr><td>Jane A. Doe, MD</td><td>Resident</td><td>PGY-2</td>
+     <td><a href="mailto:jane.doe@med.example.edu">jane.doe@med.example.edu</a></td></tr>
+ <tr><td>Marcus Webb, MD</td><td>Chief Resident</td><td>PGY-3</td><td></td></tr>
+ <tr><td>Alan Grant, MD</td><td>Program Director</td><td></td>
+     <td><a href="mailto:agrant@med.example.edu">agrant@med.example.edu</a></td></tr>
+ <tr><td>Ray Arnold</td><td>Program Coordinator</td><td></td>
+     <td><a href="mailto:rarnold@med.example.edu">rarnold@med.example.edu</a></td></tr>
+ <tr><td>Tim Murphy</td><td>Medical Student</td><td></td><td></td></tr>
+</table>
+<div class="faculty-card"><h3>Ellie Sattler, MD</h3><p>Associate Professor</p></div>
+</body></html>
+"""
+
+ALUMNI_ROSTER = """
+<html><head><title>Residency Alumni</title></head><body>
+<table>
+ <tr><th>Name</th><th>Email</th></tr>
+ <tr><td>Gone Person, MD</td>
+     <td><a href="mailto:gone@med.example.edu">gone@med.example.edu</a></td></tr>
+</table></body></html>
+"""
+
+
 def large_card_roster(count: int = 14) -> str:
     """A roster with many sibling cards.
 
@@ -68,3 +96,20 @@ def large_card_roster(count: int = 14) -> str:
         + "".join(cards)
         + "</ul></body></html>"
     )
+
+
+# A faculty directory with no mailto links, no person CSS classes and no cards:
+# just a run of headings. Seen live on radonc.uchicago.edu/people/our-faculty,
+# where 34 people were being missed entirely.
+HEADING_ONLY_FACULTY = """
+<html><head><title>Our Faculty | Department of Radiation Oncology</title></head>
+<body>
+<div class="content">
+  <h2>Our Faculty</h2>
+  <div><h3>Nishant Agrawal, MD</h3><p>Professor</p></div>
+  <div><h3>Bulent Aydogan, PhD</h3><p>Professor</p></div>
+  <div><h3>Stephanie Bennett</h3><p>Assistant Professor</p></div>
+  <div><h3>Jason Bugno, PHARMD PhD</h3><p>Assistant Professor</p></div>
+</div>
+</body></html>
+"""

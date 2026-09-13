@@ -192,13 +192,14 @@ async def _print_records(site_id: str, limit: int = 30) -> None:
         return
 
     table = Table(title=f"records ({total} total, {sum(1 for s in shots if s)} with screenshots)")
-    for column in ("name", "email", "R/F", "PGY", "class", "specialty", "conf", "status"):
+    for column in ("name", "email", "category", "position", "PGY", "class", "specialty", "status"):
         table.add_column(column, overflow="fold")
     for record in rows:
         table.add_row(
-            record.full_name or "-", record.email or "-", record.role,
+            record.full_name or "-", record.email or "-", record.category,
+            (record.position or "-")[:28],
             str(record.pgy_at_capture or "-"), str(record.class_of or "-"),
-            record.specialty_normalized or "-", f"{record.confidence:.2f}", record.status,
+            record.specialty_normalized or "-", record.status,
         )
     console.print(table)
 

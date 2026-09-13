@@ -154,8 +154,10 @@ async def years(_: AuthedUser, session: DbSession) -> MetaValues:
     return MetaValues(values=list(await distinct_years(session)))
 
 
-@meta_router.get("/roles", response_model=MetaValues)
-async def roles(_: AuthedUser, session: DbSession) -> MetaValues:
-    """Distinct roles. Additive to the contract; backs the R/F filter."""
-    rows = await session.execute(select(Record.role).distinct().order_by(Record.role))
+@meta_router.get("/categories", response_model=MetaValues)
+async def categories(_: AuthedUser, session: DbSession) -> MetaValues:
+    """Distinct person categories present in the data; backs the category filter."""
+    rows = await session.execute(
+        select(Record.category).distinct().order_by(Record.category)
+    )
     return MetaValues(values=list(rows.scalars().all()))

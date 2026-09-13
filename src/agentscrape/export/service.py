@@ -44,21 +44,28 @@ def _spawn(coro) -> asyncio.Task:
     return task
 
 
+# The client's working sheet, plus Position now that everyone on a site is
+# collected rather than just trainees. Provenance columns are deliberately not
+# exported: the source URL and screenshot are for reviewing a person in the app,
+# not for the outreach sheet.
 BASE_COLUMNS = [
-    "Hospital", "Specialty", "R/F", "Full Name", "PGY", "Class of", "Email",
+    "Hospital", "Program", "Specialty", "R/F", "Position", "Full Name",
+    "PGY", "Class of", "Email",
 ]
-STATUS_COLUMNS = ["Status", "Confidence", "First Seen", "Last Seen"]
-PROVENANCE_COLUMNS = [
-    "Source URL", "Page Title", "Captured At", "Extraction Method",
-    "Screenshot Available", "Version",
-]
-EMAILED_COLUMN = "Has Been Emailed?"
+STATUS_COLUMNS = ["Status", "Last Seen"]
+
+# R for resident, F for fellow; anyone else is labelled by what they are.
+_RF = {"resident": "R", "fellow": "F"}
 
 PAGE_SIZE = 500
 
 
 async def create_export_job(session: AsyncSession, body: ExportCreate) -> Export:
-    """Persist the job and kick off generation in the background."""
+    """Persist the job and kick off generation in the background.
+
+    Exports are normally scoped to one programme (`filters={"program_id": ...}`),
+    which is how the UI offers them.
+    """
     expires_at = (
         datetime.now(UTC) + timedelta(days=settings.export_retention_days)
         if settings.export_retention_days is not None
@@ -98,8 +105,6 @@ async def run_export(export_id: str) -> None:
             if export is None:
                 return
             filters = _filters_from_payload(dict(export.filters or {}))
-            include_provenance = export.include_provenance
-            include_emailed = export.include_emailed_column
             await session.execute(
                 update(Export)
                 .where(Export.id == export_id)
@@ -110,12 +115,7 @@ async def run_export(export_id: str) -> None:
         path = settings.export_dir / f"{export_id}.csv"
         rows_written = 0
 
-        columns = list(BASE_COLUMNS)
-        if include_emailed:
-            columns.append(EMAILED_COLUMN)
-        columns += STATUS_COLUMNS
-        if include_provenance:
-            columns += PROVENANCE_COLUMNS
+        columns = [*BASE_COLUMNS, *STATUS_COLUMNS]
 
         with path.open("w", newline="", encoding="utf-8") as handle:
             writer = csv.DictWriter(handle, fieldnames=columns)
@@ -127,16 +127,9 @@ async def run_export(export_id: str) -> None:
                     items, cursor, has_more = await query_records(
                         session, filters, cursor=cursor, limit=PAGE_SIZE
                     )
-                    provenance = (
-                        await _provenance_for(session, [i["id"] for i in items])
-                        if include_provenance
-                        else {}
-                    )
 
                 for item in items:
-                    writer.writerow(
-                        _row(item, provenance.get(item["id"]), include_emailed, include_provenance)
-                    )
+                    writer.writerow(_row(item))
                     rows_written += 1
                 if not has_more or not cursor:
                     break
@@ -163,58 +156,24 @@ async def run_export(export_id: str) -> None:
             )
 
 
-def _row(
-    item: dict, version, include_emailed: bool, include_provenance: bool
-) -> dict[str, object]:
-    row: dict[str, object] = {
+def _row(item: dict) -> dict[str, object]:
+    category = str(item.get("category") or "")
+    return {
         "Hospital": item.get("hospital") or "",
+        "Program": item.get("program_name") or "",
         "Specialty": item.get("area") or "",
-        # The client's R/F column: R for resident, F for fellow, blank if unknown.
-        "R/F": {"resident": "R", "fellow": "F"}.get(item.get("role") or "", ""),
+        # R/F for trainees; anyone else is labelled by category.
+        "R/F": _RF.get(category, category.title() if category != "unknown" else ""),
+        "Position": item.get("position") or "",
         "Full Name": item.get("full_name") or "",
+        # Exactly as the page printed it; blank when it did not say.
         "PGY": item.get("pgy") or "",
         "Class of": item.get("year") or "",
         "Email": item.get("email") or "",
+        "Status": item.get("status") or "",
+        "Last Seen": _iso(item.get("last_seen_at")),
     }
-    if include_emailed:
-        # Deliberately blank: outreach state is the client's to track.
-        row[EMAILED_COLUMN] = ""
-    row.update(
-        {
-            "Status": item.get("status") or "",
-            "Confidence": item.get("confidence"),
-            "First Seen": _iso(item.get("first_seen_at")),
-            "Last Seen": _iso(item.get("last_seen_at")),
-        }
-    )
-    if include_provenance:
-        row.update(
-            {
-                "Source URL": getattr(version, "source_url", "") or "",
-                "Page Title": getattr(version, "page_title", "") or "",
-                "Captured At": _iso(getattr(version, "captured_at", None)),
-                "Extraction Method": getattr(version, "extraction_method", "") or "",
-                "Screenshot Available": getattr(version, "screenshot_available", False),
-                "Version": getattr(version, "version_no", "") or "",
-            }
-        )
-    return row
 
 
 def _iso(value) -> str:
     return value.isoformat() if isinstance(value, datetime) else ""
-
-
-async def _provenance_for(session: AsyncSession, record_ids: list[str]) -> dict:
-    from sqlalchemy import select
-
-    from ..db.models import Record, RecordVersion
-
-    if not record_ids:
-        return {}
-    rows = await session.execute(
-        select(Record.id, RecordVersion)
-        .join(RecordVersion, RecordVersion.id == Record.current_version_id)
-        .where(Record.id.in_(record_ids))
-    )
-    return dict(rows.all())

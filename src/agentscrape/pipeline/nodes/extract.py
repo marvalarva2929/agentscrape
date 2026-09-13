@@ -25,7 +25,12 @@ from ...extraction.html_people import extract_people, page_looks_thin
 from ...extraction.person import ExtractedPerson
 from ...extraction.vision import extract_with_vision
 from ...orchestrator.events import EventType
-from ...storage.artifacts import relative_path, save_screenshot, screenshot_expiry
+from ...storage.artifacts import (
+    png_dimensions,
+    relative_path,
+    save_screenshot,
+    screenshot_expiry,
+)
 from ...urls import canonicalize, host_of, url_hash
 from ..checkpoint import save_checkpoint
 from ..deps import PipelineDeps
@@ -66,6 +71,7 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
 
     new = changed = unchanged = missing_total = 0
     known_hits = state.get("known_path_hits", 0)
+    barren_streak = state.get("barren_streak", 0)
     seen_ids = list(state.get("seen_record_ids", []))
     fingerprint = dict(state.get("fingerprint", {}))
     steps_used = 0
@@ -80,6 +86,7 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
         people: list[ExtractedPerson] = []
         fetch_mode = FetchMode.HTML
         screenshot_rel: str | None = None
+        shot_size: tuple[int | None, int | None] = (None, None)
         field_locations: dict[str, dict[str, int]] = {}
         page_title = ""
 
@@ -100,9 +107,13 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
                 deps, url, state, candidate, why
             )
             if rendered is not None:
-                people, fetch_mode, screenshot_rel, field_locations, page_title = rendered
+                (
+                    people, fetch_mode, screenshot_rel, field_locations,
+                    page_title, shot_size,
+                ) = rendered
 
         records_here = 0
+        outcome_new_or_changed = 0
         if people:
             context = ExtractionContext(
                 site_id=state["site_id"],
@@ -117,6 +128,8 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
                 fetch_mode=fetch_mode,
                 screenshot_path=screenshot_rel,
                 screenshot_expires_at=screenshot_expiry() if screenshot_rel else None,
+                screenshot_width=shot_size[0],
+                screenshot_height=shot_size[1],
                 field_locations=field_locations,
                 page_score=float(candidate.get("score", 0.0)),
                 run_id=state.get("run_id"),
@@ -135,6 +148,7 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
             unchanged += outcome.unchanged
             seen_ids.extend(outcome.record_ids)
             records_here = outcome.total_seen
+            outcome_new_or_changed = outcome.new + outcome.changed
 
             # Fingerprint only the pages that actually produced records: those
             # are the ones the next run's skip probe will re-fetch, and the two
@@ -151,6 +165,13 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
                     site_id=state["site_id"], site_run_id=state["site_run_id"],
                     url=url, records=records_here,
                 )
+
+        # Track how long we have gone without finding anyone new. Candidates are
+        # ranked, so a long barren stretch means the productive pages are behind us.
+        if outcome_new_or_changed:
+            barren_streak = 0
+        else:
+            barren_streak += 1
 
         async with deps.sessionmaker() as session:
             await update_visit(
@@ -195,6 +216,7 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
         "records_missing": state.get("records_missing", 0) + missing_total,
         "seen_record_ids": seen_ids,
         "known_path_hits": known_hits,
+        "barren_streak": barren_streak,
         "fingerprint": fingerprint,
     }
 
@@ -257,6 +279,7 @@ async def _render_and_extract(
         field_locations = located.field_locations if located.ok else {}
 
     screenshot_rel = None
+    shot_size: tuple[int | None, int | None] = (None, None)
     if rendered.screenshot:
         path = save_screenshot(
             rendered.screenshot,
@@ -264,8 +287,13 @@ async def _render_and_extract(
             url_hash=url_hash(url),
         )
         screenshot_rel = relative_path(path)
+        # Needed to place the field boxes, which are in screenshot pixels.
+        shot_size = png_dimensions(rendered.screenshot)
 
-    return people, FetchMode.BOTH, screenshot_rel, field_locations, rendered.title
+    return (
+        people, FetchMode.BOTH, screenshot_rel, field_locations, rendered.title,
+        shot_size,
+    )
 
 
 def _title_of(html: str) -> str:

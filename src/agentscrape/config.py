@@ -16,7 +16,14 @@ class Settings(BaseSettings):
 
     # --- auth -----------------------------------------------------------
     app_password: str = "change-me"
+    # Staff-only areas: submitted CSVs, launching runs, spend and site stats.
+    admin_password: str = "change-me-admin"
     token_ttl_hours: int = 720
+    # Signed screenshot links, so an <img> tag can load one without a header.
+    artifact_link_ttl_seconds: int = 3600
+    # Explicit origins: the frontend is served from GitHub Pages, a different
+    # origin from the API, so "*" is both unsafe and insufficient here.
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     # --- database -------------------------------------------------------
     database_url: str = (
@@ -58,6 +65,11 @@ class Settings(BaseSettings):
     max_concurrency: int = 8
     default_skip_threshold: float = 0.90
     default_step_budget: int = 40
+    # Stop a site once this many consecutive candidate pages yield nobody new.
+    # Candidates are ranked, so a long barren stretch means the good pages are
+    # behind us. Replaces a fixed people-goal: the run ends when the site stops
+    # giving, not at an arbitrary count.
+    stop_after_barren_pages: int = 8
     run_timeout_seconds: int = 86_400
     site_timeout_seconds: int = 1_800
     max_concurrent_contexts: int = 8

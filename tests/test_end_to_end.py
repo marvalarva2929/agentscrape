@@ -78,13 +78,15 @@ class TestSingleSiteEndToEnd:
         assert "Cara Diaz" in by_name
         assert "Dana Fields" in by_name
 
-        # Out of scope: a program director and an alumni listing.
-        assert "Owen Grant" not in by_name
-        assert "Gone Person" not in by_name
+        # Scope inverted: everyone on the site is collected and labelled.
+        assert by_name["Owen Grant"].category == "faculty"
+        assert by_name["Owen Grant"].position == "Program Director"
+        # Alumni pages are a source now; their people are labelled alumni.
+        assert by_name["Gone Person"].category == "alumni"
 
         ann = by_name["Ann Riley"]
         assert ann.email == "ann.riley@example.edu"
-        assert ann.role == "resident"
+        assert ann.category == "resident"
         assert ann.pgy_at_capture == 1
         assert ann.status == RecordStatus.NEW
         assert ann.current_version_id is not None

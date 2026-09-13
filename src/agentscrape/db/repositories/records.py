@@ -28,8 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...domain.confidence import score_record
 from ...domain.matching import build_identity, diff_fields
-from ...domain.pgy import resolve_year_fields
-from ...domain.specialty import infer_specialty, program_years
+from ...domain.specialty import infer_specialty
 from ...extraction.person import ExtractedPerson
 from ...urls import host_of, url_hash
 from ..enums import ExtractionMethod, FetchMode, RecordStatus
@@ -51,6 +50,8 @@ class ExtractionContext:
     fetch_mode: FetchMode
     screenshot_path: str | None = None
     screenshot_expires_at: datetime | None = None
+    screenshot_width: int | None = None
+    screenshot_height: int | None = None
     field_locations: dict[str, dict[str, int]] = field(default_factory=dict)
     page_score: float = 0.0
     run_id: str | None = None
@@ -89,7 +90,7 @@ def _build_fields(
 ) -> dict[str, object] | None:
     """Normalize one extracted person into the stored field shape."""
     identity = build_identity(
-        email=person.email, full_name=person.full_name, role=str(person.role)
+        email=person.email, full_name=person.full_name, role=str(person.category)
     )
     if identity is None:
         return None
@@ -102,12 +103,6 @@ def _build_fields(
     canonical = specialty.canonical or context.site_dominant_specialty
 
     capture_day: date = context.captured_at.date()
-    years = resolve_year_fields(
-        pgy_at_capture=person.pgy,
-        class_of=person.class_of,
-        capture_date=capture_day,
-        program_years=program_years(canonical),
-    )
 
     return {
         "identity_key": identity.key,
@@ -115,14 +110,14 @@ def _build_fields(
         "role_account": identity.role_account,
         "full_name": person.full_name,
         "email": person.email,
-        "role": str(person.role),
+        "category": str(person.category),
+        "position": person.position,
         "specialty_normalized": canonical,
         "specialty_raw": person.specialty_raw or specialty.raw or None,
-        "pgy_at_capture": years.pgy_at_capture,
+        # Exactly what the page stated. Nothing is inferred or rolled forward.
+        "pgy_at_capture": person.pgy,
         "pgy_capture_date": capture_day,
-        "pgy_source": years.pgy_source,
-        "class_of": years.class_of,
-        "class_of_source": years.class_of_source,
+        "class_of": person.class_of,
         "confidence": score_record(
             person,
             site_host=context.site_host,
@@ -138,6 +133,19 @@ def _version_payload(fields: dict[str, object]) -> dict[str, object]:
     from ...domain.matching import VERSIONED_FIELDS
 
     return {key: fields.get(key) for key in VERSIONED_FIELDS}
+
+
+async def _attach_program(
+    session: AsyncSession, site_id: str, fields: dict[str, object]
+) -> None:
+    """Give the record a programme, creating it on first sight."""
+    from .programs import ensure_program
+
+    specialty = fields.get("specialty_normalized")
+    if specialty:
+        fields["program_id"] = await ensure_program(
+            session, site_id=site_id, specialty=str(specialty)
+        )
 
 
 async def reconcile_people(
@@ -179,6 +187,7 @@ async def reconcile_people(
     by_identity = {row.identity_key: row for row in existing_rows}
 
     for identity_key, (person, fields) in prepared.items():
+        await _attach_program(session, context.site_id, fields)
         record = by_identity.get(identity_key)
         if record is None:
             record = await _create_record(session, fields, person, context)
@@ -234,7 +243,8 @@ async def _update_record(
     previous = {
         "full_name": record.full_name,
         "email": record.email,
-        "role": record.role,
+        "category": record.category,
+        "position": record.position,
         "specialty_normalized": record.specialty_normalized,
         "specialty_raw": record.specialty_raw,
         # Compare the captured PGY, never the derived current one: the July
@@ -310,6 +320,8 @@ def _make_version(
         screenshot_path=context.screenshot_path,
         screenshot_available=context.screenshot_path is not None,
         screenshot_expires_at=context.screenshot_expires_at,
+        screenshot_width=context.screenshot_width,
+        screenshot_height=context.screenshot_height,
         captured_at=context.captured_at,
         extraction_method=context.extraction_method,
         fetch_mode=context.fetch_mode,

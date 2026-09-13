@@ -18,7 +18,7 @@ import pytest_asyncio
 
 TEST_DATABASE_URL = os.environ.get(
     "TEST_DATABASE_URL",
-    "postgresql+asyncpg://agentscrape:agentscrape@localhost:5433/agentscrape_test",
+    "postgresql+asyncpg://agentscrape:agentscrape@localhost:5432/agentscrape_test",
 )
 SYNC_DATABASE_URL = TEST_DATABASE_URL.replace("+asyncpg", "+psycopg")
 
@@ -31,7 +31,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine  # no
 from agentscrape.db.models import Base  # noqa: E402
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="session")
 def schema():
     """Create the schema once for the whole test session."""
     engine = create_engine(SYNC_DATABASE_URL, future=True)
@@ -42,7 +42,7 @@ def schema():
     yield
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture
 def clean_tables(schema):
     """Truncate before each test, synchronously, so no async loop is involved."""
     engine = create_engine(SYNC_DATABASE_URL, future=True)
@@ -54,21 +54,21 @@ def clean_tables(schema):
 
 
 @pytest_asyncio.fixture
-async def engine():
+async def engine(clean_tables):
     engine = create_async_engine(TEST_DATABASE_URL, future=True, poolclass=None)
     yield engine
     await engine.dispose()
 
 
 @pytest_asyncio.fixture
-async def session(engine):
+async def session(engine, reset_global_engine):
     maker = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
     async with maker() as session:
         yield session
         await session.rollback()
 
 
-@pytest_asyncio.fixture(autouse=True)
+@pytest_asyncio.fixture
 async def reset_global_engine():
     """Give every test a fresh application engine.
 

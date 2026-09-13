@@ -154,8 +154,8 @@ def build_identity(
 # Fields that participate in change detection. `pgy_at_capture` is included but
 # `pgy_current` deliberately is not: the July rollover is not a data change.
 VERSIONED_FIELDS: tuple[str, ...] = (
-    "full_name", "email", "role", "specialty_normalized", "specialty_raw",
-    "pgy_at_capture", "class_of",
+    "full_name", "email", "category", "position", "specialty_normalized",
+    "specialty_raw", "pgy_at_capture", "class_of",
 )
 
 

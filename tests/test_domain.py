@@ -20,21 +20,8 @@ from agentscrape.domain.matching import (
     normalize_email,
     normalize_name,
 )
-from agentscrape.domain.pgy import (
-    academic_year,
-    class_of_from_pgy,
-    current_pgy,
-    parse_class_of,
-    parse_pgy,
-    pgy_from_class_of,
-    resolve_year_fields,
-)
-from agentscrape.domain.specialty import (
-    final_pgy,
-    infer_specialty,
-    normalize_specialty,
-    program_years,
-)
+from agentscrape.domain.pgy import academic_year, parse_class_of, parse_pgy
+from agentscrape.domain.specialty import infer_specialty, normalize_specialty
 from agentscrape.urls import canonicalize, registrable_domain, url_hash
 
 
@@ -150,42 +137,24 @@ class TestPgy:
     def test_parse_class_of(self, text, expected):
         assert parse_class_of(text) == expected
 
-    def test_rolls_forward_across_july(self):
-        captured = date(2025, 9, 1)
-        assert current_pgy(2, captured, today=date(2026, 6, 30)) == 2   # same AY
-        assert current_pgy(2, captured, today=date(2026, 9, 11)) == 3   # next AY
+    def test_nothing_is_inferred_or_rolled_forward(self):
+        """Product decision: if the page did not state it, it stays blank.
 
-    def test_stale_capture_returns_none_rather_than_nonsense(self):
-        assert current_pgy(3, date(2015, 9, 1), today=date(2026, 9, 11)) is None
+        We used to roll a captured PGY forward each 1 July and back-fill class-of
+        from PGY. Institutions update their sites whenever they like, so a value
+        we computed was a value we could be wrong about. These helpers are gone.
+        """
+        import agentscrape.domain.pgy as pgy_module
 
-    def test_class_of_and_pgy_round_trip(self):
-        captured = date(2025, 9, 1)
-        class_of = class_of_from_pgy(1, captured, final_pgy=3)
-        assert class_of == 2028
-        assert pgy_from_class_of(class_of, captured, final_pgy=3) == 1
+        for removed in (
+            "current_pgy", "class_of_from_pgy", "pgy_from_class_of",
+            "resolve_year_fields",
+        ):
+            assert not hasattr(pgy_module, removed), f"{removed} should be gone"
 
-    def test_final_pgy_semantics_not_programme_length(self):
-        # Radiation Oncology is a four-year programme whose residents are PGY-2
-        # through PGY-5. Using the accredited length here yields no class year
-        # for a PGY-5, which is exactly the graduating cohort.
-        assert final_pgy("Radiation Oncology") == 5
-        assert class_of_from_pgy(5, date(2026, 9, 1), final_pgy=5) == 2027
-
-    def test_backfill_marks_derived_values(self):
-        fields = resolve_year_fields(
-            pgy_at_capture=2, class_of=None, capture_date=date(2025, 9, 1),
-            program_years=5,
-        )
-        assert fields.pgy_source == "extracted"
-        assert fields.class_of == 2029
-        assert fields.class_of_source == "derived"
-
-    def test_no_backfill_without_a_known_program_length(self):
-        fields = resolve_year_fields(
-            pgy_at_capture=2, class_of=None, capture_date=date(2025, 9, 1),
-            program_years=None,
-        )
-        assert fields.class_of is None and fields.class_of_source is None
+    def test_parsing_still_reads_what_the_page_states(self):
+        assert parse_pgy("PGY-4") == 4
+        assert parse_class_of("Class of 2029") == 2029
 
 
 class TestSpecialty:
@@ -214,9 +183,6 @@ class TestSpecialty:
             page_title="Meet Our Residents", url="https://x.edu/pediatrics/residents"
         ).canonical == "Pediatrics"
 
-    def test_program_length_known_for_backfill(self):
-        assert program_years("Internal Medicine") == 3
-        assert program_years(None) is None
 
 
 class TestUrls:

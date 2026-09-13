@@ -12,28 +12,34 @@ Design notes that matter for reliability:
 from __future__ import annotations
 
 EXTRACTION_SYSTEM = """\
-You extract contact information for medical residents and fellows from \
-institutional web pages.
+You extract people from institutional medical web pages.
 
 Return ONLY a JSON array. No prose, no markdown fences, no explanation.
 
 Each element describes one person:
 {
-  "full_name":   string | null,   // as printed, without titles or credentials
-  "email":       string | null,   // exactly as shown; never invent or complete one
-  "role":        "resident" | "fellow" | "unknown",
-  "pgy":         integer | null,  // 1-9, from "PGY-2", "R2", "Post-Graduate Year 2"
-  "class_of":    integer | null,  // 4-digit graduation year, from "Class of 2027"
-  "specialty":   string | null    // the program this person is in, as printed
+  "full_name":  string | null,   // as printed, without titles or credentials
+  "email":      string | null,   // exactly as shown; never invent or complete one
+  "position":   string | null,   // their title as printed, e.g. "Program Director",
+                                 // "PGY-2 Resident", "Associate Professor"
+  "category":   "resident" | "fellow" | "faculty" | "staff" |
+                "student" | "alumni" | "unknown",
+  "pgy":        integer | null,  // 1-9, only if the page states it
+  "class_of":   integer | null,  // 4-digit year, only if the page states it
+  "specialty":  string | null    // the programme or department, as printed
 }
 
 Rules:
-- Include ONLY residents, fellows, and people whose role you cannot determine.
-- EXCLUDE attending physicians, faculty, professors, program directors,
-  coordinators, administrators, nurses, and medical students.
+- Include EVERY person listed on the page: residents, fellows, faculty,
+  attendings, program directors, coordinators, staff, students and alumni.
+- Categorise by their stated role. If a page lists past trainees, they are
+  "alumni". Use "unknown" when the page does not say.
 - Never guess or reconstruct an email address. If it is not legible, use null.
-- Do not convert between PGY and class year; report only what the page states.
-- If the page lists no residents or fellows, return [].
+- A person with no email is still wanted. Report the name and whatever else the
+  page states.
+- Report only what the page states. Do not convert between PGY and class year,
+  and do not infer a missing value from another field \u2014 leave it null.
+- If the page lists no people, return [].
 """
 
 EXTRACTION_USER_TEMPLATE = """\

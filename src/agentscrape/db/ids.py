@@ -25,6 +25,10 @@ def site_run_id() -> str:
     return new_id("sr")
 
 
+def program_id() -> str:
+    return new_id("prog")
+
+
 def record_id() -> str:
     return new_id("rec")
 
@@ -35,6 +39,10 @@ def version_id() -> str:
 
 def path_id() -> str:
     return new_id("path")
+
+
+def submission_id() -> str:
+    return new_id("sub")
 
 
 def export_id() -> str:

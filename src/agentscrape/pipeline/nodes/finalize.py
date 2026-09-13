@@ -10,9 +10,11 @@ from sqlalchemy import select, update
 
 from ...db.enums import SiteRunStatus
 from ...db.models import Record, SiteRun
+from ...db.repositories.programs import refresh_program_counts
 from ...db.repositories.records import lock_site, mark_missing_records
 from ...db.repositories.sites import save_fingerprint, set_dominant_specialty, visited_hashes
 from ...orchestrator.events import EventType
+from ...storage.artifacts import replace_school_screenshots
 from ..checkpoint import clear_checkpoint
 from ..deps import PipelineDeps
 from ..state import SiteState
@@ -39,7 +41,14 @@ async def finalize(state: SiteState, deps: PipelineDeps) -> SiteState:
                 if state.get("fingerprint"):
                     await save_fingerprint(session, site_id, state["fingerprint"])
                 await _update_dominant_specialty(session, site_id)
+                await refresh_program_counts(session, site_id)
             await session.commit()
+
+        # A school keeps only its most recent run's screenshots. Skipped runs
+        # capture nothing, so replacing there would delete the previous set and
+        # leave the school with no screenshots at all.
+        if state.get("status") != "skipped":
+            await replace_school_screenshots(site_id, site_run_id)
 
     status = _final_status(state)
     async with deps.sessionmaker() as session:

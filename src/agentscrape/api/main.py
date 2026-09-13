@@ -11,7 +11,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from ..config import settings
 from ..db.session import dispose_engine
 from .errors import register_exception_handlers
-from .routes import admin, artifacts, auth, health, records, runs, sites
+from .routes import (
+    admin,
+    artifacts,
+    auth,
+    health,
+    records,
+    runs,
+    schools,
+    sites,
+    submissions,
+)
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s %(levelname)-5s [%(name)s] %(message)s"
@@ -54,13 +64,17 @@ def create_app() -> FastAPI:
         docs_url=f"{API_PREFIX}/docs",
         openapi_url=f"{API_PREFIX}/openapi.json",
     )
+    # Explicit origins. The frontend is served from GitHub Pages, a different
+    # origin from this API, so the browser enforces CORS on every call.
+    origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=origins,
         allow_methods=["*"],
         allow_headers=["*"],
         expose_headers=["*"],
     )
+    log.info("CORS origins: %s", ", ".join(origins))
     register_exception_handlers(app)
 
     for router in (
@@ -68,8 +82,10 @@ def create_app() -> FastAPI:
         auth.router,
         runs.router,
         records.router,
+        schools.router,
         sites.router,
         sites.meta_router,
+        submissions.router,
         admin.router,
         artifacts.router,
     ):
