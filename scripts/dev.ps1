@@ -34,6 +34,44 @@ function Warn { param($m) Write-Host "!   $m" -ForegroundColor Yellow }
 function Die  { param($m) Write-Host "x   $m" -ForegroundColor Red; exit 1 }
 function Have { param($c) [bool](Get-Command $c -ErrorAction SilentlyContinue) }
 
+function Test-PortFree {
+    param([int]$Port)
+    # Bind it ourselves: the only reliable way to know it is actually free.
+    try {
+        $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, $Port)
+        $listener.Start(); $listener.Stop()
+        return $true
+    } catch { return $false }
+}
+
+function Get-PortHolder {
+    param([int]$Port)
+    try {
+        $conn = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction Stop |
+                Select-Object -First 1
+        $proc = Get-Process -Id $conn.OwningProcess -ErrorAction SilentlyContinue
+        if ($proc) { return "$($proc.ProcessName) (PID $($proc.Id))" }
+    } catch { }
+    return $null
+}
+
+function Resolve-Port {
+    <# Use the requested port, or the next free one, rather than dying. #>
+    param([int]$Requested, [string]$Label)
+    if (Test-PortFree $Requested) { return $Requested }
+
+    $holder = Get-PortHolder $Requested
+    $detail = if ($holder) { " (in use by $holder)" } else { ' (in use)' }
+
+    foreach ($candidate in ($Requested + 1)..($Requested + 20)) {
+        if (Test-PortFree $candidate) {
+            Warn "Port $Requested is busy$detail; using $candidate for the $Label instead."
+            return $candidate
+        }
+    }
+    Die "Ports $Requested-$($Requested + 20) are all in use. Free one, or pass -${Label}Port."
+}
+
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
 if (-not $FrontendDir) {
@@ -54,6 +92,10 @@ if (-not (Have 'uv')) {
     }
 }
 if (-not (Have 'uv')) { Die 'uv installed but not on PATH. Open a new terminal and re-run.' }
+
+# Resolve ports first: .env, CORS and the UI config all embed them.
+$BackendPort  = Resolve-Port -Requested $BackendPort  -Label 'Backend'
+$FrontendPort = Resolve-Port -Requested $FrontendPort -Label 'Frontend'
 
 # --- database --------------------------------------------------------------
 # Docker Desktop is the documented path; fall back to a local Postgres, because
@@ -277,7 +319,11 @@ try {
         } catch { Start-Sleep -Milliseconds 500 }
     }
     if (-not $healthy) {
-        Die "The API did not start. Run it directly to see why: uv run uvicorn agentscrape.api.main:app --port $BackendPort"
+        Die @"
+The API did not start on port $BackendPort.
+Run it directly to see the error:
+  uv run uvicorn agentscrape.api.main:app --port $BackendPort
+"@
     }
 
     Say "Starting the UI on :$FrontendPort"

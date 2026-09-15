@@ -34,6 +34,35 @@ die()  { printf '\033[1;31mx\033[0m  %s\n' "$1" >&2; exit 1; }
 
 cd "$ROOT"
 
+port_free() {
+  # Prefer lsof; fall back to a bind attempt via Python.
+  if command -v lsof >/dev/null; then
+    ! lsof -iTCP:"$1" -sTCP:LISTEN -n -P >/dev/null 2>&1
+  else
+    python3 - "$1" <<'PY' >/dev/null 2>&1
+import socket, sys
+s = socket.socket()
+try:
+    s.bind(("127.0.0.1", int(sys.argv[1])))
+finally:
+    s.close()
+PY
+  fi
+}
+
+resolve_port() {
+  # Use the requested port, or the next free one, rather than failing to bind.
+  local requested="$1" label="$2" candidate
+  if port_free "$requested"; then echo "$requested"; return; fi
+  for candidate in $(seq $((requested + 1)) $((requested + 20))); do
+    if port_free "$candidate"; then
+      warn "Port $requested is busy; using $candidate for the $label instead."
+      echo "$candidate"; return
+    fi
+  done
+  die "Ports $requested-$((requested + 20)) are all in use. Free one and re-run."
+}
+
 # --- prerequisites ---------------------------------------------------------
 command -v node >/dev/null || die "Node.js is required: https://nodejs.org (or: brew install node)"
 
@@ -43,6 +72,10 @@ if ! command -v uv >/dev/null; then
   export PATH="$HOME/.local/bin:$PATH"
 fi
 command -v uv >/dev/null || die "uv installed but not on PATH. Add ~/.local/bin to PATH and re-run."
+
+# Resolve ports first: .env, CORS and the UI config all embed them.
+BACKEND_PORT="$(resolve_port "$BACKEND_PORT" backend)"
+FRONTEND_PORT="$(resolve_port "$FRONTEND_PORT" frontend)"
 
 # --- database --------------------------------------------------------------
 # Docker is the documented path, but plenty of machines do not have it running,

@@ -61,6 +61,22 @@ Open a fresh PowerShell window afterwards so the new tools are on `PATH`.
 `--reset` wipes the database and reseeds it; `--no-seed` starts empty
 (`./scripts/dev.sh --reset`, or `.\scripts\dev.ps1 -Reset` on Windows).
 
+If a port is already taken the script moves to the next free one and tells
+you, so the URLs it prints at the end are the ones to use.
+
+### If it cannot find your database
+
+The Windows Postgres installer does not put `psql` on `PATH`. The script
+looks in `C:\Program Files\PostgreSQL\*\bin` anyway, but if your install
+is elsewhere, point at it directly:
+
+```powershell
+$env:PGBIN = "D:\Postgres\18\bin"
+.\scripts\dev.ps1
+# or skip detection entirely
+.\scripts\dev.ps1 -DatabaseUrl "postgresql+asyncpg://postgres:PASSWORD@localhost:5432/agentscrape"
+```
+
 ### Crawling a real institution
 
 The demo data is seeded, not scraped. To run the actual pipeline you need a
