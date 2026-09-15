@@ -226,10 +226,13 @@ _NOT_IN_NAME = frozenset({
     "attendings", "trainees", "alumni", "leadership",
     "highlights", "testimonials", "life", "community", "outreach", "global",
     "simulation", "quality", "safety", "innovation", "mission", "vision",
+    "award", "awards", "appreciation", "recognition", "responsibilities",
+    "responsibility", "duties", "call", "expectations", "requirements",
+    "policies", "guidelines", "handbook", "faq", "eligibility", "stipend",
     # Site furniture that reads as a title-cased phrase in a card block.
     "jobs", "job", "careers", "career", "giving", "donate", "news",
-    "events", "calendar", "links", "policies", "policy", "forms",
-    "application", "applications", "requirements", "diversity", "inclusion",
+    "events", "calendar", "links", "policy", "forms",
+    "application", "applications", "diversity", "inclusion",
     "research", "publications", "gallery", "photos", "videos", "sitemap",
 })
 

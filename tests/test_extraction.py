@@ -397,6 +397,9 @@ class TestSectionHeadingsAreNotPeople:
             # A bare specialty is a department heading, never a person.
             "Vascular Surgery",
             "Internal Medicine",
+            # The last two to survive a live crawl.
+            "Appreciation Award",
+            "Call Responsibilities",
         ],
     )
     def test_page_furniture_is_rejected(self, text):
