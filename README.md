@@ -17,18 +17,38 @@ continuous uptime.
 
 ## Quick start
 
+**macOS / Linux**
+
 ```bash
 git clone https://github.com/marvalarva2929/agentscrape.git
 cd agentscrape
 ./scripts/dev.sh
 ```
 
+**Windows** (PowerShell)
+
+```powershell
+git clone https://github.com/marvalarva2929/agentscrape.git
+cd agentscrape
+powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1
+```
+
 That installs everything, starts Postgres, applies migrations, loads demo data,
 clones the UI next to this repo, and runs the API and the UI together. Then open
 **<http://localhost:5173>** and sign in with `change-me`.
 
-Requires Node.js and either Docker or a local Postgres; it installs the Python
-toolchain itself. `Ctrl-C` stops both. Re-running it is safe.
+Requires Node.js, Git, and either Docker Desktop or a local Postgres; it
+installs the Python toolchain itself. `Ctrl-C` stops both. Re-running it is safe.
+
+On Windows, if either is missing:
+
+```powershell
+winget install OpenJS.NodeJS.LTS
+winget install Git.Git
+winget install Docker.DockerDesktop   # or PostgreSQL.PostgreSQL.16
+```
+
+Open a fresh PowerShell window afterwards so the new tools are on `PATH`.
 
 | | |
 |---|---|
@@ -38,8 +58,8 @@ toolchain itself. `Ctrl-C` stops both. Re-running it is safe.
 | Client password | `change-me` — browse, export, request schools |
 | Admin password | `change-me-admin` — the above, plus the request queue |
 
-`./scripts/dev.sh --reset` wipes the database and reseeds it;
-`--no-seed` starts empty.
+`--reset` wipes the database and reseeds it; `--no-seed` starts empty
+(`./scripts/dev.sh --reset`, or `.\scripts\dev.ps1 -Reset` on Windows).
 
 ### Crawling a real institution
 
