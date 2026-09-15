@@ -380,3 +380,63 @@ class TestPrecisionOnRealPages:
         assert classify_person("", "vascular neurology program leadership") is (
             PersonCategory.FACULTY
         )
+
+
+class TestSectionHeadingsAreNotPeople:
+    """The heading fallback reads every <h3>, so page furniture has to be
+    rejected explicitly. All of these reached the database on a live run."""
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "Clinical Experience",
+            "Scholarly Activity",
+            "Cardiac Anesthesia Attendings",
+            "Resident Wellness",
+            "Global Health",
+            # A bare specialty is a department heading, never a person.
+            "Vascular Surgery",
+            "Internal Medicine",
+        ],
+    )
+    def test_page_furniture_is_rejected(self, text):
+        assert _extract_name(text) is None
+
+    @pytest.mark.parametrize(
+        "text",
+        ["Nishant Agrawal", "Maria Gonzalez", "Zhen Tian", "Sean McDonald-Smith"],
+    )
+    def test_real_names_are_unaffected(self, text):
+        assert _extract_name(text) == text
+
+
+class TestPositionFallbackIsConservative:
+    """Profile cards put several labelled fields beside a name.
+
+    The fallback only runs when no recognised title matched, so it has to be
+    strict: "MD Medical School: Chicago Med. College" reached the UI as a job
+    title before this guard.
+    """
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "MD Medical School: Chicago Med. College",
+            "Medical School: MCW",
+            "Hometown: Chicago, IL",
+            "Undergraduate: Northwestern",
+        ],
+    )
+    def test_other_fields_are_not_positions(self, text):
+        assert _extract_position(text, "Charles Humes") is None
+
+    @pytest.mark.parametrize(
+        "text,expected",
+        [
+            ("Program Director", "Program Director"),
+            ("Associate Professor", "Associate Professor"),
+            ("Chief Resident", "Chief Resident"),
+        ],
+    )
+    def test_recognised_titles_still_work(self, text, expected):
+        assert _extract_position(text, "Someone Else") == expected

@@ -20,6 +20,7 @@ from selectolax.parser import HTMLParser, Node
 from ..db.enums import PersonCategory
 from ..domain.matching import EMAIL_RE, normalize_email, normalize_name
 from ..domain.pgy import parse_class_of, parse_pgy
+from ..domain.specialty import normalize_specialty
 from ..validation.email import deobfuscate, extract_emails, is_plausible
 from .person import ExtractedPerson
 
@@ -158,6 +159,15 @@ _POSITION_NOISE = re.compile(
     re.IGNORECASE,
 )
 _MAX_POSITION_CHARS = 90
+# Other labelled fields that sit beside a name on profile cards. Without this
+# the free-text fallback returns things like "MD Medical School: Chicago Med.
+# College" as though it were a job title.
+_NOT_A_POSITION = re.compile(
+    r"\b(medical school|med school|undergrad(uate)?|hometown|home town|interests|"
+    r"hobbies|fun fact|college|university|degree|born|raised|from|research|"
+    r"publications|education|b\.?s\.?|b\.?a\.?)\b",
+    re.IGNORECASE,
+)
 # Part of a name, not an acronym.
 _NAME_SUFFIX_TOKENS = frozenset({"II", "III", "IV", "JR", "SR"})
 
@@ -208,11 +218,18 @@ _NOT_IN_NAME = frozenset({
     "academic", "administration", "operations", "unit", "branch",
     "section", "campus", "library", "bureau", "agency", "authority",
     "graduate", "medical", "education", "training", "programs",
+    # Section headings on programme pages. The heading fallback reads every
+    # <h3>, so these arrive looking exactly like a two-word name.
+    "experience", "activity", "activities", "scholarly", "curriculum",
+    "rotations", "rotation", "conferences", "conference", "schedule",
+    "didactics", "wellness", "benefits", "salary", "housing", "mentorship",
+    "attendings", "trainees", "alumni", "leadership",
+    "highlights", "testimonials", "life", "community", "outreach", "global",
+    "simulation", "quality", "safety", "innovation", "mission", "vision",
     # Site furniture that reads as a title-cased phrase in a card block.
-    "alumni", "jobs", "job", "careers", "career", "giving", "donate", "news",
+    "jobs", "job", "careers", "career", "giving", "donate", "news",
     "events", "calendar", "links", "policies", "policy", "forms",
-    "application", "applications", "requirements", "curriculum", "rotations",
-    "benefits", "salary", "housing", "wellness", "diversity", "inclusion",
+    "application", "applications", "requirements", "diversity", "inclusion",
     "research", "publications", "gallery", "photos", "videos", "sitemap",
 })
 
@@ -239,6 +256,11 @@ def _looks_like_person_name(text: str) -> bool:
     # A comma with more than three words is a list of people, not one person
     # ("A Sanchez, K Little"). "Doe, Jane" and "Smith, John Paul" still pass.
     if "," in stripped and len(words) > 3:
+        return False
+    # Anything that resolves to a specialty is a department or section heading,
+    # not a person ("Cardiac Anesthesia", "Vascular Surgery"). More durable than
+    # listing every clinical word, and no real surname collides with one.
+    if normalize_specialty(stripped).canonical:
         return False
     # An all-caps token is an acronym, not part of a name ("BSD", "GME", "UCSF").
     # Credentials have already been stripped by this point. Generational
@@ -300,6 +322,10 @@ def _extract_position(text: str, name: str | None) -> str | None:
     # "MD" on its own is a credential, not a job title.
     tokens = [t for t in re.split(r"[,\s]+", blob) if t]
     if tokens and all(_CREDENTIAL_TOKEN.fullmatch(t) for t in tokens):
+        return None
+    # The fallback only guesses when no recognised title matched, so be strict:
+    # a colon or another field's label means this is somebody else's data.
+    if ":" in blob or _NOT_A_POSITION.search(blob):
         return None
     # A leftover that is just a person's own name is not a position.
     return blob if not _looks_like_person_name(blob) else None
