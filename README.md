@@ -18,20 +18,49 @@ continuous uptime.
 ## Quick start
 
 ```bash
-# Toolchain (system Python 3.9 is too old for LangGraph)
+git clone https://github.com/marvalarva2929/agentscrape.git
+cd agentscrape
+./scripts/dev.sh
+```
+
+That installs everything, starts Postgres, applies migrations, loads demo data,
+clones the UI next to this repo, and runs the API and the UI together. Then open
+**<http://localhost:5173>** and sign in with `change-me`.
+
+Requires Node.js and either Docker or a local Postgres; it installs the Python
+toolchain itself. `Ctrl-C` stops both. Re-running it is safe.
+
+| | |
+|---|---|
+| UI | <http://localhost:5173> |
+| API | <http://localhost:8000/api/v1> |
+| API docs | <http://localhost:8000/api/v1/docs> |
+| Client password | `change-me` — browse, export, request schools |
+| Admin password | `change-me-admin` — the above, plus the request queue |
+
+`./scripts/dev.sh --reset` wipes the database and reseeds it;
+`--no-seed` starts empty.
+
+### Crawling a real institution
+
+The demo data is seeded, not scraped. To run the actual pipeline you need a
+vision model on an OpenAI-compatible endpoint (`LLM_BASE_URL` in `.env`):
+
+```bash
+uv run agentscrape site medicine.uchicago.edu --dry-run   # ranked candidates only
+uv run agentscrape site radonc.uchicago.edu               # full pipeline
+```
+
+### Manual setup
+
+```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 uv venv --python 3.12 && uv sync
 uv run playwright install chromium
-
-cp .env.example .env          # set APP_PASSWORD and LLM_BASE_URL
-docker compose up -d          # Postgres on :5433
+cp .env.example .env
+docker compose up -d                 # Postgres on :5433
 uv run alembic upgrade head
-
-# One site, end to end, no concurrency — the fastest correctness check
-uv run agentscrape site medicine.uchicago.edu --dry-run   # ranked candidates only
-uv run agentscrape site radonc.uchicago.edu               # full pipeline
-
-# API
+uv run agentscrape seed-demo
 uv run uvicorn agentscrape.api.main:app --port 8000
 ```
 

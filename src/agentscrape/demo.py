@@ -20,11 +20,22 @@ from sqlalchemy import select
 
 from .config import settings
 from .db.enums import (
-    ExtractionMethod, FetchMode, PersonCategory, RecordStatus, RunStatus,
-    SiteRunStatus, ValidationStatus,
+    ExtractionMethod,
+    FetchMode,
+    PersonCategory,
+    RecordStatus,
+    RunStatus,
+    SiteRunStatus,
+    ValidationStatus,
 )
 from .db.models import (
-    KnownPath, Program, Record, RecordVersion, Run, Site, SiteRun,
+    KnownPath,
+    Program,
+    Record,
+    RecordVersion,
+    Run,
+    Site,
+    SiteRun,
 )
 from .db.repositories.programs import program_name_for
 from .db.session import session_scope
