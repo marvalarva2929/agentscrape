@@ -205,6 +205,8 @@ async def record_source(
         screenshot_available=version.screenshot_available,
         screenshot_url=_screenshot_url(version),
         screenshot_expires_at=version.screenshot_expires_at,
+        screenshot_width=version.screenshot_width,
+        screenshot_height=version.screenshot_height,
         field_locations=version.field_locations,
         run_id=version.run_id,
     )

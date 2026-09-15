@@ -85,6 +85,21 @@ else
   echo "DATABASE_URL=$DB_URL" >> .env
 fi
 
+# The browser enforces CORS on every call, so the API has to name the exact
+# origin the UI is served from — including a non-default FRONTEND_PORT.
+UI_ORIGINS="http://localhost:$FRONTEND_PORT,http://127.0.0.1:$FRONTEND_PORT"
+if grep -q '^CORS_ORIGINS=' .env; then
+  current="$(grep '^CORS_ORIGINS=' .env | cut -d= -f2-)"
+  case ",$current," in
+    *",http://localhost:$FRONTEND_PORT,"*) ;;
+    *) tmp="$(mktemp)"
+       sed "s|^CORS_ORIGINS=.*|CORS_ORIGINS=$current,$UI_ORIGINS|" .env > "$tmp"
+       mv "$tmp" .env ;;
+  esac
+else
+  echo "CORS_ORIGINS=$UI_ORIGINS" >> .env
+fi
+
 say "Installing Python dependencies"
 uv sync --quiet
 

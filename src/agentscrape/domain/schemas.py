@@ -112,6 +112,10 @@ class SourceOut(BaseModel):
     screenshot_available: bool
     screenshot_url: str | None
     screenshot_expires_at: datetime | None
+    # Natural size of the screenshot. `field_locations` are in screenshot pixel
+    # coordinates, so these are required to place them as percentages.
+    screenshot_width: int | None = None
+    screenshot_height: int | None = None
     field_locations: dict[str, dict[str, int]] | None
     run_id: str | None
 

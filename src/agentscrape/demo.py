@@ -205,7 +205,11 @@ async def seed_demo(*, reset: bool = False) -> dict[str, int]:
                 for person_index, (
                     name, category, position, pgy, class_of, has_email, status,
                 ) in enumerate(PEOPLE_TEMPLATE):
-                    local = name.lower().replace(" ", ".").replace("'", "")
+                    local = ".".join(
+                        part.strip(".").lower().replace("'", "")
+                        for part in name.split()
+                        if part.strip(".")
+                    )
                     email = f"{local}@{spec['domain']}" if has_email else None
                     identity = f"email:{email}" if email else f"name:{name.lower()}|{category}"
 
