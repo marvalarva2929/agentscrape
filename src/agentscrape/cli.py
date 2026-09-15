@@ -204,6 +204,25 @@ async def _print_records(site_id: str, limit: int = 30) -> None:
     console.print(table)
 
 
+@app.command("seed-demo")
+def seed_demo_command(
+    reset: bool = typer.Option(
+        False, "--reset", help="Clear existing data first"
+    ),
+) -> None:
+    """Populate demo data so the app can be explored without crawling."""
+    from .demo import seed_demo
+
+    async def _go() -> None:
+        counts = await seed_demo(reset=reset)
+        console.print(
+            f"[green]Seeded[/green] {counts['schools']} schools, "
+            f"{counts['programs']} programmes, {counts['people']} people."
+        )
+
+    asyncio.run(_go())
+
+
 @app.command()
 def sweep() -> None:
     """Expire screenshots and exports past their retention window."""
