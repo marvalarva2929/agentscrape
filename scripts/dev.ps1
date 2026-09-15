@@ -19,7 +19,12 @@ param(
     [int]$BackendPort = 8000,
     [int]$FrontendPort = 5173,
     [string]$FrontendRepo = 'https://github.com/marvalarva2929/agentscrape-frontend.git',
-    [string]$FrontendDir
+    [string]$FrontendDir,
+    # Skip database detection entirely.
+    [string]$DatabaseUrl,
+    # Superuser used only to create the agentscrape role and database.
+    [string]$PostgresUser = 'postgres',
+    [int]$PostgresPort
 )
 
 $ErrorActionPreference = 'Stop'
@@ -51,16 +56,55 @@ if (-not (Have 'uv')) {
 if (-not (Have 'uv')) { Die 'uv installed but not on PATH. Open a new terminal and re-run.' }
 
 # --- database --------------------------------------------------------------
-# Docker Desktop is the documented path; fall back to a local Postgres because
-# plenty of machines do not have Docker running.
+# Docker Desktop is the documented path; fall back to a local Postgres, because
+# plenty of machines have Postgres installed and no Docker.
+
+function Find-PostgresBin {
+    <#
+      The Windows installer does not put psql on PATH by default, so "is
+      Postgres installed" cannot be answered by Get-Command alone. Check PATH
+      first, then PGBIN, then the standard install locations, newest first.
+    #>
+    if (Have 'pg_isready') { return (Split-Path (Get-Command pg_isready).Source) }
+    if ($env:PGBIN -and (Test-Path (Join-Path $env:PGBIN 'pg_isready.exe'))) { return $env:PGBIN }
+
+    $roots = @($env:ProgramFiles, ${env:ProgramFiles(x86)}, 'C:\Program Files') |
+             Where-Object { $_ } | Select-Object -Unique
+    foreach ($root in $roots) {
+        $base = Join-Path $root 'PostgreSQL'
+        if (-not (Test-Path $base)) { continue }
+        # Sort on the major version only. Stripping non-digits turns "9.6"
+        # into 906, which would beat 18 and pick an ancient install.
+        $versions = Get-ChildItem $base -Directory -ErrorAction SilentlyContinue |
+                    Sort-Object { [int](($_.Name -split '[^0-9]')[0]) } -Descending
+        foreach ($v in $versions) {
+            $bin = Join-Path $v.FullName 'bin'
+            if (Test-Path (Join-Path $bin 'pg_isready.exe')) { return $bin }
+        }
+    }
+    return $null
+}
+
+function Test-PostgresPort {
+    param([int]$Port)
+    pg_isready -q -h localhost -p $Port *> $null
+    return ($LASTEXITCODE -eq 0)
+}
+
 $DbUrl = $null
+
+if ($DatabaseUrl) {
+    Say 'Using the database URL you supplied'
+    $DbUrl = $DatabaseUrl
+}
+
 $dockerUp = $false
-if (Have 'docker') {
+if (-not $DbUrl -and (Have 'docker')) {
     docker info *> $null
     $dockerUp = ($LASTEXITCODE -eq 0)
 }
 
-if ($dockerUp) {
+if (-not $DbUrl -and $dockerUp) {
     Say 'Starting Postgres in Docker'
     docker compose up -d | Out-Null
     $ready = $false
@@ -72,21 +116,76 @@ if ($dockerUp) {
     if (-not $ready) { Die 'Postgres container did not become ready. Try: docker compose logs postgres' }
     $DbUrl = 'postgresql+asyncpg://agentscrape:agentscrape@localhost:5433/agentscrape'
 }
-elseif (Have 'pg_isready') {
-    pg_isready -q -h localhost -p 5432 *> $null
-    if ($LASTEXITCODE -eq 0) {
-        Warn 'Docker is not running; using the Postgres already on localhost:5432'
-        psql -h localhost -p 5432 -d postgres -q -c "CREATE ROLE agentscrape LOGIN PASSWORD 'agentscrape' SUPERUSER" *> $null
-        psql -h localhost -p 5432 -d postgres -q -c 'CREATE DATABASE agentscrape OWNER agentscrape' *> $null
-        $DbUrl = 'postgresql+asyncpg://agentscrape:agentscrape@localhost:5432/agentscrape'
+
+if (-not $DbUrl) {
+    $pgBin = Find-PostgresBin
+    if ($pgBin) {
+        # Only for this process, so the machine's PATH is left alone.
+        $env:Path = $pgBin + [IO.Path]::PathSeparator + $env:Path
+        Say "Found Postgres at $pgBin"
+
+        $port = @($PostgresPort, 5432, 5433) | Where-Object { $_ } |
+                Select-Object -Unique | Where-Object { Test-PostgresPort $_ } |
+                Select-Object -First 1
+
+        if (-not $port) {
+            Die @"
+Postgres is installed at $pgBin but is not accepting connections.
+Start the service and re-run:
+  Get-Service postgresql*          # find the service name
+  Start-Service <name>
+"@
+        }
+
+        Warn "Docker is not running; using the Postgres on localhost:$port"
+
+        # The installer creates a 'postgres' superuser with a password set
+        # during setup. There is no way to discover it, so ask once and keep it
+        # only for this process.
+        if (-not $env:PGPASSWORD) {
+            $secure = Read-Host "Password for the 'postgres' user (set when you installed Postgres)" -AsSecureString
+            $env:PGPASSWORD = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
+                [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure))
+        }
+
+        $psqlArgs = @('-h', 'localhost', '-p', "$port", '-U', $PostgresUser, '-d', 'postgres', '-q', '-t', '-A')
+
+        & psql @psqlArgs -c 'SELECT 1' *> $null
+        if ($LASTEXITCODE -ne 0) {
+            Die @"
+Could not sign in to Postgres on localhost:$port as '$PostgresUser'.
+Check the password, or pass a different superuser:
+  .\scripts\dev.ps1 -PostgresUser postgres
+"@
+        }
+
+        $hasRole = (& psql @psqlArgs -c "SELECT 1 FROM pg_roles WHERE rolname='agentscrape'")
+        if ("$hasRole".Trim() -ne '1') {
+            Say 'Creating the agentscrape role'
+            & psql @psqlArgs -c "CREATE ROLE agentscrape LOGIN PASSWORD 'agentscrape' SUPERUSER" *> $null
+        }
+
+        $hasDb = (& psql @psqlArgs -c "SELECT 1 FROM pg_database WHERE datname='agentscrape'")
+        if ("$hasDb".Trim() -ne '1') {
+            Say 'Creating the agentscrape database'
+            & psql @psqlArgs -c 'CREATE DATABASE agentscrape OWNER agentscrape' *> $null
+        }
+
+        $DbUrl = "postgresql+asyncpg://agentscrape:agentscrape@localhost:$port/agentscrape"
     }
 }
 
 if (-not $DbUrl) {
     Die @'
-No database available. Either:
-  - start Docker Desktop and re-run, or
-  - install Postgres: winget install PostgreSQL.PostgreSQL.16
+No database found.
+
+If Postgres IS installed, its tools are probably not on PATH. Point the script
+at them directly:
+  $env:PGBIN = "C:\Program Files\PostgreSQL\18\bin"
+  .\scripts\dev.ps1
+
+Otherwise either start Docker Desktop, or install Postgres:
+  winget install PostgreSQL.PostgreSQL.16
 '@
 }
 
