@@ -233,6 +233,10 @@ Priority scale (absolute, comparable across calls):
   10-29   individual profile pages, search/filter variants of a directory
           already represented, pages that only might help
   1-9     very unlikely to matter
+News stories, press releases, blog posts and "spotlight" articles rank 5-20
+even when they are about residents or a residency ("...-announces-pediatric-
+residency", "residents-ready-real-world-medicine"): they describe trainees,
+they do not list them. Judge by what the page is, not by the words it contains.
 Mark "skip" ONLY when the link is obviously useless for finding people: login,
 donate/giving, apply/application portals, patient billing or appointments,
 maps/parking, privacy/terms, social media, calendars, general news articles
