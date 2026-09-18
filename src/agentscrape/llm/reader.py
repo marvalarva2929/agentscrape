@@ -285,7 +285,17 @@ def combine_with_regex(
     return only when an address on the page anchors them."""
     model_ids = {id(p) for p in model_people}
     merged = merge_people(model_people, regex_people)
-    return [
-        p for p in merged
-        if id(p) in model_ids or (p.email and p.email in folded_text)
-    ]
+    out: list[ExtractedPerson] = []
+    for person in merged:
+        if id(person) in model_ids:
+            out.append(person)
+        elif person.email and person.email in folded_text:
+            # The address is real, but a name and role the model did not
+            # confirm are regex guesses ("Infant Breast Feeding", "Cambridge
+            # St"); keep only what the page proves.
+            person.full_name = None
+            person.position = None
+            person.category = PersonCategory.UNKNOWN
+            person.locate_hints = [person.email]
+            out.append(person)
+    return out

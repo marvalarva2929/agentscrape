@@ -52,9 +52,9 @@ from ..state import SiteState
 
 log = logging.getLogger("agentscrape.pipeline.extract")
 
-# Pages per loop iteration. Fetches and model reads in a batch run concurrently;
-# browser work is serialized on the site's one browser context.
-BATCH_SIZE = 16
+# Pages per loop iteration. Fetches, model reads and (bounded) browser work in a
+# batch all run concurrently.
+BATCH_SIZE = 32
 _TRAINEES = (PersonCategory.RESIDENT, PersonCategory.FELLOW)
 # How many visited pages to remember per program for gap filling.
 _PROGRAM_VISITS_KEPT = 60
@@ -308,11 +308,16 @@ async def _process_page(
     return outcome
 
 
-def _render_lock(deps: PipelineDeps) -> asyncio.Lock:
-    """One browser context per site, so browser work within a batch is serial."""
+# Browser pages open at once in the site's context. Renders were the
+# bottleneck when serialized: a render plus tab clicks runs 15-60 seconds.
+RENDER_CONCURRENCY = 4
+
+
+def _render_lock(deps: PipelineDeps) -> asyncio.Semaphore:
+    """Bounds concurrent browser pages within the site's one browser context."""
     lock = getattr(deps, "_render_lock", None)
     if lock is None:
-        lock = asyncio.Lock()
+        lock = asyncio.Semaphore(RENDER_CONCURRENCY)
         deps._render_lock = lock  # type: ignore[attr-defined]
     return lock
 

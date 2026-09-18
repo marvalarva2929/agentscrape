@@ -90,7 +90,7 @@ async def test_a_dead_endpoint_aborts_instead_of_degrading(monkeypatch) -> None:
     assert meter.failures == 3
 
 
-def test_regex_people_survive_only_when_anchored_by_an_address() -> None:
+def test_regex_people_survive_only_as_the_address_that_anchors_them() -> None:
     model = [ExtractedPerson(full_name="Lorenzo Canseco", category=PersonCategory.RESIDENT)]
     regex = [
         ExtractedPerson(full_name="Lorenzo Canseco", email="lcanseco@bswhealth.org"),
@@ -99,9 +99,12 @@ def test_regex_people_survive_only_when_anchored_by_an_address() -> None:
     ]
     text = fold(ROSTER_TEXT + " pat.doe@bswhealth.org")
     kept = combine_with_regex(model, regex, text)
-    assert [p.full_name for p in kept] == ["Lorenzo Canseco", "Pat Doe"]
-    assert kept[0].email == "lcanseco@bswhealth.org"
+    assert [p.email for p in kept] == ["lcanseco@bswhealth.org", "pat.doe@bswhealth.org"]
+    assert kept[0].full_name == "Lorenzo Canseco"
     assert kept[0].category == PersonCategory.RESIDENT
+    # The address is on the page; the name and role are regex guesses.
+    assert kept[1].full_name is None
+    assert kept[1].category == PersonCategory.UNKNOWN
 
 
 def test_page_text_keeps_hidden_tabs_mailto_alt_text_and_embedded_people() -> None:

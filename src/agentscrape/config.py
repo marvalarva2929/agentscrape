@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     # A 100-person roster is several thousand tokens of JSON; 4096 truncated it.
     llm_max_output_tokens: int = 16_000
     # Model calls in flight at once, across every site in the process.
-    llm_concurrency: int = 16
+    llm_concurrency: int = 24
     # This many model failures in a row abort the site. A broken endpoint used
     # to degrade silently into a heuristic-only crawl that looked like success.
     llm_max_consecutive_failures: int = 20
