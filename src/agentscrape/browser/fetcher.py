@@ -12,6 +12,9 @@ from ..config import settings
 from ..urls import content_hash, host_of
 from .ratelimit import get_rate_limiter
 
+# A host saying no is a request to slow down, not a page that does not exist.
+_THROTTLE_STATUS = frozenset({403, 429, 503})
+
 log = logging.getLogger("agentscrape.fetch")
 
 _RETRYABLE_STATUS = {429, 500, 502, 503, 504}
@@ -94,6 +97,10 @@ class Fetcher:
                 else:
                     elapsed = int((asyncio.get_running_loop().time() - start) * 1000)
                     last_status = response.status_code
+                    if response.status_code in _THROTTLE_STATUS:
+                        self._limiter.note_throttled(host)
+                    elif response.status_code < 400:
+                        self._limiter.note_success(host)
                     if response.status_code in _RETRYABLE_STATUS and attempt < attempts - 1:
                         last_error = f"HTTP {response.status_code}"
                         await self._backoff(attempt, response)

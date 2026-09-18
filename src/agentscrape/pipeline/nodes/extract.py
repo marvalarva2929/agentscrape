@@ -21,9 +21,12 @@ from ...config import settings
 from ...db.enums import ExtractionMethod, FetchMode
 from ...db.repositories.records import ExtractionContext, lock_site, reconcile_people
 from ...db.repositories.sites import claim_url, record_path_outcome, update_visit
+from ...discovery.scoring import rank_candidates
+from ...discovery.sitemap import extract_links
 from ...extraction.html_people import extract_people, page_looks_thin
 from ...extraction.person import ExtractedPerson
 from ...extraction.vision import extract_with_vision
+from ...llm.navigation import decide_navigation
 from ...orchestrator.events import EventType
 from ...storage.artifacts import (
     png_dimensions,
@@ -31,7 +34,7 @@ from ...storage.artifacts import (
     save_screenshot,
     screenshot_expiry,
 )
-from ...urls import canonicalize, host_of, url_hash
+from ...urls import canonicalize, host_of, in_scope, registrable_domain, url_hash
 from ..checkpoint import save_checkpoint
 from ..deps import PipelineDeps
 from ..state import SiteState
@@ -41,6 +44,11 @@ log = logging.getLogger("agentscrape.pipeline.extract")
 # How many candidates to pull per loop iteration. Cheap fetches run concurrently
 # inside a batch; any browser work in the batch is serialized afterwards.
 BATCH_SIZE = 8
+# A link has to look like a roster to earn a place in the work list. Sitemap
+# discovery can afford a floor of 1.0 because it runs once; this runs on every
+# page fetched, so a low floor would let a department's own navigation refill
+# the list faster than the crawl drains it.
+FRONTIER_MIN_SCORE = 6.0
 
 
 async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
@@ -69,7 +77,12 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
 
     results = await deps.fetcher.get_many([c["url"] for c in claimed])
 
+    allowed = set(
+        state.get("allowed_domains") or [registrable_domain(state["root_domain"])]
+    )
     new = changed = unchanged = missing_total = 0
+    discovered_links: dict[str, None] = {}
+    preferred_links: list[str] = []
     known_hits = state.get("known_path_hits", 0)
     barren_streak = state.get("barren_streak", 0)
     seen_ids = list(state.get("seen_record_ids", []))
@@ -93,6 +106,13 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
         if result.ok and result.is_html:
             page_title = _title_of(result.text)
             people = extract_people(result.text, page_title=page_title, url=url)
+            # Discovery is one-shot and sitemap-driven, so it never sees a page
+            # that is only reachable by following a link. Harvesting links from
+            # the pages we fetch anyway turns the ranked list into a frontier:
+            # a programme landing page leads to its own roster.
+            discovered_links.update(
+                dict.fromkeys(extract_links(result.text, url, allowed_domains=allowed))
+            )
 
         should_render, why = (
             page_looks_thin(result.text, result.text, len(people))
@@ -109,11 +129,12 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
             if rendered is not None:
                 (
                     people, fetch_mode, screenshot_rel, field_locations,
-                    page_title, shot_size,
+                    page_title, shot_size, navigation_links,
                 ) = rendered
+                preferred_links.extend(navigation_links)
+                discovered_links.update(dict.fromkeys(navigation_links))
 
         records_here = 0
-        outcome_new_or_changed = 0
         if people:
             context = ExtractionContext(
                 site_id=state["site_id"],
@@ -148,7 +169,6 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
             unchanged += outcome.unchanged
             seen_ids.extend(outcome.record_ids)
             records_here = outcome.total_seen
-            outcome_new_or_changed = outcome.new + outcome.changed
 
             # Fingerprint only the pages that actually produced records: those
             # are the ones the next run's skip probe will re-fetch, and the two
@@ -166,11 +186,20 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
                     url=url, records=records_here,
                 )
 
-        # Track how long we have gone without finding anyone new. Candidates are
-        # ranked, so a long barren stretch means the productive pages are behind us.
-        if outcome_new_or_changed:
+        # Track how long we have gone without finding anybody. Candidates are
+        # ranked, so a long barren stretch means the productive pages are behind
+        # us. This counts people *found*, not people new or changed: a re-scrape
+        # of a site whose rosters have not moved yields nothing new on every
+        # page, and counting that as barren stopped the second run of a site
+        # eight pages in, before it reached anything it had not seen.
+        #
+        # A page we could not read is not evidence that the site has stopped
+        # giving — it is evidence we were blocked. Baylor Scott & White starts
+        # returning 403 under load, and counting those as barren ended the crawl
+        # after 120 of its 1,500 steps with most of its rosters unvisited.
+        if records_here:
             barren_streak = 0
-        else:
+        elif result.ok:
             barren_streak += 1
 
         async with deps.sessionmaker() as session:
@@ -206,8 +235,14 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
             steps_taken=steps_taken + steps_used,
         )
 
+    candidates = _merge_frontier(
+        candidates, cursor + len(batch), discovered_links,
+        allowed=allowed, preferred=preferred_links,
+    )
+
     updated: SiteState = {
         **state,
+        "candidates": candidates,
         "cursor": cursor + len(batch),
         "steps_taken": steps_taken + steps_used,
         "records_new": state.get("records_new", 0) + new,
@@ -227,6 +262,101 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
         await session.commit()
 
     return updated
+
+
+def _merge_frontier(
+    candidates: list[dict],
+    cursor: int,
+    links: dict[str, None],
+    *,
+    allowed: set[str] | frozenset[str],
+    preferred: list[str] | tuple[str, ...] = (),
+) -> list[dict]:
+    """Fold newly seen links into the part of the work list not yet visited.
+
+    Only the tail is touched, so the caller's cursor stays valid. The tail is
+    re-sorted by score, which is what lets a roster found on page 3 be visited
+    before the eighty faculty pages already queued behind it. Everything already
+    visited keeps its place and is never re-scored.
+    """
+    if not links:
+        return candidates
+
+    known = {c["url"] for c in candidates}
+    preferred_urls: list[str] = []
+    for url in preferred:
+        canonical = canonicalize(url)
+        if (
+            canonical
+            and canonical not in preferred_urls
+            and in_scope(host_of(canonical), allowed)
+        ):
+            preferred_urls.append(canonical)
+    preferred_set = set(preferred_urls)
+    fresh = [
+        {"url": scored.url, "score": scored.score, "is_known_path": False}
+        for scored in rank_candidates(
+            [u for u in links if u not in known and u not in preferred_set],
+            limit=settings.max_candidates,
+            min_score=FRONTIER_MIN_SCORE,
+        )
+        if in_scope(host_of(scored.url), allowed)
+    ]
+    model_fresh = [
+        {
+            "url": url,
+            # Kept for the existing candidate schema; semantic precedence is
+            # represented explicitly by llm_selected, not a fabricated score.
+            "score": 0.0,
+            "is_known_path": False,
+            "llm_selected": True,
+        }
+        for url in preferred_urls
+        if url not in known
+    ]
+    if not fresh and not model_fresh and not preferred_set.intersection(known):
+        return candidates
+
+    head, tail = candidates[:cursor], candidates[cursor:]
+    promoted = []
+    tail_by_url = {c["url"]: c for c in tail}
+    for url in preferred_urls:
+        existing = tail_by_url.pop(url, None)
+        if existing is not None:
+            promoted.append({**existing, "llm_selected": True})
+    tail = list(tail_by_url.values())
+    room = max(settings.max_candidates - len(candidates), 0)
+    if room <= 0:
+        # The list is already at its cap. A new page still displaces a queued one
+        # when it scores higher, so a late discovery is not simply lost.
+        merged = [
+            *promoted,
+            *model_fresh,
+            *sorted(
+                tail + fresh,
+                key=lambda c: (not c.get("llm_selected", False), -c["score"]),
+            ),
+        ]
+        merged = merged[: max(len(candidates) - len(head), 0)]
+    else:
+        additions = [*model_fresh, *fresh]
+        merged = [
+            *promoted,
+            *additions[:room],
+            *sorted(
+                tail,
+                key=lambda c: (not c.get("llm_selected", False), -c["score"]),
+            ),
+        ]
+    queued = {c["url"] for c in merged}
+    admitted = sum(
+        1 for c in [*model_fresh, *fresh] if c["url"] in queued
+    )
+    log.info(
+        "frontier: %d of %d new links queued (work list now %d, %d unvisited)",
+        admitted, len(fresh) + len(model_fresh), len(head) + len(merged), len(merged),
+    )
+    return [*head, *merged]
 
 
 async def _render_and_extract(
@@ -249,17 +379,33 @@ async def _render_and_extract(
 
     people = extract_people(rendered.html, page_title=rendered.title, url=url)
 
-    # One interaction step, only when the accessibility tree offers a control.
-    # Targets come from role + name; never from pixel coordinates.
-    if not people and rendered.controls:
-        control = next((c for c in rendered.controls if not c.get("disabled")), None)
-        if control:
-            log.info("interacting with %r on %s", control["name"], url)
-            after = await click_by_accessible_name(
-                deps.browser_context, url, control["role"], control["name"]
-            )
-            if after.ok:
-                people = extract_people(after.html, page_title=after.title, url=url)
+    decision = await decide_navigation(
+        url=rendered.final_url,
+        title=rendered.title,
+        text=rendered.text,
+        links=rendered.links,
+        controls=rendered.controls,
+        screenshot=rendered.screenshot,
+        meter=deps.meter,
+    )
+    if decision.reason:
+        log.info(
+            "navigation decision for %s: %s (%s)",
+            url, decision.page_type, decision.reason,
+        )
+
+    # The model may choose one supplied accessibility target. It never produces
+    # pixel coordinates, and the decision is validated against the real controls.
+    if decision.control:
+        control = decision.control
+        log.info("interacting with %r on %s", control["name"], url)
+        after = await click_by_accessible_name(
+            deps.browser_context, url, control["role"], control["name"]
+        )
+        if after.ok:
+            after_people = extract_people(after.html, page_title=after.title, url=url)
+            if after_people:
+                people = after_people
 
     if not people:
         # Vision reads what the DOM does not expose: contacts published as images,
@@ -292,7 +438,7 @@ async def _render_and_extract(
 
     return (
         people, FetchMode.BOTH, screenshot_rel, field_locations, rendered.title,
-        shot_size,
+        shot_size, list(decision.visit_urls),
     )
 
 

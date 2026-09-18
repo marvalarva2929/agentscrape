@@ -145,8 +145,10 @@ class TestErrorEnvelope:
         assert error["code"] == "NOT_FOUND"
         assert isinstance(error["message"], str) and error["message"]
 
-    async def test_validation_error_carries_details(self, client, auth):
-        response = await client.post(f"{API}/runs", json={"sites": []}, headers=auth)
+    async def test_validation_error_carries_details(self, client):
+        login = await client.post(f"{API}/auth/login", json={"password": "change-me-admin"})
+        admin_auth = {"Authorization": f"Bearer {login.json()['token']}"}
+        response = await client.post(f"{API}/runs", json={"sites": []}, headers=admin_auth)
         assert response.status_code == 422
         assert response.json()["error"]["code"] == "VALIDATION_ERROR"
 
@@ -344,49 +346,21 @@ class TestRunsAndAdmin:
         assert "success_rate" in row and "skip_rate" in row
         assert row["total_site_runs"] == 1
 
-    async def test_cancelling_a_finished_run_is_a_clean_conflict(self, client, auth, seeded):
+    async def test_cancelling_a_finished_run_is_a_clean_conflict(self, client, seeded):
+        login = await client.post(f"{API}/auth/login", json={"password": "change-me-admin"})
+        admin_auth = {"Authorization": f"Bearer {login.json()['token']}"}
         response = await client.post(
-            f"{API}/runs/{seeded['run'].id}/cancel", headers=auth
+            f"{API}/runs/{seeded['run'].id}/cancel", headers=admin_auth
         )
         assert response.status_code == 409
         assert response.json()["error"]["code"] == "RUN_NOT_CANCELLABLE"
 
 
-class TestCsvValidate:
-    async def test_preview_reports_known_sites_and_rejects_k12(self, client, auth, seeded):
-        csv = (
-            b"url\n"
-            b"med.example.edu\n"
-            b"lincoln.k12.ca.us\n"
-            b"brand-new-hospital.edu\n"
-            b"not a url at all\n"
-        )
+class TestRemovedCsvValidate:
+    async def test_csv_preview_upload_endpoint_is_removed(self, client, auth, seeded):
         response = await client.post(
             f"{API}/runs/validate",
-            files={"file": ("sites.csv", csv, "text/csv")},
+            files={"file": ("sites.csv", b"url\nmed.example.edu\n", "text/csv")},
             headers=auth,
         )
-        assert response.status_code == 200
-        body = response.json()
-        assert body["total_rows"] == 4
-        rows = {r["input"]: r for r in body["rows"]}
-
-        assert rows["med.example.edu"]["known_site"] is True
-        assert rows["med.example.edu"]["previous_record_count"] == 3
-
-        k12 = rows["lincoln.k12.ca.us"]
-        assert k12["valid"] is False
-        assert "K-12" in k12["error"] or "post-secondary" in k12["error"]
-
-        assert rows["brand-new-hospital.edu"]["valid"] is True
-        assert rows["brand-new-hospital.edu"]["known_site"] is False
-        assert rows["not a url at all"]["valid"] is False
-
-    async def test_empty_csv_is_a_clean_error(self, client, auth):
-        response = await client.post(
-            f"{API}/runs/validate",
-            files={"file": ("empty.csv", b"", "text/csv")},
-            headers=auth,
-        )
-        assert response.status_code == 400
-        assert response.json()["error"]["code"] == "INVALID_CSV"
+        assert response.status_code in (404, 405)

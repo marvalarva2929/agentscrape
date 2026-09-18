@@ -197,8 +197,8 @@ cat <<EOF
    API docs:  http://localhost:$BACKEND_PORT/api/v1/docs
 
    Passwords (from .env)
-     client:  ${CLIENT_PW:-change-me}          browse, export, request schools
-     admin:   ${ADMIN_PW:-change-me-admin}     the above, plus the request queue
+     client:  ${CLIENT_PW:-change-me}          browse schools, people, sources
+     admin:   ${ADMIN_PW:-change-me-admin}     the above, plus billable crawls
 
    Demo data is already loaded. To crawl a real institution instead:
      uv run agentscrape site medicine.uchicago.edu

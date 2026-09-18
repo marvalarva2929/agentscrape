@@ -169,7 +169,7 @@ _CANONICAL_BY_DENOISED = {
 # Subdomain labels that name a whole medical school or health system rather than
 # one program. `medicine.<univ>.edu` is the School of Medicine, not the Internal
 # Medicine department, so it must not out-rank a specialty in the path.
-_GENERIC_HOST_LABELS = frozenset({
+GENERIC_HOST_LABELS = frozenset({
     "www", "web", "medicine", "med", "meds", "medical", "health", "healthcare",
     "hospital", "hospitals", "clinic", "clinics", "school", "college",
     "university", "campus", "education", "edu", "gme", "residency", "students",
@@ -275,7 +275,7 @@ def infer_specialty(
                 return SpecialtyMatch(match.canonical, segment, match.confidence * 0.9)
 
         for label in (parts.hostname or "").split(".")[:-2]:
-            if label.lower() in _GENERIC_HOST_LABELS:
+            if label.lower() in GENERIC_HOST_LABELS:
                 continue
             match = normalize_specialty(label)
             if match.canonical:

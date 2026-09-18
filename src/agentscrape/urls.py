@@ -30,19 +30,29 @@ def canonicalize(url: str, *, base: str | None = None) -> str | None:
     url = url.strip()
     if not url or url.startswith(("mailto:", "tel:", "javascript:", "data:", "#")):
         return None
-    if base:
-        url = urljoin(base, url)
-
-    parts = urlsplit(url)
-    if parts.scheme not in ("http", "https"):
+    # A page can link anything, and both `urljoin` and `urlsplit` raise on a
+    # malformed authority — "Invalid IPv6 URL" for a stray bracket, "Port out of
+    # range" for a typo. Unguarded, one bad href on one page aborted the whole
+    # site run: an Arizona crawl lost 650 steps of remaining budget to a single
+    # link. Both calls are inside the guard because `urljoin` parses too, and
+    # guarding only the second one left the crash exactly where it was. An
+    # unparseable URL is simply not fetchable, which is what None already means.
+    try:
+        if base:
+            url = urljoin(base, url)
+        parts = urlsplit(url)
+        if parts.scheme not in ("http", "https"):
+            return None
+        host = (parts.hostname or "").lower().rstrip(".")
+        port = parts.port
+    except ValueError:
         return None
-    host = (parts.hostname or "").lower().rstrip(".")
     if not host:
         return None
 
     netloc = host
-    if parts.port and parts.port != _DEFAULT_PORTS.get(parts.scheme):
-        netloc = f"{host}:{parts.port}"
+    if port and port != _DEFAULT_PORTS.get(parts.scheme):
+        netloc = f"{host}:{port}"
 
     path = parts.path or "/"
     path = _INDEX_SUFFIX.sub("/", path)
@@ -96,9 +106,30 @@ def same_registrable_domain(a: str, b: str) -> bool:
     return registrable_domain(a) == registrable_domain(b)
 
 
+def in_scope(host: str, allowed_domains: set[str] | frozenset[str]) -> bool:
+    """True when `host` belongs to one of the institution's own domains.
+
+    An academic medical centre routinely spans two registrable domains: the
+    university and the health system it staffs. Chicago's trainees are published
+    on uchicagomedicine.org while its GME site is uchicago.edu, and Arizona's
+    residents carry bannerhealth.com addresses. Judging scope by the entry
+    domain alone puts the rosters permanently out of reach.
+    """
+    if not host:
+        return False
+    return registrable_domain(host) in allowed_domains
+
+
 def host_of(url: str) -> str:
-    return (urlsplit(url).hostname or "").lower()
+    try:
+        return (urlsplit(url).hostname or "").lower()
+    except ValueError:
+        return ""
 
 
 def path_depth(url: str) -> int:
-    return len([s for s in urlsplit(url).path.split("/") if s])
+    try:
+        path = urlsplit(url).path
+    except ValueError:
+        return 0
+    return len([s for s in path.split("/") if s])

@@ -1,7 +1,7 @@
 """Two passwords, two scopes, bearer tokens.
 
-A client password grants `client` scope: browse, export, submit a CSV request.
-A separate admin password grants `admin` scope: see submitted CSVs, launch runs,
+A client password grants `client` scope: browse schools, people, sources and
+exports. A separate admin password grants `admin` scope: launch billable runs
 and view spend. Both are plain config values — no user table, no roles.
 
 Bearer tokens rather than cookies, deliberately. The frontend is served from

@@ -16,7 +16,7 @@ class Settings(BaseSettings):
 
     # --- auth -----------------------------------------------------------
     app_password: str = "change-me"
-    # Staff-only areas: submitted CSVs, launching runs, spend and site stats.
+    # Staff-only areas: launching runs, spend and site stats.
     admin_password: str = "change-me-admin"
     token_ttl_hours: int = 720
     # Signed screenshot links, so an <img> tag can load one without a header.
@@ -52,7 +52,7 @@ class Settings(BaseSettings):
     max_html_bytes: int = 4_000_000
 
     # --- discovery ------------------------------------------------------
-    max_candidates: int = 150
+    max_candidates: int = 2_500
     discovery_timeout_seconds: int = 180
     discovery_source_timeout_seconds: int = 60
     enable_crt_sh: bool = True
@@ -64,14 +64,27 @@ class Settings(BaseSettings):
     default_concurrency: int = 4
     max_concurrency: int = 8
     default_skip_threshold: float = 0.90
-    default_step_budget: int = 40
-    # Stop a site once this many consecutive candidate pages yield nobody new.
+    # A teaching hospital publishes one roster per programme, and a medical
+    # school runs 40-60 programmes across as many departmental hosts. At 40 the
+    # budget was spent inside the first four departments, which is what capped a
+    # full-university scrape at roughly half its rosters. Pages are plain HTTP
+    # fetches at a few per second, so the budget is bounded by politeness rather
+    # than cost.
+    # Measured, not guessed: across five benchmarked institutions every run
+    # spent its budget with 91-99% of the pages it had visited still yielding
+    # people, so the crawl was being cut off mid-harvest every time.
+    default_step_budget: int = 1_500
+    # Stop a site once this many consecutive candidate pages yield nobody at all.
     # Candidates are ranked, so a long barren stretch means the good pages are
     # behind us. Replaces a fixed people-goal: the run ends when the site stops
-    # giving, not at an arbitrary count.
-    stop_after_barren_pages: int = 8
+    # giving, not at an arbitrary count. It has to be well above the length of
+    # one department's run of brochure pages, or the crawl stops between two
+    # departments that both have rosters.
+    stop_after_barren_pages: int = 30
     run_timeout_seconds: int = 86_400
-    site_timeout_seconds: int = 1_800
+    # A large institution at the raised step budget runs for well over half
+    # an hour, and longer again when pages have to be rendered.
+    site_timeout_seconds: int = 7_200
     max_concurrent_contexts: int = 8
     estimated_mb_per_context: int = 350
     memory_safety_factor: float = 0.75

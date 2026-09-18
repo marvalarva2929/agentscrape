@@ -1,0 +1,56 @@
+{
+  "arizona": {
+    "name": "University of Arizona College of Medicine - Tucson",
+    "host": "medicine.arizona.edu",
+    "entry": "https://medicine.arizona.edu/education/residency-fellowship",
+    "sheet": "benchmarks/sheets/arizona-tucson.csv",
+    "expected_residents_fellows": 1247,
+    "affiliated_domains": [
+      "bannerhealth.com"
+    ],
+    "needs_browser": false,
+    "step_budget": 1500
+  },
+  "texas-tech": {
+    "name": "Texas Tech University Health Sciences Center",
+    "host": "www.ttuhsc.edu",
+    "entry": "https://www.ttuhsc.edu/",
+    "sheet": "benchmarks/sheets/texas-tech.csv",
+    "expected_residents_fellows": 901,
+    "affiliated_domains": [],
+    "needs_browser": false,
+    "step_budget": 1500
+  },
+  "bcm": {
+    "name": "Baylor College of Medicine",
+    "host": "www.bcm.edu",
+    "entry": "https://www.bcm.edu/education/school-of-medicine/graduate-medical-education",
+    "sheet": "benchmarks/sheets/bcm.csv",
+    "expected_residents_fellows": 1516,
+    "affiliated_domains": [],
+    "needs_browser": false,
+    "step_budget": 2500
+  },
+  "uchicago": {
+    "name": "University of Chicago Medicine",
+    "host": "gme.uchicago.edu",
+    "entry": "https://gme.uchicago.edu/programs/",
+    "sheet": "benchmarks/sheets/uchicago.csv",
+    "expected_residents_fellows": 958,
+    "affiliated_domains": [
+      "uchicagomedicine.org"
+    ],
+    "needs_browser": true,
+    "step_budget": 900
+  },
+  "baylor-scott-white": {
+    "name": "Baylor Scott & White Health",
+    "host": "www.bswhealth.com",
+    "entry": "https://www.bswhealth.com/medical-professionals/education/graduate-medical-education",
+    "sheet": "benchmarks/sheets/baylor-scott-white.csv",
+    "expected_residents_fellows": 918,
+    "affiliated_domains": [],
+    "needs_browser": false,
+    "step_budget": 2500
+  }
+}

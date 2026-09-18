@@ -2,8 +2,8 @@
 
 Scope constraint: the system must not collect from K-12 institutions. This is an
 explicit validation step with a stated reason, never a silent filter — a rejected
-site produces a SiteRun with K12_INSTITUTION_REJECTED and surfaces in the
-/runs/validate preview so the client sees it before spending compute.
+site produces a SiteRun with K12_INSTITUTION_REJECTED before extraction compute
+is spent.
 
 Cheap signals decide the clear cases. Only genuine ambiguity reaches the model.
 """

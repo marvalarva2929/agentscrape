@@ -100,7 +100,7 @@ class SkipReason(StrEnum):
 
 
 class SubmissionStatus(StrEnum):
-    """Lifecycle of a client's CSV request."""
+    """Lifecycle of a legacy school request."""
 
     PENDING = "pending"       # submitted, awaiting staff review
     RUNNING = "running"       # a run was launched from it

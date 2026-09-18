@@ -35,20 +35,25 @@ def site(
         False, "--no-browser", help="HTML fetching only; never escalate to Chromium"
     ),
     budget: int = typer.Option(None, "--budget", help="Step budget for this site"),
+    also: list[str] = typer.Option(
+        None, "--also",
+        help="Another registrable domain this institution publishes on, e.g. "
+             "--also uchicagomedicine.org (repeatable)",
+    ),
     threshold: float = typer.Option(None, "--threshold", help="Skip similarity threshold"),
 ) -> None:
     """Run one site end to end."""
     asyncio.run(
         _run_site(
             url, dry_run=dry_run, force=force, no_browser=no_browser,
-            budget=budget, threshold=threshold,
+            budget=budget, threshold=threshold, also=list(also or []),
         )
     )
 
 
 async def _run_site(
     url: str, *, dry_run: bool, force: bool, no_browser: bool,
-    budget: int | None, threshold: float | None,
+    budget: int | None, threshold: float | None, also: list[str] | None = None,
 ) -> None:
     from .browser.renderer import BrowserPool
     from .db.enums import RunStatus
@@ -90,7 +95,7 @@ async def _run_site(
         state = await run_site(
             site_id=site_id, site_run_id=site_run_id, root_url=root_url,
             run_id=run_id, force_rescan=force, step_budget=budget,
-            skip_threshold=threshold, browser_context=context,
+            skip_threshold=threshold, allowed_domains=also, browser_context=context,
         )
     finally:
         if pool is not None:

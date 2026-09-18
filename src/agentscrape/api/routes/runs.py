@@ -1,14 +1,13 @@
-"""Run management: validate, create, list, detail, per-site status, SSE, cancel, retry."""
+"""Run management: create, list, detail, per-site status, SSE, cancel, retry."""
 
 from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, File, Query, UploadFile
+from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 
-from ...config import settings
 from ...db.enums import TERMINAL_RUN_STATUSES, RunStatus, SiteRunStatus
 from ...db.models import Run, Site, SiteRun
 from ...domain.schemas import (
@@ -16,11 +15,10 @@ from ...domain.schemas import (
     RunCreate,
     RunOut,
     SiteRunOut,
-    ValidatePreview,
 )
 from ...orchestrator import service
 from ...orchestrator.limits import MemoryCeilingExceeded
-from ..deps import AuthedUser, DbSession
+from ..deps import AdminUser, AuthedUser, DbSession
 from ..errors import AppError, ErrorCode, NotFoundError, ResourceLimitError
 from ..pagination import Cursor, clamp_limit
 from ..sse import event_stream
@@ -47,39 +45,9 @@ def _run_out(run: Run, pending: int = 0) -> RunOut:
     )
 
 
-@router.post("/validate", response_model=ValidatePreview)
-async def validate_csv(
-    _: AuthedUser,
-    session: DbSession,
-    file: Annotated[UploadFile, File(description="CSV of institution URLs")],
-    skip_threshold: float = Query(default=None),
-) -> ValidatePreview:
-    """Parse and preview a CSV without creating a run.
-
-    Shows, per row: whether the URL is valid, whether the site is known, when it
-    was last scraped, how many known paths and prior records it has, and whether
-    it is predicted to be skipped — so compute can be reviewed before it is spent.
-    """
-    content = await file.read()
-    entries = service.parse_csv(content)
-    if not entries:
-        raise AppError(
-            "No usable rows found in the uploaded CSV.",
-            code=ErrorCode.INVALID_CSV,
-            details={"filename": file.filename},
-        )
-    return await service.preview_csv(
-        session,
-        entries,
-        skip_threshold=(
-            skip_threshold if skip_threshold is not None else settings.default_skip_threshold
-        ),
-    )
-
-
 @router.post("", response_model=RunOut, status_code=201)
-async def create_run(body: RunCreate, _: AuthedUser, session: DbSession) -> RunOut:
-    """Create and start a run."""
+async def create_run(body: RunCreate, _: AdminUser, session: DbSession) -> RunOut:
+    """Create and start a run. Staff-only because each crawl is billable."""
     try:
         run = await service.create_run(session, body)
     except MemoryCeilingExceeded as exc:
@@ -218,7 +186,7 @@ async def run_events(run_id: str, _: AuthedUser, session: DbSession) -> Streamin
 
 
 @router.post("/{run_id}/cancel", response_model=RunOut)
-async def cancel_run(run_id: str, _: AuthedUser, session: DbSession) -> RunOut:
+async def cancel_run(run_id: str, _: AdminUser, session: DbSession) -> RunOut:
     run = await _get_run(session, run_id)
     if run.status in TERMINAL_RUN_STATUSES:
         raise AppError(
@@ -234,7 +202,7 @@ async def cancel_run(run_id: str, _: AuthedUser, session: DbSession) -> RunOut:
 
 @router.post("/{run_id}/sites/{site_id}/retry", response_model=SiteRunOut)
 async def retry_site(
-    run_id: str, site_id: str, _: AuthedUser, session: DbSession
+    run_id: str, site_id: str, _: AdminUser, session: DbSession
 ) -> SiteRunOut:
     """Retry one failed or skipped site. Always forces a rescan."""
     run = await _get_run(session, run_id)

@@ -1,8 +1,7 @@
 """Schools and programmes.
 
-These are the frontend's primary navigation: School -> Program -> Person. A
-school is one institution's web presence; a programme is one training programme
-within it, keyed on the normalized specialty.
+The frontend's primary navigation is School -> Person. Programmes remain as
+internal grouping metadata, keyed on the normalized specialty.
 """
 
 from __future__ import annotations
@@ -168,6 +167,30 @@ async def list_school_programs(
         raise NotFoundError(f"No school with id {school_id!r}.")
     rows = await programs_repo.list_programs(session, school_id)
     return Page[ProgramOut](items=[_program_out(p) for p in rows], has_more=False)
+
+
+@router.get("/schools/{school_id}/people", response_model=Page[RecordOut])
+async def list_school_people(
+    school_id: str,
+    _: AuthedUser,
+    session: DbSession,
+    cursor: str | None = None,
+    limit: int = 100,
+    category: Annotated[list[str] | None, Query()] = None,
+    q: Annotated[str | None, Query()] = None,
+) -> Page[RecordOut]:
+    if await session.get(Site, school_id) is None:
+        raise NotFoundError(f"No school with id {school_id!r}.")
+
+    filters = RecordFilters.from_query(site_id=[school_id], category=category, q=q)
+    items, next_cursor, has_more = await query_records(
+        session, filters, cursor=cursor, limit=limit
+    )
+    return Page[RecordOut](
+        items=[RecordOut(**item) for item in items],
+        next_cursor=next_cursor,
+        has_more=has_more,
+    )
 
 
 @router.get("/programs/{program_id}", response_model=ProgramOut)

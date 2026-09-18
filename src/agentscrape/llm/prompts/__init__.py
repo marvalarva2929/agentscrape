@@ -11,6 +11,8 @@ Design notes that matter for reliability:
 
 from __future__ import annotations
 
+import json
+
 EXTRACTION_SYSTEM = """\
 You extract people from institutional medical web pages.
 
@@ -85,6 +87,47 @@ Homepage text:
 ---
 """
 
+NAVIGATION_SYSTEM = """\
+You are navigating an academic medical institution's website to find every current
+resident and fellow. Decide how a careful human researcher should continue from the
+current page.
+
+Use the screenshot together with the page text, links, and interactive controls.
+Return ONLY this JSON object:
+{
+  "page_type": "roster" | "program" | "directory" | "event" | "news" |
+               "faculty" | "alumni" | "other" | "unknown",
+  "control": {"role": "<supplied role>", "name": "<supplied name>"} | null,
+  "visit_urls": ["<supplied URL>", ...],
+  "reason": "<one concise sentence>"
+}
+
+Choose at most one control. Rank visit_urls in the order they should be visited.
+Use only controls and URLs supplied in the prompt; never invent either. Explore
+uncertain official program paths when they could lead to current trainee rosters.
+Do not choose ordinary site chrome, event registration, news, donations, or general
+patient-care navigation unless it is the only plausible route to a training program.
+"""
+
+NAVIGATION_USER_TEMPLATE = """\
+Current URL: {url}
+Page title: {title}
+
+A screenshot of this rendered page is attached. Use its visual layout and labels as
+evidence alongside the structured page data below.
+
+Visible page text:
+---
+{text}
+---
+
+Interactive controls:
+{controls}
+
+Visible links:
+{links}
+"""
+
 
 def extraction_user_prompt(
     *, title: str, url: str, text: str, has_screenshot: bool, max_chars: int = 24_000
@@ -106,4 +149,27 @@ def extraction_user_prompt(
 def institution_user_prompt(*, domain: str, title: str, text: str) -> str:
     return INSTITUTION_USER_TEMPLATE.format(
         domain=domain, title=title or "(none)", text=(text or "")[:8_000]
+    )
+
+
+def navigation_user_prompt(
+    *,
+    url: str,
+    title: str,
+    text: str,
+    controls: list[dict],
+    links: list[dict],
+    max_text_chars: int = 18_000,
+) -> str:
+    """Build one compact multimodal navigation request.
+
+    The browser still exposes every URL to the ordinary frontier. The cap here only
+    bounds model context; it does not make unseen links unreachable.
+    """
+    return NAVIGATION_USER_TEMPLATE.format(
+        url=url,
+        title=title or "(none)",
+        text=(text or "")[:max_text_chars] or "(no visible text)",
+        controls=json.dumps(controls[:100], ensure_ascii=False),
+        links=json.dumps(links[:300], ensure_ascii=False),
     )

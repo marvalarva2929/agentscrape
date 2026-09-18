@@ -209,7 +209,7 @@ class SiteRunOut(ApiModel):
 
 
 class CsvRowPreview(BaseModel):
-    """One row of `POST /runs/validate`, so compute can be reviewed before spend."""
+    """One parsed school row retained for historical/admin request previews."""
 
     row: int
     input: str
@@ -365,7 +365,7 @@ class ExportOut(ApiModel):
 
 
 class SubmissionOut(ApiModel):
-    """A client's CSV request, as staff see it in the admin queue."""
+    """Legacy staff-visible school request shape."""
 
     id: str
     filename: str | None
@@ -380,7 +380,7 @@ class SubmissionOut(ApiModel):
 
 
 class SubmissionRunRequest(BaseModel):
-    """Staff launching a submitted CSV. One number: the budget."""
+    """Staff launching a legacy school request. One number: the budget."""
 
     max_spend_usd: float | None = Field(
         default=None, gt=0, description="Stop the run once estimated spend reaches this"

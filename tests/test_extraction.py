@@ -443,3 +443,360 @@ class TestPositionFallbackIsConservative:
     )
     def test_recognised_titles_still_work(self, text, expected):
         assert _extract_position(text, "Someone Else") == expected
+
+
+class TestNamesPrintedWithTheirRole:
+    """Real rosters print the role next to the name, in the same element.
+
+    Each of these is a string taken from the Arizona scrape, where the printed
+    role or an image caption ended up stored as part of the person's name.
+    """
+
+    @pytest.mark.parametrize(
+        "text,expected",
+        [
+            # A trailing role after a comma. "resident/fellow" is not a stopword
+            # while "resident" is, so the name was accepted whole until the
+            # splitter learned about "/".
+            ("Abbey Bayless,  Resident/Fellow", "Abbey Bayless"),
+            ("Sara Fallahi ,  Resident/Fellow", "Sara Fallahi"),
+            ("Arunbalaji Pugazhendhi ,  Resident", "Arunbalaji Pugazhendhi"),
+            ("Ana Ruiz | Program Coordinator", "Ana Ruiz"),
+            # A credential this pattern did not cover.
+            ("Lee McGhan , MBBCh", "Lee McGhan"),
+        ],
+    )
+    def test_printed_role_is_not_part_of_the_name(self, text, expected):
+        assert _extract_name(text) == expected
+
+    @pytest.mark.parametrize(
+        "text,expected",
+        [
+            # A quoted nickname splits the name into two runs; the longest run
+            # then absorbed the image caption beside it instead of the surname.
+            ("Image Nicholas “Nick” D’Amico", "Nicholas D’Amico"),
+            ("Image Marcelina “Marcy” Belmont", "Marcelina Belmont"),
+            ("Laura “Lo” Cantu", "Laura Cantu"),
+            ("Robert 'Bob' Chen", "Robert Chen"),
+        ],
+    )
+    def test_nickname_and_caption_do_not_displace_the_surname(self, text, expected):
+        assert _extract_name(text) == expected
+
+    @pytest.mark.parametrize(
+        "text",
+        ["Tom O’Brien", "Mary O'Neill", "Sean McDonald-Smith", "Doe, Jane"],
+    )
+    def test_apostrophes_and_inverted_names_still_survive(self, text):
+        assert _extract_name(text) == text
+
+
+class TestFellowsAreNotLabelledResidents:
+    """A fellowship roster prints a PGY number too.
+
+    Testing the PGY before the word "fellow" labelled every cardiology fellow a
+    resident, which is the R/F column the client sorts their outreach by.
+    """
+
+    @pytest.mark.parametrize(
+        "text,category",
+        [
+            ("Fellow PGY-6", PersonCategory.FELLOW),
+            ("Cardiology Fellow, PGY-5", PersonCategory.FELLOW),
+            ("PGY-2 Resident", PersonCategory.RESIDENT),
+            ("PGY-4", PersonCategory.RESIDENT),
+            # Faculty is still tested first, so a director stays faculty.
+            ("Fellowship Program Director, PGY-7", PersonCategory.FACULTY),
+        ],
+    )
+    def test_printed_title_beats_the_pgy_number(self, text, category):
+        assert classify_person(text, "") is category
+
+    def test_a_resident_planning_a_fellowship_is_still_a_resident(self):
+        assert (
+            classify_person("PGY-3 Resident, applying to a GI fellowship", "")
+            is PersonCategory.RESIDENT
+        )
+
+
+LAYOUT_TABLE_BIOS = """
+<html><head><title>Psychiatry Fellowship Programs</title></head><body>
+<h2>Addiction Psychiatry Fellows</h2>
+<table>
+  <tr>
+    <td>
+      <p><strong>Michael Sheehy, DO</strong></p>
+      <p>As a practicing emergency physician for the last 20-plus years I have
+      seen the daily effect substance use disorders have on my patients, their
+      families and my ED staff. During my emergency medicine career I came to
+      understand that the tools I had were not enough, and I want to be at the
+      forefront of a cultural shift toward compassionate, trauma-informed care
+      for people living with addiction in our community and across the state.</p>
+    </td>
+    <td>
+      <p><strong>Priya Raman, MD</strong></p>
+      <p>I grew up in Tucson and returned for residency because the patients
+      here are the patients I wanted to serve. My interest in the intersection
+      of chronic pain and substance use began on an inpatient consult rotation
+      and has shaped every rotation since.</p>
+    </td>
+  </tr>
+</table>
+</body></html>
+"""
+
+
+class TestLayoutTableBios:
+    """A table with no header row, one person per cell, prose under the name.
+
+    Departments publish fellowship bios this way. There is no header to drive
+    column parsing, no card class to hook onto and no mailto link, and the cell
+    is far longer than a card block — so every shape handler passed it over and
+    the people on it were silently lost.
+    """
+
+    def test_people_in_headerless_table_cells_are_found(self):
+        names = {p.full_name for p in extract_people(LAYOUT_TABLE_BIOS, url="/x")}
+        assert names == {"Michael Sheehy", "Priya Raman"}
+
+    def test_a_long_bio_does_not_become_a_job_title(self):
+        for person in extract_people(LAYOUT_TABLE_BIOS, url="/x"):
+            assert person.position is None or len(person.position) <= 90
+
+    def test_a_real_data_table_still_yields_nobody(self):
+        """The cell scan must not turn a table of numbers into people."""
+        data = """
+        <table>
+          <tr><td>Rotation</td><td>Weeks</td></tr>
+          <tr><td>Inpatient Consult</td><td>12</td></tr>
+          <tr><td>Community Clinic</td><td>8</td></tr>
+        </table>
+        """
+        assert extract_people(data, url="/x") == []
+
+
+ROSTER_WITH_ALUMNI_BLOCK = """
+<html><head><title>Internal Medicine: Current and Past Residents</title></head><body>
+<h1>Internal Medicine: Current and Past Residents</h1>
+
+<h1>Chief Residents</h1>
+<div class="card"><h3>Amrutha Doniparthi, MD</h3><p>Resident/Fellow</p>
+  <a href="mailto:doniparthi@example.edu">doniparthi@example.edu</a></div>
+
+<h1>PGY-3</h1>
+<div class="card"><h3>Monica Angeletti, MD</h3><p>Resident/Fellow</p>
+  <a href="mailto:angeletti@example.edu">angeletti@example.edu</a></div>
+
+<h1>Alumni</h1>
+<h2>Class of 2025</h2>
+<table>
+  <tr><th>Name</th><th>Prior Education</th><th>Next Stop</th></tr>
+  <tr><td>Audrey Adkins, MD</td><td>University of Arizona, 2022</td><td>Hospitalist, Phoenix</td></tr>
+</table>
+<h2>Class of 2024</h2>
+<table>
+  <tr><th>Name</th><th>Medical School</th><th>Next Stop</th></tr>
+  <tr><td>Kalkidan Abebe, MD</td><td>Ross University, 2020</td><td>Outpatient Medicine</td></tr>
+</table>
+</body></html>
+"""
+
+
+class TestAlumniBlocksOnCurrentRosters:
+    """`.../current-and-past-residents` is the commonest roster URL on a .edu
+    medical site, and it carries both groups on one page.
+
+    The split is stated only in the page's own headings. Judging the page by its
+    title labelled every graduate a current resident: across Arizona's internal
+    medicine, paediatrics and anaesthesiology rosters that was 407 of 658 people,
+    and it is what pushed the site's resident count past its true roster.
+    """
+
+    def _by_name(self):
+        return {
+            p.full_name: p
+            for p in extract_people(
+                ROSTER_WITH_ALUMNI_BLOCK,
+                page_title="Internal Medicine: Current and Past Residents",
+                url="https://x.edu/im/current-and-past-residents",
+            )
+        }
+
+    def test_people_above_the_alumni_heading_are_current(self):
+        found = self._by_name()
+        assert found["Amrutha Doniparthi"].category is PersonCategory.RESIDENT
+        assert found["Monica Angeletti"].category is PersonCategory.RESIDENT
+
+    def test_people_below_the_alumni_heading_are_alumni(self):
+        found = self._by_name()
+        assert found["Audrey Adkins"].category is PersonCategory.ALUMNI
+        assert found["Kalkidan Abebe"].category is PersonCategory.ALUMNI
+
+    def test_a_per_year_subheading_does_not_hide_the_alumni_heading(self):
+        """The heading directly above a graduate reads "Class of 2025"; the one
+        that says they have left is the <h1> above every year."""
+        assert self._by_name()["Audrey Adkins"].category is PersonCategory.ALUMNI
+
+    def test_everyone_on_the_page_is_still_collected(self):
+        assert len(self._by_name()) == 4
+
+
+class TestCombinedResidentFellowTerm:
+    """Drupal-built medical schools print one taxonomy term, "Resident/Fellow",
+    on the card of every trainee whatever they actually are.
+
+    It names both roles, so it is not a claim about either. Reading it as a claim
+    about fellows relabelled a whole anaesthesiology residency; reading it as a
+    claim about residents would relabel a cardiology fellowship.
+    """
+
+    @pytest.mark.parametrize(
+        "page_context,expected",
+        [
+            # The roster says which programme it is.
+            ("Anesthesiology Current and Past Residents", PersonCategory.RESIDENT),
+            ("Cardiology Fellows | Sarver Heart Center", PersonCategory.FELLOW),
+            ("PGY-2", PersonCategory.RESIDENT),
+            # A directory that names no programme cannot say, so neither do we.
+            ("Our Team Leadership | College of Medicine", PersonCategory.UNKNOWN),
+            ("", PersonCategory.UNKNOWN),
+        ],
+    )
+    def test_the_roster_disambiguates_the_combined_term(self, page_context, expected):
+        assert classify_person("Resident/Fellow", page_context) is expected
+
+    @pytest.mark.parametrize(
+        "text,expected",
+        [
+            # One role noun is a real claim and settles it on its own.
+            ("Resident", PersonCategory.RESIDENT),
+            ("Chief Resident", PersonCategory.RESIDENT),
+            ("Clinical Fellow", PersonCategory.FELLOW),
+            ("Fellow PGY-6", PersonCategory.FELLOW),
+            # A bare PGY is a training year; nothing else carries one.
+            ("PGY-2", PersonCategory.RESIDENT),
+        ],
+    )
+    def test_a_single_role_noun_does_not_need_the_page(self, text, expected):
+        assert classify_person(text, "") is expected
+
+    def test_a_pgy_on_a_fellowship_roster_is_a_fellow(self):
+        assert (
+            classify_person("PGY-6", "Cardiology Fellowship Program Fellows")
+            is PersonCategory.FELLOW
+        )
+
+
+DIRECTORY_TABLE_WITH_NESTED_TITLES = """
+<table>
+  <tr><th>Name</th><th>Department</th><th>Email</th><th>Phone</th></tr>
+  <tr><td>Obaidah Adi<div class="name-title">Resident Instructor - 3rd Yr</div></td>
+      <td>Internal Med Dept Ama Genl</td>
+      <td><a href="mailto:obaidah.adi@ttuhsc.edu">obaidah.adi@ttuhsc.edu</a></td>
+      <td>(806) 414-9100</td></tr>
+  <tr><td>Celine Zhong<div class="name-title">Recurrent Faculty Member</div></td>
+      <td>Pharmacy Practice Dal</td>
+      <td><a href="mailto:cezhong@ttuhsc.edu">cezhong@ttuhsc.edu</a></td>
+      <td>(325) 696-0501</td></tr>
+</table>
+"""
+
+
+class TestTableCellsWithNestedTitles:
+    """An institution-wide directory prints the title inside the name cell.
+
+    Joining a cell's text without a separator produced "Obaidah AdiResident
+    Instructor - 3rd Yr": the role noun then has no word boundary in front of it,
+    so 135 Texas Tech residents the client's sheet had confirmed were classified
+    `unknown`. Reading the cell's own text separately keeps the title out of the
+    surname as well.
+    """
+
+    def _by_name(self):
+        return {
+            p.full_name: p
+            for p in extract_people(
+                DIRECTORY_TABLE_WITH_NESTED_TITLES, page_title="Directory", url="/dir"
+            )
+        }
+
+    def test_the_nested_title_is_read_as_a_role(self):
+        assert self._by_name()["Obaidah Adi"].category is PersonCategory.RESIDENT
+
+    def test_the_nested_title_does_not_become_part_of_the_name(self):
+        found = self._by_name()
+        assert "Celine Zhong" in found
+        assert "Celine Zhong Recurrent" not in found
+
+    def test_a_faculty_member_is_not_a_trainee(self):
+        assert self._by_name()["Celine Zhong"].category is PersonCategory.FACULTY
+
+    def test_the_address_still_comes_from_its_own_cell(self):
+        assert self._by_name()["Obaidah Adi"].email == "obaidah.adi@ttuhsc.edu"
+
+
+class TestAnaesthesiologyTrainingYears:
+    """CA-1..CA-3 is the anaesthesiology equivalent of PGY-n.
+
+    It is what the client's own sheet records in its PGY column, and UChicago
+    heads each section of its roster with it. Without it every one of those 141
+    people came back `unknown`, because the page is titled "Residents & Fellows"
+    and that names both roles.
+    """
+
+    @pytest.mark.parametrize("section", ["CA-1", "CA-2", "CA 3", "PGY-2"])
+    def test_a_training_year_section_means_resident(self, section):
+        assert (
+            classify_person("Brandon Alford, MD", "Residents & Fellows", section=section)
+            is PersonCategory.RESIDENT
+        )
+
+    def test_a_fellows_section_on_the_same_page_means_fellow(self):
+        assert (
+            classify_person("Serene Hoskins, MD", "Residents & Fellows", section="Fellows")
+            is PersonCategory.FELLOW
+        )
+
+    def test_the_section_is_asked_before_the_page(self):
+        """"Residents & Fellows" names both, so the page cannot settle it."""
+        assert (
+            classify_person("Someone Here", "Residents & Fellows") is PersonCategory.UNKNOWN
+        )
+
+
+class TestEducationHistoryIsNotACurrentRole:
+    """A profile card introduces where someone has been with a labelled field.
+
+    "Undergraduate: University of Florida" on a PGY-1's card matched the student
+    pattern and turned 35 Chicago pathology residents into students. The label is
+    what misfires, so only the label is stripped; the value after it is harmless.
+    """
+
+    @pytest.mark.parametrize(
+        "text,expected",
+        [
+            (
+                "Resident (AP/CP) Medical School: Lincoln Memorial "
+                "Undergraduate: University of Florida",
+                PersonCategory.RESIDENT,
+            ),
+            # The same trap in the other direction.
+            ("PGY-2 Resident Fellowship: Mayo Clinic", PersonCategory.RESIDENT),
+            ("Clinical Fellow Residency: Johns Hopkins", PersonCategory.FELLOW),
+        ],
+    )
+    def test_a_history_field_does_not_decide_the_role(self, text, expected):
+        assert classify_person(text, "") is expected
+
+    @pytest.mark.parametrize(
+        "text,expected",
+        [
+            # A real student label is still a student.
+            ("Medical Student", PersonCategory.STUDENT),
+            ("Graduate student in immunology", PersonCategory.STUDENT),
+            ("MS3", PersonCategory.STUDENT),
+            ("Undergraduate research assistant", PersonCategory.STUDENT),
+        ],
+    )
+    def test_real_student_titles_still_classify(self, text, expected):
+        assert classify_person(text, "") is expected

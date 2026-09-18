@@ -1,0 +1,911 @@
+Hospital,Specialty,R/F,Full Name,PGY,Class of,Email
+BCM,Anesthesiology,RS,Raul Alba,PGY1,,raul.alba@bcm.edu
+BCM,Anesthesiology,RS,Christy Cao,PGY1,,christy.cao@bcm.edu
+BCM,Anesthesiology,RS,Jen Li Dong,PGY1,,jenli.dong@bcm.edu
+BCM,Anesthesiology,RS,Olivia Haddadin,PGY1,,olivia.haddadin@bcm.edu
+BCM,Anesthesiology,RS,Christy Lee,PGY1,,christy.lee2@bcm.edu
+BCM,Anesthesiology,RS,Yuli Lim,PGY1,,yuli.lim@bcm.edu
+BCM,Anesthesiology,RS,Arusa Macnojia,PGY1,,arusa.macnojia@bcm.edu
+BCM,Anesthesiology,RS,Madelina Nguyen,PGY1,,madelina.nguyen@bcm.edu
+BCM,Anesthesiology,RS,Shiva Nuti,PGY1,,shiva.nuti@bcm.edu
+BCM,Anesthesiology,RS,Luis Sanabria Segura,PGY1,,luis.sanabriasegura@bcm.edu
+BCM,Anesthesiology,RS,Cole Sorrels,PGY1,,cole.sorrels@bcm.edu
+BCM,Anesthesiology,RS,Amanda Strang,PGY1,,amanda.strang@bcm.edu
+BCM,Anesthesiology,RS,Sadiq Walker Baker,PGY1,,
+BCM,Anesthesiology,RS,Abir Zahra,PGY1,,abir.zahra@bcm.edu
+BCM,Anesthesiology,RS,Temitope Ajala,PGY2,,
+BCM,Anesthesiology,RS,Scott Beckman,PGY2,,scott.beckman@bcm.edu
+BCM,Anesthesiology,RS,Richard Bui,PGY2,,richard.bui@bcm.edu
+BCM,Anesthesiology,RS,Ujalashah Dhanani,PGY2,,ujalashah.dhanani@bcm.edu
+BCM,Anesthesiology,RS,Christina Gaw,PGY2,,christina.gaw@bcm.edu
+BCM,Anesthesiology,RS,Michael Gill,PGY2,,
+BCM,Anesthesiology,RS,Yasmeen Kawji,PGY2,,
+BCM,Anesthesiology,RS,Illa Kunik,PGY2,,
+BCM,Anesthesiology,RS,Julianne Mannix,PGY2,,julianne.mannix@bcm.edu
+BCM,Anesthesiology,RS,Aum Mhapankar,PGY2,,aum.mhapankar@bcm.edu
+BCM,Anesthesiology,RS,Gloria Mina,PGY2,,
+BCM,Anesthesiology,RS,Sarah Momin,PGY2,,sarah.momin@bcm.edu
+BCM,Anesthesiology,RS,Kristina Pieterson,PGY2,,
+BCM,Anesthesiology,RS,Asad Saleem,PGY2,,asad.saleem@bcm.edu
+BCM,Anesthesiology,RS,Monica Sheth,PGY2,,u252724@bcm.edu
+BCM,Anesthesiology,RS,Israa Shwaiki,PGY2,,israa.shwaiki@bcm.edu
+BCM,Anesthesiology,RS,Shweta Sridhar,PGY2,,
+BCM,Anesthesiology,RS,Michael Stetzer,PGY2,,u252377@bcm.edu
+BCM,Anesthesiology,RS,Nicole Walters B S,PGY2,,
+BCM,Anesthesiology,RS,Rhett Wilkerson,PGY2,,
+BCM,Anesthesiology,RS,Maius Bermejo,PGY3,,maius.bermejo@bcm.edu
+BCM,Anesthesiology,RS,Noureddeen Bitar,PGY3,,noureddeen.bitar@bcm.edu
+BCM,Anesthesiology,RS,Jeffery Chen,PGY3,,jlchen@bcm.edu
+BCM,Anesthesiology,RS,Benjamin Chiang,PGY3,,
+BCM,Anesthesiology,RS,Elaine Chinn,PGY3,,ebchinn@bcm.edu
+BCM,Anesthesiology,RS,Yajaira Garcia Rodriguez,PGY3,,yajaira.garciarodriguez@bcm.edu
+BCM,Anesthesiology,RS,Krupa George,PGY3,,krupa.george@bcm.edu
+BCM,Anesthesiology,RS,Anna Gibbs,PGY3,,anna.gibbs@bcm.edu
+BCM,Anesthesiology,RS,Anant Gonugunta,PGY3,,
+BCM,Anesthesiology,RS,Sunny Gotewal,PGY3,,sunny.gotewal@bcm.edu
+BCM,Anesthesiology,RS,Leslie Kim,PGY3,,leslie.kim@bcm.edu
+BCM,Anesthesiology,RS,Emily Le,PGY3,,
+BCM,Anesthesiology,RS,Tiffany Lim,PGY3,,tiffany.lim@bcm.edu
+BCM,Anesthesiology,RS,Zavher Momin,PGY3,,zavher.momin@bcm.edu
+BCM,Anesthesiology,RS,Rachel Ortega,PGY3,,rmortega@bcm.edu
+BCM,Anesthesiology,RS,Linda Ren,PGY3,,linda.ren@bcm.edu
+BCM,Anesthesiology,RS,Rumsha Salman,PGY3,,rumsha.salman@bcm.edu
+BCM,Anesthesiology,RS,Amanda Schaaf,PGY3,,
+BCM,Anesthesiology,RS,Shirley Zhang,PGY3,,shirley.zhang@bcm.edu
+BCM,Anesthesiology,RS,James Zhao,PGY3,,james.zhao@bcm.edu
+BCM,Anesthesiology,RS,Breanna Alonzo,PGY4,,breanna.alonzo@bcm.edu
+BCM,Anesthesiology,RS,Charles Burke,PGY4,,
+BCM,Anesthesiology,RS,Katie Chang,PGY4,,
+BCM,Anesthesiology,RS,Samiya Diawara,PGY4,,
+BCM,Anesthesiology,RS,Victor Garcia,PGY4,,
+BCM,Anesthesiology,RS,Tianyang Guo,PGY4,,
+BCM,Anesthesiology,RS,Vanessa Hernandez,PGY4,,vanessa.hernandez@bcm.edu
+BCM,Anesthesiology,RS,Livia Hopper,PGY4,,
+BCM,Anesthesiology,RS,Connor Johnson,PGY4,,
+BCM,Anesthesiology,RS,Kayli Kallina,PGY4,,
+BCM,Anesthesiology,RS,Kennedy Kirkpatrick,PGY4,,
+BCM,Anesthesiology,RS,Marlene Lopez,PGY4,,
+BCM,Anesthesiology,RS,Camryn Parker,PGY4,,
+BCM,Anesthesiology,RS,Emily Phan,PGY4,,emily.phan@bcm.edu
+BCM,Anesthesiology,RS,Mauna Rao,PGY4,,
+BCM,Anesthesiology,RS,Marina Rofaeil,PGY4,,
+BCM,Anesthesiology,RS,Jay Shah,PGY4,,jay.shah2@bcm.edu
+BCM,Anesthesiology,RS,Feiya Shi,PGY4,,
+BCM,Anesthesiology,RS,Lacey Stribling,PGY4,,
+BCM,Anesthesiology,RS,Dominique Wreh,PGY4,,
+BCM,Medical Genetics and Genomics and Programs,RS,Rachel Ceron,,,
+BCM,Medical Genetics and Genomics and Programs,RS,Steven Lang,,,steven.lang@bcm.edu
+BCM,Medical Genetics and Genomics and Programs,RS,Alison Perl,,,
+BCM,Medical Genetics and Genomics and Programs,RS,Eliyahu Perl,,,
+BCM,Medical Genetics and Genomics and Programs,RS,Caraline Sepich-Poore,,,
+BCM,Medical Genetics and Genomics and Programs,RS,John Wells,,,john.wells@bcm.edu
+BCM,Pediatrics,RS,Taylor Armenta,PGY1,,taylor.armenta@bcm.edu
+BCM,Pediatrics,RS,Neeharika Bandlapalli,PGY1,,neeharika.bandlapalli@bcm.edu
+BCM,Pediatrics,RS,Krista Bangs,PGY1,,krista.bangs@bcm.edu
+BCM,Pediatrics,RS,Megan Campbell,PGY1,,megan.campbell@bcm.edu
+BCM,Pediatrics,RS,Anna Crain,PGY1,,anna.crain@bcm.edu
+BCM,Pediatrics,RS,Kathryn Crouch,PGY1,,kathryn.crouch@bcm.edu
+BCM,Pediatrics,RS,Emily Dolce,PGY1,,emily.dolce@bcm.edu
+BCM,Pediatrics,RS,Osasere Eke,PGY1,,osasere.eke@bcm.edu
+BCM,Pediatrics,RS,Emily Ensley,PGY1,,emily.ensley@bcm.edu
+BCM,Pediatrics,RS,Bria Gamble,PGY1,,bria.gamble@bcm.edu
+BCM,Pediatrics,RS,Alyssa Gregory,PGY1,,alyssa.gregory@bcm.edu
+BCM,Pediatrics,RS,Andrea Guloy,PGY1,,andrea.guloy@bcm.edu
+BCM,Pediatrics,RS,Cody Johnson,PGY1,,cody.johnson@bcm.edu
+BCM,Pediatrics,RS,Koral Kaplan,PGY1,,koral.kaplan@bcm.edu
+BCM,Pediatrics,RS,Gabriela Kim,PGY1,,gabriela.kim@bcm.edu
+BCM,Pediatrics,RS,Pornsinee Laisathit,PGY1,,pornsinee.laisathit@bcm.edu
+BCM,Pediatrics,RS,Jerry Liu,PGY1,,jerry.liu@bcm.edu
+BCM,Pediatrics,RS,Joohi Maknojia,PGY1,,joohi.maknojia@bcm.edu
+BCM,Pediatrics,RS,Nyeomi Mcgaskey,PGY1,,nyeomi.mcgaskey@bcm.edu
+BCM,Pediatrics,RS,Alyssa Miguelino,PGY1,,alyssa.miguelino@bcm.edu
+BCM,Pediatrics,RS,Cristal Monzon Hernandez,PGY1,,cristal.monzon-hernandez@bcm.edu
+BCM,Pediatrics,RS,Julia Morales,PGY1,,julia.morales@bcm.edu
+BCM,Pediatrics,RS,Yash Nagpal,PGY1,,yash.nagpal@bcm.edu
+BCM,Pediatrics,RS,Deja Pegues,PGY1,,deja.pegues@bcm.edu
+BCM,Pediatrics,RS,Sukriti Prashar,PGY1,,sukriti.prashar@bcm.edu
+BCM,Pediatrics,RS,Ariel Repass,PGY1,,ariel.repass@bcm.edu
+BCM,Pediatrics,RS,"M.D., M.A",PGY1,,
+BCM,Pediatrics,RS,Danelle Saah,PGY1,,danelle.saah@bcm.edu
+BCM,Pediatrics,RS,Ashira Santos Macswain,PGY1,,ashira.santosmacswain@bcm.edu
+BCM,Pediatrics,RS,Jordan Siegel,PGY1,,jordan.siegel@bcm.edu
+BCM,Pediatrics,RS,Gail Snyder,PGY1,,gail.snyder@bcm.edu
+BCM,Pediatrics,RS,Amal Syed,PGY1,,amal.syed@bcm.edu
+BCM,Pediatrics,RS,Cecilia Varga,PGY1,,cecilia.varga@bcm.edu
+BCM,Pediatrics,RS,Joseph Wahba,PGY1,,joseph.wahba@bcm.edu
+BCM,Pediatrics,RS,Andrea Yazbeck,PGY1,,andrea.yazbeck@bcm.edu
+BCM,Pediatrics,RS,Christabelle Ayensu Asiedu,PGY1,,christabelle.ayensu-asiedu@bcm.edu
+BCM,Pediatrics,RS,Alexis Elliott,PGY1,,alexis.elliott@bcm.edu
+BCM,Pediatrics,RS,Raquel Gupta,PGY1,,raquel.gupta@bcm.edu
+BCM,Pediatrics,RS,Aaron Hendrix,PGY1,,aaron.hendrix@bcm.edu
+BCM,Pediatrics,RS,Sonia Padmanabhan,PGY1,,sonia.padmanabhan@bcm.edu
+BCM,Pediatrics,RS,Courtney Huynh,PGY1,,courtney.huynh@bcm.edu
+BCM,Pediatrics,RS,Varsha Mullangi,PGY1,,varsha.mullangi@bcm.edu
+BCM,Pediatrics,RS,Angelica Nibo,PGY1,,angelica.nibo@bcm.edu
+BCM,Pediatrics,RS,Vinit Shah,PGY1,,vinit.shah@bcm.edu
+BCM,Pediatrics,RS,Peter Dimitrion,PGY1,,peter.dimitrion@bcm.edu
+BCM,Pediatrics,RS,Conner Earl,PGY1,,conner.earl@bcm.edu
+BCM,Pediatrics,RS,Anna Beck,PGY2,,
+BCM,Pediatrics,RS,Sheena Bedi,PGY2,,
+BCM,Pediatrics,RS,Elizabeth Bradshaw,PGY2,,
+BCM,Pediatrics,RS,Kaitlin Cole,PGY2,,kaitlin.cole@bcm.edu
+BCM,Pediatrics,RS,Maria De Los Santos,PGY2,,
+BCM,Pediatrics,RS,Emily Emerson,PGY2,,
+BCM,Pediatrics,RS,Fariya Fatima,PGY2,,fariya.fatima@bcm.edu
+BCM,Pediatrics,RS,Melanie Green,PGY2,,
+BCM,Pediatrics,RS,Lawrence Hamilton,PGY2,,
+BCM,Pediatrics,RS,Selena Hanna,PGY2,,
+BCM,Pediatrics,RS,Maria Hoyos,PGY2,,
+BCM,Pediatrics,RS,Shaafae Hussain,PGY2,,shaafae.hussain@bcm.edu
+BCM,Pediatrics,RS,Madison Jeziorski,PGY2,,
+BCM,Pediatrics,RS,Nicole Kennard,PGY2,,
+BCM,Pediatrics,RS,Erin Ladine,PGY2,,
+BCM,Pediatrics,RS,Ngan Le,PGY2,,
+BCM,Pediatrics,RS,Elissa Naame,PGY2,,
+BCM,Pediatrics,RS,Anjali Nair,PGY2,,
+BCM,Pediatrics,RS,Maianh Nguyen,PGY2,,
+BCM,Pediatrics,RS,Chizoba Ogbuefi,PGY2,,
+BCM,Pediatrics,RS,Cristina Otero,PGY2,,cristina.otero@bcm.edu
+BCM,Pediatrics,RS,Bobbie Sandidge,PGY2,,
+BCM,Pediatrics,RS,Chloe Ramos,PGY2,,u257093@bcm.edu
+BCM,Pediatrics,RS,Kyra Roa,PGY2,,
+BCM,Pediatrics,RS,Carson Rogge,PGY2,,
+BCM,Pediatrics,RS,Emily Roy,PGY2,,emily.roy@bcm.edu
+BCM,Pediatrics,RS,Katherine Kushner,PGY2,,
+BCM,Pediatrics,RS,Mariel Schroeder,PGY2,,mariel.schroeder@bcm.edu
+BCM,Pediatrics,RS,Shayli Schulz,PGY2,,
+BCM,Pediatrics,RS,Sanjivini Suresh,PGY2,,
+BCM,Pediatrics,RS,Connor Tompkins,PGY2,,connor.tompkins@bcm.edu
+BCM,Pediatrics,RS,Carmen Traseira Pedraz,PGY2,,
+BCM,Pediatrics,RS,Nina Truong,PGY2,,nina.truong@bcm.edu
+BCM,Pediatrics,RS,Nancy Ukoh,PGY2,,
+BCM,Pediatrics,RS,Maria Bonilla,PGY2,,
+BCM,Pediatrics,RS,Natali Borrego,PGY2,,
+BCM,Pediatrics,RS,Kelly Hogan,PGY2,,
+BCM,Pediatrics,RS,Neha Lamsal,PGY2,,
+BCM,Pediatrics,RS,Vicky Le,PGY2,,
+BCM,Pediatrics,RS,Alisha Sadhwani,PGY2,,
+BCM,Pediatrics,RS,Angelica Scribner,PGY2,,
+BCM,Pediatrics,RS,Iris Ham,PGY2,,
+BCM,Pediatrics,RS,David Mcdonald,PGY2,,dmcdonal@bcm.edu
+BCM,Pediatrics,RS,Brittany Opokwu,PGY2,,brittany.opokwu@bcm.edu
+BCM,Pediatrics,RS,Carolina Venturi,PGY2,,carolina.venturi@bcm.edu
+BCM,Pediatrics,RS,Erin Bolte,PGY2,,erin.bolte@bcm.edu
+BCM,Pediatrics,RS,Kali Deans,PGY2,,kali.deans@bcm.edu
+BCM,Pediatrics,RS,Aya Al Adli,PGY3,,u252299@bcm.edu
+BCM,Pediatrics,RS,Avery Allen,PGY3,,
+BCM,Pediatrics,RS,Jessica Elliott,PGY3,,
+BCM,Pediatrics,RS,William Clifton,PGY3,,
+BCM,Pediatrics,RS,Amber Cox,PGY3,,amber.cox@bcm.edu
+BCM,Pediatrics,RS,Busra Dalgic,PGY3,,
+BCM,Pediatrics,RS,Nicole Drury,PGY3,,
+BCM,Pediatrics,RS,Jessy Feng,PGY3,,jessyf@bcm.edu
+BCM,Pediatrics,RS,Danielle Garza,PGY3,,
+BCM,Pediatrics,RS,Jessica Gonzalez,PGY3,,
+BCM,Pediatrics,RS,Sravya Gurivireddygari,PGY3,,u251901@bcm.edu
+BCM,Pediatrics,RS,Leah Jeemon,PGY3,,
+BCM,Pediatrics,RS,Suzette Jimenez,PGY3,,
+BCM,Pediatrics,RS,Amrit Kannan,PGY3,,
+BCM,Pediatrics,RS,Kathryn Keeney,PGY3,,u252346@bcm.edu
+BCM,Pediatrics,RS,Amy Loerke,PGY3,,
+BCM,Pediatrics,RS,Christopher Loerke,PGY3,,
+BCM,Pediatrics,RS,Kelly Martinek,PGY3,,kelly.martinek@bcm.edu
+BCM,Pediatrics,RS,Emery Mintz,PGY3,,
+BCM,Pediatrics,RS,Fatima Mohammed,PGY3,,
+BCM,Pediatrics,RS,Tahmina Mohiuddin,PGY3,,
+BCM,Pediatrics,RS,Jorge Moran,PGY3,,
+BCM,Pediatrics,RS,Jakob Neilson,PGY3,,
+BCM,Pediatrics,RS,Kajal Patel,PGY3,,
+BCM,Pediatrics,RS,Catherine Perez,PGY3,,
+BCM,Pediatrics,RS,Lauren Rahman,PGY3,,
+BCM,Pediatrics,RS,Emma Reford,PGY3,,
+BCM,Pediatrics,RS,Autumn Rieken,PGY3,,
+BCM,Pediatrics,RS,Farah Saleem,PGY3,,
+BCM,Pediatrics,RS,Brooke Schwartz,PGY3,,
+BCM,Pediatrics,RS,Maheen Sheikh,PGY3,,
+BCM,Pediatrics,RS,James Sickler,PGY3,,james.sickler@bcm.edu
+BCM,Pediatrics,RS,Sreekara Singam,PGY3,,
+BCM,Pediatrics,RS,Lydia Sobhi,PGY3,,
+BCM,Pediatrics,RS,Sarah Stockum,PGY3,,sarah.stockum@bcm.edu
+BCM,Pediatrics,RS,Hailey Simpson,PGY3,,hailey.simpson@bcm.edu
+BCM,Pediatrics,RS,Thi Doan Tran,PGY3,,u252379@bcm.edu
+BCM,Pediatrics,RS,Shelby Walcott,PGY3,,
+BCM,Pediatrics,RS,Austin White,PGY3,,
+BCM,Pediatrics,RS,Laura Wilson,PGY3,,
+BCM,Pediatrics,RS,Emily Xiao,PGY3,,
+BCM,Pediatrics,RS,Norman Harris,PGY3,,u252731@bcm.edu
+BCM,Pediatrics,RS,Arlene Lopez,PGY3,,
+BCM,Pediatrics,RS,Cathryn Mccormack,PGY3,,
+BCM,Pediatrics,RS,Felicia Rosiji,PGY3,,felicia.rosiji@bcm.edu
+BCM,Pediatrics,RS,Marisa Pinson,PGY3,,
+BCM,Pediatrics,RS,Nicolas Flores,PGY4,,nicolas.flores@bcm.edu
+BCM,Pediatrics,RS,Daniel Muller,PGY4,,daniel.muller@bcm.edu
+BCM,Pediatrics,RS,Khanh Nguyen,PGY4,,khanh.nguyen@bcm.edu
+BCM,Pediatrics,RS,Elizabeth Rodriguez,PGY4,,elizabeth.rodriguez2@bcm.edu
+BCM,General Surgery,RS,Bani Medegan Fagla,,,
+BCM,General Surgery,RS,Onur Sahin,,,
+BCM,General Surgery,RS,Dinushi Kulasekere,,,
+BCM,General Surgery,RS,Henry Olano Soler,,,
+BCM,General Surgery,RS,Alexandra Buda,,,alexandra.buda@bcm.edu
+BCM,General Surgery,RS,Lubna Khan,,,
+BCM,General Surgery,RS,Yao Yang,,,yao.yang@bcm.edu
+BCM,General Surgery,RS,David Holmes,,,
+BCM,General Surgery,RS,Sukriti Bansal,,,
+BCM,General Surgery,RS,Youmna A. Sherif,,,
+BCM,General Surgery,RS,Megan T. Vu,,,
+BCM,General Surgery,RS,Rachel W. Davis,,,
+BCM,Radiation Oncology,RS,Sara Ahmed,PGY1,,
+BCM,Radiation Oncology,RS,Taeck Kim,PGY1,,
+BCM,Radiation Oncology,RS,Jayna Reichert,PGY1,,
+BCM,Radiation Oncology,RS,Abraham Arenas,PGY2,,abraham.arenas@bcm.edu
+BCM,Radiation Oncology,RS,Madeline Flanagan,PGY2,,
+BCM,Radiation Oncology,RS,Kevin Cao,PGY3,,kevin.cao@bcm.edu
+BCM,Radiation Oncology,RS,Caleb Stewart,PGY3,,
+BCM,Radiation Oncology,RS,Cheryl Claunch,PGY4,,
+BCM,Radiation Oncology,RS,Piyush Pathak,PGY4,,piyush.pathak@bcm.edu
+BCM,Orthopedic Surgery,RS,Michael Alfred,PGY1,,
+BCM,Orthopedic Surgery,RS,Brady Decker,PGY1,,
+BCM,Orthopedic Surgery,RS,Michael Diejomaoh,PGY1,,
+BCM,Orthopedic Surgery,RS,Giovanni Gamalong,PGY1,,
+BCM,Orthopedic Surgery,RS,Samantha Gardner,PGY1,,samantha.gardner@bcm.edu
+BCM,Orthopedic Surgery,RS,Daniel Liggio,PGY1,,daniel.liggio@bcm.edu
+BCM,Orthopedic Surgery,RS,Lemuelson Aryeetey,PGY2,,lemuelson.aryeetey@bcm.edu
+BCM,Orthopedic Surgery,RS,Maryam Yasmeen Jawid,PGY2,,
+BCM,Orthopedic Surgery,RS,Sameer Khawaja,PGY2,,
+BCM,Orthopedic Surgery,RS,Benjamin Martin,PGY2,,benjamin.martin@bcm.edu
+BCM,Orthopedic Surgery,RS,Jonathan Schwartzman,PGY2,,
+BCM,Orthopedic Surgery,RS,Nagaraj Swaminathan,PGY2,,
+BCM,Orthopedic Surgery,RS,Madison Allen,PGY3,,
+BCM,Orthopedic Surgery,RS,William Estes,PGY3,,
+BCM,Orthopedic Surgery,RS,Arnav Kak,PGY3,,
+BCM,Orthopedic Surgery,RS,Nathaniel Loyd,PGY3,,nathaniel.loyd@bcm.edu
+BCM,Orthopedic Surgery,RS,Beatrice Morrow,PGY3,,beatrice.morrow@bcm.edu
+BCM,Orthopedic Surgery,RS,Alexis Restrepo,PGY3,,
+BCM,Orthopedic Surgery,RS,Eric Azua,PGY4,,eric.azua@bcm.edu
+BCM,Orthopedic Surgery,RS,Sydnee Brown,PGY4,,sydnee.brown@bcm.edu
+BCM,Orthopedic Surgery,RS,Benjamin Fiedler,PGY4,,benjamin.fiedler@bcm.edu
+BCM,Orthopedic Surgery,RS,Meghana Jami,PGY4,,meghana.jami@bcm.edu
+BCM,Orthopedic Surgery,RS,Alexander Mihas,PGY4,,alexander.mihas@bcm.edu
+BCM,Orthopedic Surgery,RS,Abdullah Ghali,PGY5,,
+BCM,Orthopedic Surgery,RS,Umar M. Ghilzai,PGY5,,
+BCM,Orthopedic Surgery,RS,Roberto Gonzalez,PGY5,,
+BCM,Orthopedic Surgery,RS,Fatima O. Mubarak,PGY5,,
+BCM,Orthopedic Surgery,RS,Eileen N Phan,PGY5,,eileen.phan@bcm.edu
+BCM,Orthopedic Surgery,RS,M. Brent Price,PGY5,,
+BCM,Radiation Physics Doctoral Intern,RS,Xinru Chen,,,xinru.chen@bcm.edu
+BCM,Radiation Physics Doctoral Intern,RS,Rupesh Dotel,,,rupesh.dotel@bcm.edu
+BCM,Radiation Physics Doctoral Intern,RS,Yiding Han,,,yiding.han@bcm.edu
+BCM,,RS,Taolin Qin,,,taolin.qin@bcm.edu
+BCM,Primary Care Leaders Evaluating and Addressing Disparities,RS,Iris Ham,PGY1,,
+BCM,Primary Care Leaders Evaluating and Addressing Disparities,RS,David McDonald,PGY1,,
+BCM,Primary Care Leaders Evaluating and Addressing Disparities,RS,Brittany Opokwu,PGY1,,
+BCM,Primary Care Leaders Evaluating and Addressing Disparities,RS,Carolina Venturi,PGY1,,
+BCM,Primary Care Leaders Evaluating and Addressing Disparities,RS,Norman Harris II,PGY2,,
+BCM,Primary Care Leaders Evaluating and Addressing Disparities,RS,Arlene Lopez,PGY2,,
+BCM,Primary Care Leaders Evaluating and Addressing Disparities,RS,Catie McCormack,PGY2,,
+BCM,Primary Care Leaders Evaluating and Addressing Disparities,RS,Felicia Rosiji,PGY2,,felicia.rosiji@bcm.edu
+BCM,Primary Care Leaders Evaluating and Addressing Disparities,RS,Yi Yan (Yannie) Heng,PGY3,,
+BCM,Primary Care Leaders Evaluating and Addressing Disparities,RS,Malvi Mehta,PGY3,,
+BCM,Primary Care Leaders Evaluating and Addressing Disparities,RS,Karen Pereira,PGY3,,
+BCM,Primary Care Leaders Evaluating and Addressing Disparities,RS,Mikaila Singleton,PGY3,,
+BCM,Radiology,RS,Nadia Ahmed,,2027.0,nadia.ahmed@bcm.edu
+BCM,Radiology,RS,Daniel Alvarez,,2027.0,daniel.alvarez@bcm.edu
+BCM,Radiology,RS,George Fan,,2027.0,george.fan@bcm.edu
+BCM,Radiology,RS,Jack Hagen,,2027.0,john.hagen@bcm.edu
+BCM,Radiology,RS,Aya Hamadeh,,2027.0,aya.hamadeh@bcm.edu
+BCM,Radiology,RS,Jacob Kraus,,2027.0,jacob.kraus@bcm.edu
+BCM,Radiology,RS,Kyler Simon Shin,,2027.0,kyler.shin@bcm.edu
+BCM,Radiology,RS,Sohail Daniel Siraj,,2027.0,sohail.siraj@bcm.edu
+BCM,Radiology,RS,Marcus Spady,,2027.0,marcus.spady@bcm.edu
+BCM,Radiology,RS,Tyler Donald Strong,,2027.0,tyler.strong@bcm.edu
+BCM,Radiology,RS,Easton Lee West,,2027.0,easton.west@bcm.edu
+BCM,Radiology,RS,Justin Yan,,2027.0,justin.yan@bcm.edu
+BCM,Radiology,RS,Pooja Agrawal,,2028.0,pagrawal@bcm.edu
+BCM,Radiology,RS,Kevin Benny,,2028.0,
+BCM,Radiology,RS,Derek Svenson Brook,,2028.0,dsbrook@bcm.edu
+BCM,Radiology,RS,Roberto Alejandro Cediel-Pagan,,2028.0,roberto.cediel-pagan@bcm.edu
+BCM,Radiology,RS,Molly Lieux Furrow,,2028.0,molly.furrow@bcm.edu
+BCM,Radiology,RS,Justin Dat Nguyen,,2028.0,jdnguyen@bcm.edu
+BCM,Radiology,RS,Matthew Okechukwu Obi,,2028.0,matthew.obi@bcm.edu
+BCM,Radiology,RS,Daniel Gregory Rodricks,,2028.0,rodricks@bcm.edu
+BCM,Radiology,RS,Nikitas Rodriguez,,2028.0,nikitas.rodriguez@bcm.edu
+BCM,Radiology,RS,Christine Tang,,2028.0,ct10@bcm.edu
+BCM,Radiology,RS,Benjamin Timmer,,2028.0,benjamin.timmer@bcm.edu
+BCM,Radiology,RS,Raul Zambrana Valenzuela,,2028.0,raul.zambranavalenzuela@bcm.edu
+BCM,Radiology,RS,Kevin Agahi,,2029.0,agahi@bcm.edu
+BCM,Radiology,RS,William Eskew,,2029.0,u251387@bcm.edu
+BCM,Radiology,RS,Xavier Deonte' Jefferson,,2029.0,xavier.jefferson@bcm.edu
+BCM,Radiology,RS,Hector Linares Garcia,,2029.0,u252998@bcm.edu
+BCM,Radiology,RS,Benjamin Jose Miranda-Perez,,2029.0,benjamin.miranda-perez@bcm.edu
+BCM,Radiology,RS,Valeria Ortega Apraez,,2029.0,u249505@bcm.edu
+BCM,Radiology,RS,Lauren Elizabeth Pupa,,2029.0,pupa@bcm.edu
+BCM,Radiology,RS,Muhammad Hamza Shamim,,2029.0,231033@bcm.edu
+BCM,Radiology,RS,Aleesha M. Somani,,2029.0,aleesha.somani@bcm.edu
+BCM,Radiology,RS,Yandry Varela,,2029.0,u251999@bcm.edu
+BCM,Radiology,RS,Jennifer Phuong Vu,,2029.0,
+BCM,Radiology,RS,Sofia Fei Yi,,2029.0,sofia.yi@bcm.edu
+BCM,Radiology,RS,Joshua Mark Baker,,2030.0,joshua.baker@bcm.edu
+BCM,Radiology,RS,Taylor Alexandria Beal,,2030.0,taylor.beal@bcm.edu
+BCM,Radiology,RS,Joel Jose Colon Torres,,2030.0,joel.colontorres@bcm.edu
+BCM,Radiology,RS,Jorge Andres Machicote,,2030.0,jorge.machicote@bcm.edu
+BCM,Radiology,RS,Sarena Renee Matriano-Lim,,2030.0,sarena.matriano-lim@bcm.edu
+BCM,Radiology,RS,Sarah Navid,,2030.0,sarah.navid@bcm.edu
+BCM,Radiology,RS,Alex Nazzal,,2030.0,alex.nazzal@bcm.edu
+BCM,Radiology,RS,Stephanie Eloho Chisom Oyibo,,2030.0,stephanie.oyibo@bcm.edu
+BCM,Radiology,RS,Neal Patel,,2030.0,neal.patel@bcm.edu
+BCM,Radiology,RS,Grant Allen Patrick,,2030.0,grant.patrick@bcm.edu
+BCM,Radiology,RS,Kelly Phuong Trinh,,2030.0,kelly.trinh@bcm.edu
+BCM,Radiology,RS,Bailey Trinkino,,2030.0,bailey.trinkino@bcm.edu
+BCM,Vascular Surgery Integrated Residents,RS,Daniel Ruppert,PGY1,,daniel.ruppert@bcm.edu
+BCM,Vascular Surgery Integrated Residents,RS,Samyuktha Ravikumar,PGY2,,
+BCM,Vascular Surgery Integrated Residents,RS,Hataka Minami,PGY3,,hataka.minami@bcm.edu
+BCM,Vascular Surgery Integrated Residents,RS,Arvind Srinivasan,PGY4,,
+BCM,Vascular Surgery Integrated Residents,RS,Ian Cook Armstrong,PGY5,,
+BCM,Family Medicine,RS,Karis Diandra Makoko Bamba,PGY1,,
+BCM,Family Medicine,RS,Cameron Dang,PGY1,,
+BCM,Family Medicine,RS,Juan Antonio Garcia,PGY1,,
+BCM,Family Medicine,RS,Chan Kafkalia,PGY1,,
+BCM,Family Medicine,RS,Confidence W Koboo,PGY1,,
+BCM,Family Medicine,RS,Jonathan Scott Rosen,PGY1,,
+BCM,Family Medicine,RS,Zainab Sherwani,PGY1,,
+BCM,Family Medicine,RS,Addison Xu,PGY1,,
+BCM,Family Medicine,RS,Leena Al-Ani,PGY1,,
+BCM,Family Medicine,RS,Hafsah Mahmood,PGY1,,
+BCM,Family Medicine,RS,Roshna Timilsina,PGY1,,
+BCM,Family Medicine,RS,Daniela Nikole Almaguer Serrano,PGY2,,
+BCM,Family Medicine,RS,Rachel Sarah Dean,PGY2,,
+BCM,Family Medicine,RS,Shalini Ann Ganesh Ghurye,PGY2,,
+BCM,Family Medicine,RS,Maria Francesca Ysabelle Martinez,PGY2,,
+BCM,Family Medicine,RS,Sebastian Meza,PGY2,,
+BCM,Family Medicine,RS,Chanhyun Park,PGY2,,
+BCM,Family Medicine,RS,Joseph Recio,PGY2,,
+BCM,Family Medicine,RS,Nicholas Alexander Vojtkofsky,PGY2,,
+BCM,Family Medicine,RS,Egberanmwen Enobakhare,PGY2,,
+BCM,Family Medicine,RS,Damian Jerzy Grybowski,PGY2,,
+BCM,Family Medicine,RS,Zarak Iqbal Samoo,PGY2,,
+BCM,Family Medicine,RS,Jenny Patrice Beldin,PGY3,,
+BCM,Family Medicine,RS,Payton Miller Blackburn,PGY3,,
+BCM,Family Medicine,RS,Daniel Floyd Brooks Jr.,PGY3,,
+BCM,Family Medicine,RS,Christine Alison Crumbley,PGY3,,
+BCM,Family Medicine,RS,Connor Kenneth Groff,PGY3,,
+BCM,Family Medicine,RS,Maria Harmjanz,PGY3,,
+BCM,Family Medicine,RS,Elizabeth Oliver,PGY3,,
+BCM,Family Medicine,RS,Vyas Venkat Sarabu,PGY3,,
+BCM,Family Medicine,RS,Moneeb Akhtar,PGY3,,
+BCM,Family Medicine,RS,Ma Katerina Pedro Arpas,PGY3,,
+BCM,Family Medicine,RS,Sravya Yarlagadda,PGY3,,
+BCM,Child Neurology,RS,Margaret Codispoti,PGY1,,codispot@bcm.edu
+BCM,Child Neurology,RS,Moriah Mabry,PGY1,,u252356@bcm.edu
+BCM,Child Neurology,RS,John Gardner Smith,PGY1,,
+BCM,Child Neurology,RS,Nicholas Cheng Wu,PGY1,,
+BCM,Child Neurology,RS,Minaal Zahid,PGY1,,u252706@bcm.edu
+BCM,Pediatrics,RS,Joseph Steven Ritualo Alisch,PGY1,,joseph.alisch@bcm.edu
+BCM,Pediatrics,RS,Sarah Elizabeth Barnett,PGY1,,sarah.barnett@bcm.edu
+BCM,Pediatrics,RS,Aditi Basu,PGY1,,aditi.basu@bcm.edu
+BCM,Pediatrics,RS,Nathan Bliss,PGY1,,bliss@bcm.edu
+BCM,Pediatrics,RS,Karissa Aki Chesky,PGY1,,karissa.chesky@bcm.edu
+BCM,Pediatrics,RS,Azalea Yoonah Lee,PGY1,,azalea.lee@bcm.edu
+BCM,Pediatrics,RS,Cody Dang Khoa Luong,PGY1,,cody.luong@bcm.edu
+BCM,Pediatrics,RS,Nathania Liyadsi Pabon-Marquez,PGY1,,nathania.pabon-marquez@bcm.edu
+BCM,Pediatrics,RS,Dana Oakes,PGY1,,dana.oakes@bcm.edu
+BCM,Child Neurology,RS,Stephen Renwick Brown,PGY2,,
+BCM,Child Neurology,RS,Carla Melisa Cardona Valle,PGY2,,
+BCM,Child Neurology,RS,Rachael Elaine Cheek,PGY2,,rachael.cheek@bcm.edu
+BCM,Child Neurology,RS,Emily Frances Mendez,PGY2,,
+BCM,Child Neurology,RS,Shrenevas Nandam,PGY2,,shrenevas.nandam@bcm.edu
+BCM,Child Neurology,RS,Samantha Quintero,PGY2,,
+BCM,Child Neurology,RS,Grace Marin Reynolds,PGY2,,grace.reynolds@bcm.edu
+BCM,Child Neurology,RS,Allison Camille Stephens,PGY2,,allison.stephens@bcm.edu
+BCM,Pediatrics,RS,Vanessa Rae Akiki,PGY2,,
+BCM,Pediatrics,RS,Madeleine Elizabeth Heliste,PGY2,,madeleine.heliste@bcm.edu
+BCM,Pediatrics,RS,JaVarus Dejuan Humphries,PGY2,,
+BCM,Pediatrics,RS,Sanjana Reddy Kalvakuntla,PGY2,,
+BCM,Pediatrics,RS,Prathyusha Damodaran Mahasamudram,PGY2,,
+BCM,Pediatrics,RS,Adanze Nneamaka Nnyagu,PGY2,,adanze.nnyagu@bcm.edu
+BCM,Pediatrics,RS,Pilar Danae Rodriguez,PGY2,,
+BCM,Pediatrics,RS,Austin Mann Temple,PGY2,,
+BCM,Child Neurology,RS,Amal Abd Abd Allah,PGY3,,
+BCM,Child Neurology,RS,Leslie Ann Beltran,PGY3,,leslie.beltran@bcm.edu
+BCM,Child Neurology,RS,Mariana Carretero Murillo,PGY3,,mariana.carreteromurill@bcm.edu
+BCM,Child Neurology,RS,Prescott Cheong,PGY3,,prescott.cheong@bcm.edu
+BCM,Child Neurology,RS,Whitney Franklin,PGY3,,whitney.franklin@bcm.edu
+BCM,Child Neurology,RS,Hyunyong (Howard) Koh,PGY3,,hyunyong.koh@bcm.edu
+BCM,Child Neurology,RS,Casey Declan Ryan,PGY3,,casey.ryan@bcm.edu
+BCM,Neurodevelopmental Disabilities,RS,Rima El Atrache,PGY4,,rima.elatrache@bcm.edu
+BCM,Neurodevelopmental Disabilities,RS,Paisley Lynae Pauli,PGY4,,paisley.pauli@bcm.edu
+BCM,Basic Neuroscience Pathway,RS,Lin Yao,PGY4,,lin.yao@bcm.edu
+BCM,Emergency Medicine,RS,Basmah Abdallah Maiga,PGY1,,basmah.abdallahmaiga@bcm.edu
+BCM,Emergency Medicine,RS,Britney Bernard,PGY1,,
+BCM,Emergency Medicine,RS,Michaela Carter,PGY1,,michaela.carter@bcm.edu
+BCM,Emergency Medicine,RS,Sana Erabti,PGY1,,
+BCM,Emergency Medicine,RS,Phillip Goldman,PGY1,,
+BCM,Emergency Medicine,RS,Rebecca Kassab,PGY1,,rebecca.kassab@bcm.edu
+BCM,Emergency Medicine,RS,Liv Klee,PGY1,,
+BCM,Emergency Medicine,RS,Landry Luker,PGY1,,landry.luker@bcm.edu
+BCM,Emergency Medicine,RS,Raquel Marroquin,PGY1,,raquel.marroquin@bcm.edu
+BCM,Emergency Medicine,RS,Anna Meier,PGY1,,
+BCM,Emergency Medicine,RS,Jenny Nguyen,PGY1,,
+BCM,Emergency Medicine,RS,Bethany Norwood,PGY1,,bethany.norwood@bcm.edu
+BCM,Emergency Medicine,RS,Chimdindu Obinero,PGY1,,chimdindu.obinero@bcm.edu
+BCM,Emergency Medicine,RS,Zachary Shaffer,PGY1,,zachary.shaffer@bcm.edu
+BCM,Emergency Medicine,RS,David Leavitt,PGY2,,david.leavitt@bcm.edu
+BCM,Emergency Medicine,RS,Cesar Corona Gutierrez,PGY2,,
+BCM,Emergency Medicine,RS,Joey C.W. Jackson,PGY2,,
+BCM,Emergency Medicine,RS,Reynaldo Olivo,PGY2,,
+BCM,Emergency Medicine,RS,Tamer Elashyi,PGY2,,
+BCM,Emergency Medicine,RS,Suha Godil,PGY2,,
+BCM,Emergency Medicine,RS,Yazmin Rodriguez,PGY2,,
+BCM,Emergency Medicine,RS,Marianne Zoghbi,PGY2,,
+BCM,Emergency Medicine,RS,Divya Kurian,PGY2,,
+BCM,Emergency Medicine,RS,Kevin Englar,PGY2,,
+BCM,Emergency Medicine,RS,Maya Jackson,PGY2,,
+BCM,Emergency Medicine,RS,Zoe Macfoy,PGY2,,
+BCM,Emergency Medicine,RS,Diana Marquez,PGY2,,
+BCM,Emergency Medicine,RS,Mohamed Omar,PGY2,,
+BCM,Emergency Medicine,RS,Yacine Issioui,PGY3,,
+BCM,Emergency Medicine,RS,Joachin Daberechi Eddi,PGY3,,
+BCM,Emergency Medicine,RS,Megh Gore Peterson,PGY3,,
+BCM,Emergency Medicine,RS,Alexander Le,PGY3,,
+BCM,Emergency Medicine,RS,Karim Abdeldaem,PGY3,,
+BCM,Emergency Medicine,RS,Peter Tran,PGY3,,
+BCM,Emergency Medicine,RS,Rachel Brill,PGY3,,
+BCM,Emergency Medicine,RS,Alberto de Jesús López Júarez,PGY3,,
+BCM,Emergency Medicine,RS,Chinenye E. Ukpaby,PGY3,,
+BCM,Emergency Medicine,RS,Vanesa Ochoa,PGY3,,
+BCM,Emergency Medicine,RS,Diana Ramos Rodriguez,PGY3,,
+BCM,Emergency Medicine,RS,Nicholas Shamel Hall,PGY3,,
+BCM,Emergency Medicine,RS,Heba Raslan,PGY3,,heba.raslan@bcm.edu
+BCM,Emergency Medicine,RS,Nana Kwesi Acheampong,PGY3,,
+BCM,Neurology,RS,Jeff Cherian,PGY1,,jeff.cherian@bcm.edu
+BCM,Neurology,RS,Hoang Dao,PGY1,,hoang.dao@bcm.edu
+BCM,Neurology,RS,Hasham Dhakwala,PGY1,,hasham.dhakwala@bcm.edu
+BCM,Neurology,RS,Leslie Guerrero,PGY1,,leslie.guerrero@bcm.edu
+BCM,Neurology,RS,Andres Inzunza,PGY1,,andres.inzunzamartindelcampo@bcm.edu
+BCM,Neurology,RS,Hannah Kostan,PGY1,,hannah.kostan@bcm.edu
+BCM,Neurology,RS,Nora Maerean,PGY1,,nora.maerean@bcm.edu
+BCM,Neurology,RS,Zain Naqvi,PGY1,,zain.naqvi@bcm.edu
+BCM,Neurology,RS,Gabriela Petersen Ofarrill,PGY1,,farrill@bcm.edu
+BCM,Neurology,RS,Mehmet Can Sari,PGY1,,mehmetcan.sari@bcm.edu
+BCM,Neurology,RS,Noel Thomas,PGY1,,noel.thomas@bcm.edu
+BCM,Neurology,RS,Rohit Billakanti,PGY2,,
+BCM,Neurology,RS,Mounica Boggala,PGY2,,
+BCM,Neurology,RS,Michaela Gatan,PGY2,,
+BCM,Neurology,RS,Rabie Habib,PGY2,,
+BCM,Neurology,RS,Amir Mafi,PGY2,,
+BCM,Neurology,RS,Shruti Mahale,PGY2,,
+BCM,Neurology,RS,Noah Ortiz,PGY2,,noah.ortiz@bcm.edu
+BCM,Neurology,RS,Tony Phan Jr,PGY2,,
+BCM,Neurology,RS,Varun Rachakonda,PGY2,,varun.rachakonda@bcm.edu
+BCM,Neurology,RS,Kevin Shan,PGY2,,
+BCM,Neurology,RS,Haris Sharieff,PGY2,,
+BCM,Neurology,RS,Nazaneen Amjadi,PGY3,,
+BCM,Neurology,RS,Dhyan Dave,PGY3,,
+BCM,Neurology,RS,Jana Hermoso,PGY3,,
+BCM,Neurology,RS,Aaron Lassmann,PGY3,,aaron.lassmann@bcm.edu
+BCM,Neurology,RS,Sathya Narasimhan,PGY3,,
+BCM,Neurology,RS,Yazan Nofal,PGY3,,yazan.nofal@bcm.edu
+BCM,Neurology,RS,Shrey Patel,PGY3,,shrey.patel2@bcm.edu
+BCM,Neurology,RS,Sashank Shorey,PGY3,,sashank.shorey@bcm.edu
+BCM,Neurology,RS,Valeria Sweeney,PGY3,,valeria.sweeney@bcm.edu
+BCM,Neurology,RS,Bakhos Tadros,PGY3,,bakhos.tadros@bcm.edu
+BCM,Neurology,RS,Thiofany Veony,PGY3,,thiofany.veony@bcm.edu
+BCM,Neurology,RS,Danny Abdullah,PGY4,,danny.abdullah@bcm.edu
+BCM,Neurology,RS,Jose Echeverri Alegre,PGY4,,jialegre@bcm.edu
+BCM,Neurology,RS,Gina Kayal,PGY4,,gina.kayal@bcm.edu
+BCM,Neurology,RS,Marco Malaga Julca,PGY4,,marco.malagajulca@bcm.edu
+BCM,Neurology,RS,Roald Menodiado,PGY4,,roald.menodiado@bcm.edu
+BCM,Neurology,RS,Ashna Rizvi,PGY4,,ashna.rizvi@bcm.edu
+BCM,Neurology,RS,Dyuti Shah,PGY4,,dyuti.shah@bcm.edu
+BCM,Neurology,RS,Zara Shah,PGY4,,zara.shah@bcm.edu
+BCM,Neurology,RS,Rahul Vedantam,PGY4,,rahul.vedantam@bcm.edu
+BCM,Neurology,RS,Hania Zafar,PGY4,,hania.zafar@bcm.edu
+BCM,Otolaryngology,RS,Luke Heiland,PGY1,,
+BCM,Otolaryngology,RS,Christina McCarthy,PGY1,,
+BCM,Otolaryngology,RS,Kathryn Nunes,PGY1,,
+BCM,Otolaryngology,RS,Noah Slater,PGY1,,
+BCM,Otolaryngology,RS,Andrew Voigt,PGY1,,
+BCM,Otolaryngology,RS,Mohini Bindal,PGY2,,mohini.bindal@bcm.edu
+BCM,Otolaryngology,RS,Neil Fadia,PGY2,,
+BCM,Otolaryngology,RS,Madelyn Frank,PGY2,,
+BCM,Otolaryngology,RS,Jillian O’Shaughnessy,PGY2,,
+BCM,Otolaryngology,RS,Edward Talatala,PGY2,,
+BCM,Otolaryngology,RS,Grace Amadio,PGY3,,grace.amadio@bcm.edu
+BCM,Otolaryngology,RS,Michelle Hong,PGY3,,
+BCM,Otolaryngology,RS,William Craig Kemper,PGY3,,
+BCM,Otolaryngology,RS,Harry Vildibill,PGY3,,
+BCM,Otolaryngology,RS,Elisabeth Wenneker,PGY3,,
+BCM,Otolaryngology,RS,Dylan Fall,PGY4,,
+BCM,Otolaryngology,RS,Taylor Leavitt,PGY4,,taylor.leavitt@bcm.edu
+BCM,Otolaryngology,RS,Kevin Li,PGY4,,
+BCM,Otolaryngology,RS,Emily Newstrom,PGY4,,emily.newstrom@bcm.edu
+BCM,Otolaryngology,RS,Gabrielle Wolter,PGY4,,gabrielle.wolter@bcm.edu
+BCM,Otolaryngology,RS,Nicole Alexander,PGY5,,
+BCM,Otolaryngology,RS,Zachary Christian,PGY5,,
+BCM,Otolaryngology,RS,Richmond Laryea,PGY5,,
+BCM,Otolaryngology,RS,Morgan Lee,PGY5,,
+BCM,Otolaryngology,RS,Julian Martinez,PGY5,,
+BCM,Physical Medicine and Rehabilitation,RS,Robert Emeh,PGY2,,robert.emeh@bcm.edu
+BCM,Physical Medicine and Rehabilitation,RS,Bernardo Gonzalez,PGY2,,
+BCM,Physical Medicine and Rehabilitation,RS,Candace Henry,PGY2,,candace.henry@bcm.edu
+BCM,Physical Medicine and Rehabilitation,RS,Symonne Martin,PGY2,,
+BCM,Physical Medicine and Rehabilitation,RS,Josephine Nwankwo,PGY2,,josephine.nwankwo@bcm.edu
+BCM,Physical Medicine and Rehabilitation,RS,John Spikes II,PGY2,,
+BCM,Physical Medicine and Rehabilitation,RS,Madeline Tovar,PGY2,,madeline.tovar@bcm.edu
+BCM,Physical Medicine and Rehabilitation,RS,Christopher Vong,PGY2,,
+BCM,Physical Medicine and Rehabilitation,RS,Emilia Alvarez,PGY3,,
+BCM,Physical Medicine and Rehabilitation,RS,Josiel Garcia,PGY3,,
+BCM,Physical Medicine and Rehabilitation,RS,Anisa Haque,PGY3,,
+BCM,Physical Medicine and Rehabilitation,RS,Yacoub Khatab,PGY3,,
+BCM,Physical Medicine and Rehabilitation,RS,Zaur Komachkov,PGY3,,
+BCM,Physical Medicine and Rehabilitation,RS,"Renato Martin, Jr",PGY3,,
+BCM,Physical Medicine and Rehabilitation,RS,Jedidah Prum,PGY3,,jedidah.prum@bcm.edu
+BCM,Physical Medicine and Rehabilitation,RS,Ravinderjit Singh,PGY3,,ravinderjit.singh@bcm.edu
+BCM,Physical Medicine and Rehabilitation,RS,Destiny Anamege,PGY4,,
+BCM,Physical Medicine and Rehabilitation,RS,Ashlyn Victoria Brown,PGY4,,
+BCM,Physical Medicine and Rehabilitation,RS,Jason Caffrey,PGY4,,jason.caffrey@bcm.edu
+BCM,Physical Medicine and Rehabilitation,RS,Won Jae Jeong,PGY4,,
+BCM,Physical Medicine and Rehabilitation,RS,"Ton La, Jr",PGY4,,
+BCM,Physical Medicine and Rehabilitation,RS,Angela Nwankwo,PGY4,,
+BCM,Physical Medicine and Rehabilitation,RS,Jason Parmar,PGY4,,
+BCM,Physical Medicine and Rehabilitation,RS,Neha Singh,PGY4,,
+BCM,Dermatology,RS,Tejas Prasad Joshi,PGY2,,tejas.joshi@bcm.edu
+BCM,Dermatology,RS,Rishabh Lohray,PGY2,,lohray@bcm.edu
+BCM,Dermatology,RS,Erinma Erica Ogwumike,PGY2,,erinma.ogwumike@bcm.edu
+BCM,Dermatology,RS,Chidimma Jacinta Okwara,PGY2,,chidimma.okwara@bcm.edu
+BCM,Dermatology,RS,Dina Hani Zamil,PGY2,,dina.zamil@bcm.edu
+BCM,Dermatology,RS,Natalie Garcia,PGY3,,natalie.garcia@bcm.edu
+BCM,Dermatology,RS,James M Garritano,PGY3,,
+BCM,Dermatology,RS,Hannah Laila Hanania,PGY3,,hlhanani@bcm.edu
+BCM,Dermatology,RS,Bonnie W. Leung,PGY3,,bonnie.leung@bcm.edu
+BCM,Dermatology,RS,Anna Catinis,PGY4,,anna.catinis@bcm.edu
+BCM,Dermatology,RS,Rubi Danielle Montejano,PGY4,,rubi.montejano@bcm.edu
+BCM,Plastic Surgery - Integrated,RS,Andrew Malek,PGY1,,
+BCM,Plastic Surgery - Integrated,RS,Kassandra Ogbodu,PGY1,,
+BCM,Plastic Surgery - Integrated,RS,Yasmine Soubra,PGY1,,
+BCM,Plastic Surgery - Integrated,RS,Matthew Parham,PGY2,,matthew.parham@bcm.edu
+BCM,Plastic Surgery - Integrated,RS,Arren Simpson,PGY2,,
+BCM,Plastic Surgery - Integrated,RS,Raghave Upadhyaya,PGY2,,
+BCM,Plastic Surgery - Integrated,RS,Richard Appel,PGY3,,
+BCM,Plastic Surgery - Integrated,RS,Heather Burns,PGY3,,
+BCM,Plastic Surgery - Integrated,RS,Sofia C. Perez Otero,PGY3,,
+BCM,Plastic Surgery - Integrated,RS,John Bovill,PGY4,,
+BCM,Plastic Surgery - Integrated,RS,Olivia Leonovicz,PGY4,,
+BCM,Plastic Surgery - Integrated,RS,Mariana Trevino,PGY4,,
+BCM,Plastic Surgery - Integrated,RS,Sam Cole,PGY5,,
+BCM,Plastic Surgery - Integrated,RS,Jacob Dinis,PGY5,,jacob.dinis@bcm.edu
+BCM,Plastic Surgery - Integrated,RS,Brody King,PGY5,,
+BCM,Plastic Surgery - Integrated,RS,Matthew Davis,PGY6,,
+BCM,Plastic Surgery - Integrated,RS,Tanir Moreno,PGY6,,tanir.moreno@bcm.edu
+BCM,Plastic Surgery - Integrated,RS,Linden Shih,PGY6,,
+BCM,Internal Medicine,RS,David Tweardy,,,
+BCM,Internal Medicine,RS,Orhue Odaro,,,odaro@bcm.edu
+BCM,Internal Medicine,RS,Ellen Manzullo,,,
+BCM,Internal Medicine,RS,David Rubio,,,
+BCM,Internal Medicine,RS,Shiva Aminnia,,,
+BCM,Internal Medicine,RS,Steven Grigsby,,,
+BCM,Internal Medicine,RS,Gregory Sepich-Poore,,,
+BCM,Internal Medicine,RS,April Nguyen,,,
+BCM,Internal Medicine,RS,Valerio Rasi,,,
+BCM,Internal Medicine,RS,Mohammadreza Tabary,,,
+BCM,Internal Medicine,RS,Adwiteeya Misra,,,adwiteeya.misra@bcm.edu
+BCM,Internal Medicine,RS,D’Feau Lieu,,,
+BCM,Internal Medicine,RS,Mohammad Saadatagah,,,
+BCM,Internal Medicine,RS,Jinna Chu,,,
+BCM,Pediatrician-Scientist Residents,RS,Marisa Pinson,PGY1,,
+BCM,Pediatrician-Scientist Residents,RS,Tiffany King,PGY2,,tiffany.king@bcm.edu
+BCM,Pediatrician-Scientist Residents,RS,Chris Peek,PGY2,,
+BCM,Pediatrician-Scientist Residents,RS,Sathi Wijeyesinghe,PGY3,,
+BCM,Medicine-Pediatrics,RS,Jonathan Alessi,PGY1,,jonathan.alessi@bcm.edu
+BCM,Medicine-Pediatrics,RS,Anne Cao,PGY1,,anne.cao@bcm.edu
+BCM,Medicine-Pediatrics,RS,Ross Dare,PGY1,,ross.dare@bcm.edu
+BCM,Medicine-Pediatrics,RS,Megan Kelley,PGY1,,megan.kelley@bcm.edu
+BCM,Medicine-Pediatrics,RS,Alisa Lu,PGY1,,u244712@bcm.edu
+BCM,Medicine-Pediatrics,RS,Alyson Lee,PGY1,,alyson.lee@bcm.edu
+BCM,Medicine-Pediatrics,RS,Eileen Malecki,PGY1,,eileen.malecki@bcm.edu
+BCM,Medicine-Pediatrics,RS,Layla Mokhtar,PGY1,,layla.mokhtar@bcm.edu
+BCM,Medicine-Pediatrics,RS,Heena Shah,PGY1,,heena.shah@bcm.edu
+BCM,Medicine-Pediatrics,RS,William Austin,PGY2,,
+BCM,Medicine-Pediatrics,RS,Kyla Blasingame,PGY2,,kyla.fergason@bcm.edu
+BCM,Medicine-Pediatrics,RS,Victoria DeBrock,PGY2,,victoria.debrock@bcm.edu
+BCM,Medicine-Pediatrics,RS,Chelsea Godfrey,PGY2,,chelsea.godfrey@bcm.edu
+BCM,Medicine-Pediatrics,RS,Ayleen Hernandez,PGY2,,ayleen.hernandez@bcm.edu
+BCM,Medicine-Pediatrics,RS,Michael Knapp,PGY2,,
+BCM,Medicine-Pediatrics,RS,William Porter,PGY2,,u235205@bcm.edu
+BCM,Medicine-Pediatrics,RS,Mallika Tripathy,PGY2,,
+BCM,Medicine-Pediatrics,RS,Mary Jane Zeh,PGY2,,
+BCM,Medicine-Pediatrics,RS,Gabriela Aklepi,PGY3,,
+BCM,Medicine-Pediatrics,RS,Marcos Armendariz,PGY3,,
+BCM,Medicine-Pediatrics,RS,Jonathan Freese,PGY3,,
+BCM,Medicine-Pediatrics,RS,Asif Hossain,PGY3,,
+BCM,Medicine-Pediatrics,RS,Cesar Larancuent,PGY3,,
+BCM,Medicine-Pediatrics,RS,Colleen McClean,PGY3,,
+BCM,Medicine-Pediatrics,RS,Paula Mofor,PGY3,,
+BCM,Medicine-Pediatrics,RS,Amanda Oliphant,PGY3,,
+BCM,Medicine-Pediatrics,RS,Sanika Rane,PGY3,,sanika.rane@bcm.edu
+BCM,Medicine-Pediatrics,RS,Lyena Birkenstock,PGY4,,lyena.birkenstock@bcm.edu
+BCM,Medicine-Pediatrics,RS,Emma Brackett,PGY4,,emma.brackett@bcm.edu
+BCM,Medicine-Pediatrics,RS,Alexis Kennedy,PGY4,,alexis.kennedy@bcm.edu
+BCM,Medicine-Pediatrics,RS,Nadira Lilman,PGY4,,nadira.lilman@bcm.edu
+BCM,Medicine-Pediatrics,RS,Callie Meath,PGY4,,callie.meath@bcm.edu
+BCM,Medicine-Pediatrics,RS,Kristiana Morgan,PGY4,,kristiana.morgan@bcm.edu
+BCM,Medicine-Pediatrics,RS,Jessica Saifee,PGY4,,jessica.saifee@bcm.edu
+BCM,Medicine-Pediatrics,RS,Natalie Wire,PGY4,,natalie.wire@bcm.edu
+BCM,Medicine-Pediatrics,RS,Christopher Wong,PGY4,,christopher.wong@bcm.edu
+BCM,Neurological Surgery,RS,Sarah Hamimi,PGY1,,
+BCM,Neurological Surgery,RS,Matthew Nguyen,PGY1,,
+BCM,Neurological Surgery,RS,Gabriel Reyes,PGY1,,gabriel.reyes@bcm.edu
+BCM,Neurological Surgery,RS,Arya Shetty,PGY1,,arya.shetty@bcm.edu
+BCM,Neurological Surgery,RS,Nangorgo (Oumar) Coulibaly,PGY2,,
+BCM,Neurological Surgery,RS,Collin English,PGY2,,collin.english@bcm.edu
+BCM,Neurological Surgery,RS,Mireya Rahman,PGY2,,
+BCM,Neurological Surgery,RS,Kevin Wu,PGY2,,
+BCM,Neurological Surgery,RS,Adrish Anand,PGY3,,
+BCM,Neurological Surgery,RS,Som Chaturvedi,PGY3,,
+BCM,Neurological Surgery,RS,Nisha Dabhi,PGY3,,
+BCM,Neurological Surgery,RS,Pedram Maleknia,PGY3,,
+BCM,Neurological Surgery,RS,Luis Carrete,PGY4,,
+BCM,Neurological Surgery,RS,Jeffrey Chen,PGY4,,jeffrey.chen@bcm.edu
+BCM,Neurological Surgery,RS,Sai Susheel Chilakapati,PGY4,,
+BCM,Neurological Surgery,RS,Samantha Varela,PGY4,,
+BCM,Neurological Surgery,RS,Panayotis Apokremiotis,PGY5,,panayotis.apokremiotis@bcm.edu
+BCM,Neurological Surgery,RS,Jordan Guntin,PGY5,,
+BCM,Neurological Surgery,RS,Tyler Hughes,PGY5,,
+BCM,Neurological Surgery,RS,Somto Ngwudike,PGY5,,
+BCM,Neurological Surgery,RS,Sricharan Gopakumar,PGY6,,
+BCM,Neurological Surgery,RS,Sumeeth Jonathan,PGY6,,
+BCM,Neurological Surgery,RS,Diana Le,PGY6,,diana.le2@bcm.edu
+BCM,Neurological Surgery,RS,Rajan Patel,PGY6,,
+BCM,Neurological Surgery,RS,Alex Brenner,PGY7,,
+BCM,Neurological Surgery,RS,Alex Flores,PGY7,,alex.flores@bcm.edu
+BCM,Neurological Surgery,RS,Eric Goethe,PGY7,,
+BCM,Neurological Surgery,RS,Vigi Katlowitz,PGY7,,
+BCM,Thoracic Surgery Integrated,RS,Colton Andrews,PGY1,,colton.andrews@bcm.edu
+BCM,Thoracic Surgery Integrated,RS,Austin Hingtgen,PGY2,,austin.hingtgen@bcm.edu
+BCM,Thoracic Surgery Integrated,RS,Ryan Nowrouzi,PGY3,,nowrouzi@bcm.edu
+BCM,Thoracic Surgery Integrated,RS,Monika Halas,PGY4,,
+BCM,Thoracic Surgery Integrated,RS,Gregory Boyajian,PGY5,,
+BCM,Thoracic Surgery Integrated,RS,Navyatha Mohan,PGY6,,
+BCM,Psychiatry,RS,Dany Abou Issa,PGY1,,
+BCM,Psychiatry,RS,Sebastian Andrade,PGY1,,
+BCM,Psychiatry,RS,Monica Armas Neira,PGY1,,monica.armasneira@bcm.edu
+BCM,Psychiatry,RS,Mirza Baig,PGY1,,
+BCM,Psychiatry,RS,Kevin Chen,PGY1,,
+BCM,Psychiatry,RS,Rachel Furhang,PGY1,,rachel.furhang@bcm.edu
+BCM,Psychiatry,RS,Sarah Hakam,PGY1,,
+BCM,Psychiatry,RS,John Jung,PGY1,,john.jung@bcm.edu
+BCM,Psychiatry,RS,Adebosola Karunwi,PGY1,,adebosola.karunwi@bcm.edu
+BCM,Psychiatry,RS,Cory Kittleman,PGY1,,
+BCM,Psychiatry,RS,Emma Philipps,PGY1,,emma.philipps@bcm.edu
+BCM,Psychiatry,RS,Jeswin Vennatt,PGY1,,
+BCM,Psychiatry,RS,Jameson Williams,PGY1,,jameson.williams@bcm.edu
+BCM,Psychiatry,RS,Maggie Yip,PGY1,,maggie.yip@bcm.edu
+BCM,Psychiatry,RS,Youssef Ahmed,PGY2,,youssef.ahmed@bcm.edu
+BCM,Psychiatry,RS,Corbin Darling,PGY2,,corbin.darling@bcm.edu
+BCM,Psychiatry,RS,Yemariamwork Engidaw,PGY2,,yemariamwork.engidaw@bcm.edu
+BCM,Psychiatry,RS,Muhammad Farooq,PGY2,,muhammad.farooq@bcm.edu
+BCM,Psychiatry,RS,Judith Gutierrez,PGY2,,judith.gutierrez@bcm.edu
+BCM,Psychiatry,RS,Johnathon Lueck,PGY2,,johnathon.lueck@bcm.edu
+BCM,Psychiatry,RS,Anusia Mansukhani,PGY2,,anusia.mansukhani@bcm.edu
+BCM,Psychiatry,RS,Bianca Obinyan,PGY2,,bianca.obinyan@bcm.edu
+BCM,Psychiatry,RS,Osaiyaoko Omozee,PGY2,,osaiyaoko.omozee@bcm.edu
+BCM,Psychiatry,RS,Paulette Orhii,PGY2,,
+BCM,Psychiatry,RS,Ekta Patel,PGY2,,ekta.patel@bcm.edu
+BCM,Psychiatry,RS,Neha Patel,PGY2,,neha.patel@bcm.edu
+BCM,Psychiatry,RS,Salonee Shah,PGY2,,
+BCM,Psychiatry,RS,Nivedita Sriram,PGY2,,nivedita.sriram@bcm.edu
+BCM,Psychiatry,RS,Oluwadamilola Bankole,PGY3,,
+BCM,Psychiatry,RS,Dae Gun Chung Kim,PGY3,,
+BCM,Psychiatry,RS,Augusto De Las Casas,PGY3,,
+BCM,Psychiatry,RS,Bianca De,PGY3,,
+BCM,Psychiatry,RS,Kyle Krzesowik,PGY3,,
+BCM,Psychiatry,RS,Hayley Lange,PGY3,,
+BCM,Psychiatry,RS,Landon Mabe,PGY3,,landon.mabe@bcm.edu
+BCM,Psychiatry,RS,Jannie Matar,PGY3,,jannie.matar@bcm.edu
+BCM,Psychiatry,RS,Diamond McNeil,PGY3,,
+BCM,Psychiatry,RS,Gabriella Rodriguez,PGY3,,
+BCM,Psychiatry,RS,Daniela Sanchez,PGY3,,
+BCM,Psychiatry,RS,Ushna Shamoon,PGY3,,
+BCM,Psychiatry,RS,Kara Shannon,PGY3,,
+BCM,Psychiatry,RS,Francis Tee,PGY3,,
+BCM,Psychiatry,RS,Taylor Wolfenberger,PGY3,,
+BCM,Psychiatry,RS,Lauren Beal,PGY4,,lauren.beal@bcm.edu
+BCM,Psychiatry,RS,Sarah Cheema,PGY4,,sarah.cheema@bcm.edu
+BCM,Psychiatry,RS,Samya Isa,PGY4,,samya.isa@bcm.edu
+BCM,Psychiatry,RS,Eric Nelson,PGY4,,eric.nelson@bcm.edu
+BCM,Psychiatry,RS,Joachim Operskalski,PGY4,,
+BCM,Psychiatry,RS,Michelle Raji,PGY4,,michelle.raji@bcm.edu
+BCM,Psychiatry,RS,Alyssa Schrock,PGY4,,alyssa.schrock@bcm.edu
+BCM,Psychiatry,RS,Rachel Shenoi,PGY4,,
+BCM,Psychiatry,RS,James Zhang,PGY4,,james.zhang@bcm.edu
+BCM,Internal Medicine/Medical Genetics and Genomics,RS,Gregory Boyek,,,
+BCM,Internal Medicine/Medical Genetics and Genomics,RS,Simon Braendle,,,
+BCM,Internal Medicine/Medical Genetics and Genomics,RS,Bridget Kiely,,,bridget.kiely@bcm.edu
+BCM,Internal Medicine/Medical Genetics and Genomics,RS,Charlene Norgan Radler,,,charlene.norganradler@bcm.edu
+BCM,Neuroradiology,FS,Mohammed Muzammil Ansari,,2026.0,mohammed.ansari@bcm.edu
+BCM,Neuroradiology,FS,Sally Jean Choi,,2026.0,sally.choi@bcm.edu
+BCM,Neuroradiology,FS,Andres Rafael Rodriguez Sein,,2026.0,andres.rodriguezsein@bcm.edu
+BCM,Pediatric Rheumatology,FS,Dawn Gist,,,dawn.gist@bcm.edu
+BCM,Pediatric Rheumatology,FS,Sarah Molina,,,sarah.molina@bcm.edu
+BCM,Pediatric Rheumatology,FS,Meredith Rae,,,meredith.rae@bcm.edu
+BCM,Pediatric Rheumatology,FS,Rasha Elrefai,,,
+BCM,Pediatric Rheumatology,FS,Juan Torres,,,
+BCM,"Resident, PGY3",FS,Muhammad Haroon Khilan,PGY3,,muhammadharoon.khilan@bcm.edu
+BCM,Endocrine Surgery,FS,Lina Adwer,PGY1,,
+BCM,Endocrine Surgery,FS,Webb Camille,PGY1,,
+BCM,Endocrine Surgery,FS,Dominique Cope,PGY1,,
+BCM,Endocrine Surgery,FS,Kylie Duckworth,PGY1,,
+BCM,Endocrine Surgery,FS,Jessica Lee,PGY1,,
+BCM,Endocrine Surgery,FS,Grace McCrea,PGY1,,
+BCM,Endocrine Surgery,FS,Bani Medegan Fagla,PGY1,,
+BCM,Endocrine Surgery,FS,Madeleine Obuya,PGY1,,
+BCM,Endocrine Surgery,FS,Abdul Wasay Paracha,PGY1,,
+BCM,Endocrine Surgery,FS,Matthew Sander,PGY1,,
+BCM,Endocrine Surgery,FS,Tristen Taylor,PGY1,,
+BCM,Endocrine Surgery,FS,Anthony Alanis,PGY1,,
+BCM,Endocrine Surgery,FS,Alexandra Alvarez,PGY1,,
+BCM,Endocrine Surgery,FS,Krishna Anand,PGY1,,
+BCM,Endocrine Surgery,FS,Miguel Bargas Ochoa,PGY1,,
+BCM,Endocrine Surgery,FS,Meija Caldwell,PGY1,,
+BCM,Endocrine Surgery,FS,Tamara Fleihan,PGY1,,
+BCM,Endocrine Surgery,FS,Daniel Gabriel,PGY1,,
+BCM,Endocrine Surgery,FS,Ronald Goldsberry,PGY1,,
+BCM,Endocrine Surgery,FS,Jenny Nguyen,PGY1,,
+BCM,Endocrine Surgery,FS,Julia O’Gara,PGY1,,
+BCM,Endocrine Surgery,FS,Vivien Okechukwu,PGY1,,
+BCM,Endocrine Surgery,FS,Charles Osamor,PGY1,,
+BCM,Endocrine Surgery,FS,Navoda Perikala,PGY1,,
+BCM,Endocrine Surgery,FS,Christopher Stevens,PGY1,,
+BCM,Endocrine Surgery,FS,Ericka Vazquez,PGY1,,
+BCM,Endocrine Surgery,FS,James Webb,PGY1,,
+BCM,Endocrine Surgery,FS,Jennifer Backus,PGY2,,
+BCM,Endocrine Surgery,FS,Amelia Daley,PGY2,,
+BCM,Endocrine Surgery,FS,Courtney Elliott,PGY2,,
+BCM,Endocrine Surgery,FS,Rogelio Hernandez,PGY2,,
+BCM,Endocrine Surgery,FS,John Johnson,PGY2,,
+BCM,Endocrine Surgery,FS,Cassidy Lounsbury,PGY2,,
+BCM,Endocrine Surgery,FS,David Nacouzi,PGY2,,
+BCM,Endocrine Surgery,FS,Zachary Gao,PGY5,,
+BCM,Endocrine Surgery,FS,Trenton Gluck,PGY5,,
+BCM,Endocrine Surgery,FS,Bennett Hartley,PGY5,,
+BCM,Endocrine Surgery,FS,Silas Henderson,PGY5,,
+BCM,Endocrine Surgery,FS,Raymond Lopez,PGY5,,
+BCM,Endocrine Surgery,FS,Sai Nelanuthula,PGY5,,
+BCM,Endocrine Surgery,FS,Katherine Nordick,PGY5,,
+BCM,Endocrine Surgery,FS,Sarah Peiffer,PGY5,,
+BCM,Endocrine Surgery,FS,Annie Snitman,PGY5,,
+BCM,Pediatric Critical Care Medicine,FS,"Emma Crotty, MBBCh BAO",,,
+BCM,Pediatric Critical Care Medicine,FS,Julia Garcia Mancebo,,,
+BCM,Pediatric Critical Care Medicine,FS,Nour Gebara,,,
+BCM,Pediatric Critical Care Medicine,FS,Carlos Vargas,,,
+BCM,Pediatric Critical Care Medicine,FS,Haitham Al-Khatib,,,
+BCM,Pediatric Critical Care Medicine,FS,Aline Andrucioli,,,
+BCM,Pediatric Critical Care Medicine,FS,Jazmin Garcia,,,
+BCM,Pediatric Critical Care Medicine,FS,Camila Gonzalez Aragon,,,
+BCM,Pediatric Critical Care Medicine,FS,Keisha Odunze,,,
+BCM,Pediatric Critical Care Medicine,FS,James Nelson Reed,,,
+BCM,Pediatric Critical Care Medicine,FS,Laura Stanfel,,,
+BCM,Pediatric Critical Care Medicine,FS,Doreen Chang,,,
+BCM,Pediatric Critical Care Medicine,FS,Diana Cabrera Fernandez,,,
+BCM,Pediatric Critical Care Medicine,FS,Aimee Daccache,,,
+BCM,Pediatric Critical Care Medicine,FS,Moath Azmi Hamaidi,,,
+BCM,Pediatric Critical Care Medicine,FS,Jane Hampton,,,
+BCM,Pediatric Critical Care Medicine,FS,Lamyaa Mohamed,,,
+BCM,Pediatric Critical Care Medicine,FS,Philip Picard-Fraser,,,
+BCM,Pediatric Emergency Medicine - San Antonio,FS,Kellie Nicole Williams,,,knwillia@bcm.edu
+BCM,Stereotactic and Functional Neurosurgery,FS,Sameer Sheth,,,sasheth@bcm.edu
+BCM,Gastroenterology,FS,"Kiandokht Bashiri, M.D., MSc (T-32 Research Track",,,
+BCM,Gastroenterology,FS,Priyanka Jagannathan,,,
+BCM,Gastroenterology,FS,Pooja Prasad,,,
+BCM,Gastroenterology,FS,Michael Shi,,,
+BCM,Gastroenterology,FS,Sharon Thomson,,,
+BCM,Gastroenterology,FS,Akanksha Togra,,,
+BCM,Gastroenterology,FS,Andres Urias Rivera,,,
+BCM,Gastroenterology,FS,Saleha Aziz,,,
+BCM,Gastroenterology,FS,Kadon Caskey,,,
+BCM,Gastroenterology,FS,Spyridon Peppas,,,
+BCM,Gastroenterology,FS,Prisca Pungwe,,,
+BCM,Gastroenterology,FS,Jerapas (Paul) Thongpiya,,,
+BCM,Gastroenterology,FS,Vinh Tran,,,
+BCM,Gastroenterology,FS,"Lina Yagan, M.D. (T-32 Research Track",,,
+BCM,Gastroenterology,FS,"Aman Bali, M.D. (T-32 Research Track",,,
+BCM,Gastroenterology,FS,Shivram Chandramouli,,,
+BCM,Gastroenterology,FS,Ritodhi Chatterjee,,,
+BCM,Gastroenterology,FS,"Fouad Jaber, M.B.B.Ch",,,
+BCM,Gastroenterology,FS,Rahul Mohan,,,
+BCM,Gastroenterology,FS,Codey Pham,,,
+BCM,Gastroenterology,FS,Lauren Shaffer,,,
+BCM,Gastroenterology,FS,Basim Ali,,,
+BCM,Gastroenterology,FS,"Jinna Chu, M.D. (T-32 Research Track",,,
+BCM,Gastroenterology,FS,Conrad Fernandes,,,
+BCM,Gastroenterology,FS,Franciska Gudenkauf,,,
+BCM,Gastroenterology,FS,Disha Kumar,,,
+BCM,Gastroenterology,FS,Taylor Riggs,,,
+BCM,Gastroenterology,FS,Emmanuel Palomera Tejada,,,
+BCM,Child and Adolescent Psychiatry,FS,Mahmoud Abdulbaki,,,
+BCM,Child and Adolescent Psychiatry,FS,Hersheth Aggarwal,,,
+BCM,Child and Adolescent Psychiatry,FS,Sukhvinder Cheema,,,
+BCM,Child and Adolescent Psychiatry,FS,Vineeta Damineni,,,
+BCM,Child and Adolescent Psychiatry,FS,Kamyar Jafari,,,
+BCM,Child and Adolescent Psychiatry,FS,Chiedozie Ofoma,,,
+BCM,Child and Adolescent Psychiatry,FS,Aiesha Polakampali,,,
+BCM,Child and Adolescent Psychiatry,FS,Andrew Wang,,,
+BCM,Child and Adolescent Psychiatry,FS,Dr. Agnes Cruz-Noriega,,,
+BCM,Child and Adolescent Psychiatry,FS,Dr. Swetha Kondaveeti,,,
+BCM,Child and Adolescent Psychiatry,FS,Dr. Komal Nathani,,,
+BCM,Child and Adolescent Psychiatry,FS,Dr. Bilal Qureshi,,,
+BCM,Child and Adolescent Psychiatry,FS,Dr. Omar Shawaf,,,
+BCM,Child and Adolescent Psychiatry,FS,Dr. Catherine Zeba Sunny,,,
+BCM,Child and Adolescent Psychiatry,FS,Dr. Katelyn Tate,,,
+BCM,Child and Adolescent Psychiatry,FS,Dr. Saumia Thomas,,,
+BCM,Postdoctoral Fellow PhD,FS,"Willie Phanthakone Rajvong, DrPH",,,willie.rajvong@bcm.edu
+BCM,,FS,Manoj Ghimire,PGY4,,
+BCM,,FS,Adriel Gonzalez Rivera,PGY4,,
+BCM,,FS,Andrew Lamb,PGY4,,
+BCM,,FS,Majed Shaheen,PGY4,,
+BCM,,FS,Rohanit Singh,PGY4,,
+BCM,,FS,Jose Asturias,PGY5,,
+BCM,,FS,Fidel Banuelos,PGY5,,
+BCM,,FS,Robert Jameson,PGY5,,
+BCM,,FS,Yajaira Jimenez,PGY5,,
+BCM,,FS,James Kurian,PGY5,,
+BCM,Adult Cardiothoracic Anesthesiology,FS,Jacob Conroy,PGY5,,
+BCM,Adult Cardiothoracic Anesthesiology,FS,John Bouz,,,
+BCM,Adult Cardiothoracic Anesthesiology,FS,Tommy Li,,,
+BCM,Adult Cardiothoracic Anesthesiology,FS,Jacob Ryall,,,
+BCM,,FS,"Trevor M. Bibler, Ph.D., M.T.S",,,
+BCM,,FS,Eric Mathison,,,
+BCM,Pediatric Cardiovascular Anesthesiology,FS,Brittany Bryant,,,
+BCM,Pediatrics - Houston,FS,View profile,,,chelsea.chase@bcm.edu
+BCM,Pediatrics - Houston,FS,View profile,,,pavithra.vijayakumar@bcm.edu
+BCM,Thoracic Surgery Independent,FS,Stephen Bordes,PGY6,,
+BCM,Thoracic Surgery Independent,FS,Ding Ding,PGY6,,
+BCM,Thoracic Surgery Independent,FS,Joshua Wetzler,PGY6,,
+BCM,Thoracic Surgery Independent,FS,Sarah Hill,PGY7,,
+BCM,Thoracic Surgery Independent,FS,Christopher Lemoine,PGY7,,
+BCM,Thoracic Surgery Independent,FS,Syed Peer,PGY7,,
+BCM,Thoracic Surgery Independent,FS,Reginald Chounoune,PGY8,,
+BCM,Thoracic Surgery Independent,FS,Armin Farazdaghi,PGY8,,
+BCM,Thoracic Surgery Independent,FS,Benjamin Zambetti,PGY8,,
+BCM,Hematology and Oncology,FS,Samuel Black,,,
+BCM,Hematology and Oncology,FS,Victoria Chu,,,
+BCM,Hematology and Oncology,FS,Ashley McFarquhar,,,
+BCM,Hematology and Oncology,FS,Trung Nguyen,,,
+BCM,Hematology and Oncology,FS,Caitlynn Pham,,,
+BCM,Hematology and Oncology,FS,Valerio Rasi,,,
+BCM,Hematology and Oncology,FS,Donghoon Shin,,,
+BCM,Hematology and Oncology,FS,Jia Xiong,,,
+BCM,Hematology and Oncology,FS,Ghida Akdar,,,
+BCM,Hematology and Oncology,FS,Bethany Bundrant,,,
+BCM,Hematology and Oncology,FS,Madhan Srinivasan Kumar,,,
+BCM,Hematology and Oncology,FS,Anjali Lankford,,,
+BCM,Hematology and Oncology,FS,Colleen O’Neill,,,
+BCM,Hematology and Oncology,FS,Justin Shi,,,
+BCM,Hematology and Oncology,FS,Ifeanyi Uche,,,
+BCM,Hematology and Oncology,FS,Pallavi Dev,,,
+BCM,Hematology and Oncology,FS,Lindsey Farmer,,,
+BCM,Hematology and Oncology,FS,Jaime Haro-Silerio,,,
+BCM,Hematology and Oncology,FS,Derek Kwakye,,,
+BCM,Hematology and Oncology,FS,Monica Montes-Rivera,,,
+BCM,Hematology and Oncology,FS,Rajvi Patel,,,
+BCM,Hematology and Oncology,FS,Sidrah Shah,,,
+BCM,Hematology and Oncology,FS,Patrick Sweeney,,,
+BCM,Hematology and Oncology,FS,Cindy Wu,,,
+BCM,Global Health and International Emergency Medicine,FS,"Michael Jaung, M.D., M.Sc., FACEP",,,
+BCM,Global Health and International Emergency Medicine,FS,"Joy Mackey, M.D., FACEP",,,joy.mackey@bcm.edu
+BCM,Global Health and International Emergency Medicine,FS,Maham Munawar,,,maham.munawar@bcm.edu
+BCM,Global Health and International Emergency Medicine,FS,Sarah Bezek,,,bezek@bcm.edu
+BCM,Pediatric Orthopedics,FS,View profile,,,lori.chambers@bcm.edu
+BCM,Pediatric Orthopedics,FS,View profile,,,iciar.davilacastrodad@bcm.edu
+BCM,Pediatric Rheumatology,FS,Dawn Gist,,,dawn.gist@bcm.edu
+BCM,Pediatric Rheumatology,FS,Sarah Molina,,,sarah.molina@bcm.edu
+BCM,Pediatric Rheumatology,FS,Meredith Rae,,,meredith.rae@bcm.edu
+BCM,Pediatric Rheumatology,FS,Rasha Elrefai,,,
+BCM,Pediatric Rheumatology,FS,Juan Torres,,,
+BCM,Pediatrics - Houston,FS,Olubunmi Oyeronke Fatoki,PGY1,,olubunmi.fatoki@bcm.edu
+BCM,Pediatrics - Houston,FS,Allison Rogers Giglio,PGY2,,allison.giglio@bcm.edu
+BCM,Medical Biochemical Genetics,FS,Jimmy Chang,,,
+BCM,Medical Biochemical Genetics,FS,Amber Nakar Weinstein,,,
+BCM,Medical Biochemical Genetics,FS,Aaron Williams,,,
+BCM,Clinical Postdoctoral Fellow,FS,Colin Berry,,,colin.berry@bcm.edu
+BCM,Endocrine Surgery,FS,William Lightle,,,
+BCM,,FS,View profile,,,muhammadharoon.khilan@bcm.edu

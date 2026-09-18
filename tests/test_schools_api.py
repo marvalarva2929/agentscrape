@@ -1,7 +1,7 @@
-"""School -> Program -> Person navigation, CSV submissions and admin scope.
+"""School -> Person navigation, removed CSV upload and admin scope.
 
 These are the endpoints the frontend actually navigates, and the access split
-that keeps clients out of the staff queue.
+that keeps clients out of billable/staff-only work.
 """
 
 from __future__ import annotations
@@ -129,11 +129,11 @@ class TestNavigation:
         assert program["resident_count"] == 1
         assert program["start_url"] == "https://med.example.edu/im"
 
-    async def test_people_for_a_program_include_everyone(self, client, seeded):
+    async def test_people_for_a_school_include_everyone(self, client, seeded):
         headers = await _headers(client, CLIENT_PW)
-        program_id = seeded["program"].id
+        school_id = seeded["site"].id
         body = (
-            await client.get(f"{API}/programs/{program_id}/people", headers=headers)
+            await client.get(f"{API}/schools/{school_id}/people", headers=headers)
         ).json()
         by_name = {p["full_name"]: p for p in body["items"]}
         assert set(by_name) == {"Jane Doe", "Alan Grant", "Ray Arnold"}
@@ -143,10 +143,10 @@ class TestNavigation:
 
     async def test_people_can_be_filtered_by_category(self, client, seeded):
         headers = await _headers(client, CLIENT_PW)
-        program_id = seeded["program"].id
+        school_id = seeded["site"].id
         body = (
             await client.get(
-                f"{API}/programs/{program_id}/people",
+                f"{API}/schools/{school_id}/people",
                 params={"category": "resident"},
                 headers=headers,
             )
@@ -236,6 +236,16 @@ class TestAdminScope:
         response = await client.get(f"{API}/admin/submissions", headers=headers)
         assert response.status_code == 200
 
+    async def test_client_password_cannot_start_billable_runs(self, client):
+        headers = await _headers(client, CLIENT_PW)
+        response = await client.post(
+            f"{API}/runs",
+            json={"sites": ["https://med.example.edu"]},
+            headers=headers,
+        )
+        assert response.status_code == 403
+        assert response.json()["error"]["code"] == "AUTH_FORBIDDEN"
+
     async def test_login_reports_the_scope(self, client):
         for password, scope in ((CLIENT_PW, "client"), (ADMIN_PW, "admin")):
             body = (
@@ -251,10 +261,10 @@ class TestAdminScope:
         assert body["user"]["scope"] == "admin"
 
 
-class TestSubmissions:
+class TestRemovedCsvUpload:
     CSV = b"url\nmed.example.edu\nbrand-new-hospital.edu\nnot a url\n"
 
-    async def test_a_client_can_submit_but_not_run(self, client, seeded):
+    async def test_public_csv_submission_endpoint_is_removed(self, client, seeded):
         headers = await _headers(client, CLIENT_PW)
         response = await client.post(
             f"{API}/submissions",
@@ -262,37 +272,5 @@ class TestSubmissions:
             data={"note": "Q4 targets"},
             headers=headers,
         )
-        assert response.status_code == 201
-        body = response.json()
-        assert body["status"] == "pending"
-        assert body["row_count"] == 3
-        assert body["valid_count"] == 2
-        assert body["note"] == "Q4 targets"
-
-        # Running it is staff-only.
-        forbidden = await client.post(
-            f"{API}/admin/submissions/{body['id']}/run",
-            json={"max_spend_usd": 5},
-            headers=headers,
-        )
-        assert forbidden.status_code == 403
-
-    async def test_staff_see_the_queue_with_the_row_preview(self, client, seeded):
-        client_headers = await _headers(client, CLIENT_PW)
-        await client.post(
-            f"{API}/submissions",
-            files={"file": ("wanted.csv", self.CSV, "text/csv")},
-            headers=client_headers,
-        )
-
-        admin_headers = await _headers(client, ADMIN_PW)
-        body = (
-            await client.get(f"{API}/admin/submissions", headers=admin_headers)
-        ).json()
-        assert len(body["items"]) == 1
-        submission = body["items"][0]
-        assert submission["filename"] == "wanted.csv"
-        rows = {r["input"]: r for r in submission["rows"]}
-        # The preview says which schools are already known before anything is spent.
-        assert rows["med.example.edu"]["known_site"] is True
-        assert rows["not a url"]["valid"] is False
+        assert response.status_code == 404
+        assert response.json()["error"]["code"] == "NOT_FOUND"

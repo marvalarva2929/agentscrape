@@ -85,10 +85,11 @@ def build_site_graph(deps: PipelineDeps):
             return "finalize"
         barren = state.get("barren_streak", 0)
         if barren >= settings.stop_after_barren_pages:
-            # The site has stopped yielding new people. Ranked candidates mean
-            # the remaining ones are the least promising, so keep the budget.
+            # The site has stopped yielding people at all. Ranked candidates
+            # mean the remaining ones are the least promising, so keep the
+            # budget for another site.
             log.info(
-                "%s: %d consecutive pages with nobody new; stopping",
+                "%s: %d consecutive pages yielding nobody; stopping",
                 state["root_domain"], barren,
             )
             return "finalize"

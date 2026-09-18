@@ -86,11 +86,23 @@ class TestIdentity:
 
     def test_shared_office_inbox_falls_back_to_name(self):
         # Without this guard, everyone listed under info@ collapses into one record.
-        a = build_identity(email="info@x.edu", full_name="Jane Doe", role="resident")
-        b = build_identity(email="info@x.edu", full_name="John Roe", role="resident")
+        a = build_identity(email="info@x.edu", full_name="Jane Doe")
+        b = build_identity(email="info@x.edu", full_name="John Roe")
         assert a.key != b.key
         assert a.kind is IdentityKind.NAME
         assert a.role_account
+
+    def test_one_person_read_with_two_roles_is_one_record(self):
+        """The role is the least stable thing we record, so it is not in the key.
+
+        The same trainee is "resident" on a departmental roster and "unknown" on
+        an institution-wide directory that prints a combined "Resident/Fellow"
+        term. Keying on the role split 105 Arizona people into 210 records, each
+        holding half their evidence.
+        """
+        roster = build_identity(email=None, full_name="Coen Hasenkamp")
+        directory = build_identity(email=None, full_name="Coen Hasenkamp")
+        assert roster.key == directory.key == "name:coen hasenkamp"
 
     def test_same_email_different_name_is_one_record(self):
         a = build_identity(email="jane@x.edu", full_name="Jane Doe")

@@ -61,29 +61,52 @@ _LOCATE_JS = """
 }
 """
 
-# Controls worth interacting with, discovered structurally rather than visually.
+# Visible controls are collected broadly. The model, not a label regex, decides
+# which one is useful for reaching current trainee information.
 _CONTROLS_JS = """
 () => {
-  const wanted = /next|more|load|show all|page \\d+|expand|view all|see all|all residents|all fellows/i;
   const out = [];
   const seen = new Set();
-  for (const el of document.querySelectorAll('a,button,[role=button],[role=link],[role=tab]')) {
+  for (const el of document.querySelectorAll(
+    'button,[role=button],[role=tab],a:not([href]),[role=link]:not([href])'
+  )) {
     const label = (el.innerText || el.getAttribute('aria-label') || el.title || '').trim();
-    if (!label || label.length > 80) continue;
-    if (!wanted.test(label)) continue;
+    if (!label || label.length > 120) continue;
     const r = el.getBoundingClientRect();
     if (!r.width || !r.height) continue;
-    const key = label.toLowerCase();
+    const tag = el.tagName.toLowerCase();
+    const role = el.getAttribute('role') || (tag === 'a' ? 'link' : 'button');
+    const key = `${role}:${label.toLowerCase()}`;
     if (seen.has(key)) continue;
     seen.add(key);
     out.push({
-      role: el.getAttribute('role') || el.tagName.toLowerCase(),
+      role,
       name: label,
       href: el.getAttribute('href') || null,
       disabled: el.hasAttribute('disabled') || el.getAttribute('aria-disabled') === 'true',
     });
   }
-  return out.slice(0, 25);
+  return out.slice(0, 100);
+}
+"""
+
+_LINKS_JS = """
+() => {
+  const out = [];
+  const seen = new Set();
+  for (const el of document.querySelectorAll('a[href]')) {
+    const url = el.href;
+    if (!url || !/^https?:/i.test(url) || seen.has(url)) continue;
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height) continue;
+    const text = (el.innerText || el.getAttribute('aria-label') || el.title || '').trim();
+    if (!text) continue;
+    const container = el.closest('li,p,nav,section,article,div');
+    const context = ((container && container.innerText) || text).replace(/\\s+/g, ' ').trim();
+    seen.add(url);
+    out.push({url, text: text.slice(0, 160), context: context.slice(0, 280)});
+  }
+  return out.slice(0, 300);
 }
 """
 
@@ -172,6 +195,7 @@ class RenderResult:
     screenshot: bytes | None = None
     field_locations: dict[str, dict[str, int]] = field(default_factory=dict)
     controls: list[dict[str, Any]] = field(default_factory=list)
+    links: list[dict[str, Any]] = field(default_factory=list)
     ok: bool = True
     error: str | None = None
     status: int | None = None
@@ -295,6 +319,12 @@ async def render_page(
         except PlaywrightError:
             pass
 
+        links: list[dict[str, Any]] = []
+        try:
+            links = await page.evaluate(_LINKS_JS) or []
+        except PlaywrightError:
+            pass
+
         shot: bytes | None = None
         if capture_screenshot:
             try:
@@ -309,7 +339,7 @@ async def render_page(
 
         return RenderResult(
             url=url, final_url=page.url, title=title, html=html, text=text,
-            screenshot=shot, field_locations=locations, controls=controls,
+            screenshot=shot, field_locations=locations, controls=controls, links=links,
             ok=True, status=response.status if response else None,
         )
     except PlaywrightError as exc:

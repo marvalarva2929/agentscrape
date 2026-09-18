@@ -27,11 +27,11 @@ from sqlalchemy import func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...domain.confidence import score_record
-from ...domain.matching import build_identity, diff_fields
+from ...domain.matching import IdentityKind, build_identity, diff_fields
 from ...domain.specialty import infer_specialty
 from ...extraction.person import ExtractedPerson
 from ...urls import host_of, url_hash
-from ..enums import ExtractionMethod, FetchMode, RecordStatus
+from ..enums import ExtractionMethod, FetchMode, PersonCategory, RecordStatus
 from ..ids import version_id as new_version_id
 from ..models import Record, RecordVersion
 
@@ -89,9 +89,7 @@ def _build_fields(
     person: ExtractedPerson, context: ExtractionContext
 ) -> dict[str, object] | None:
     """Normalize one extracted person into the stored field shape."""
-    identity = build_identity(
-        email=person.email, full_name=person.full_name, role=str(person.category)
-    )
+    identity = build_identity(email=person.email, full_name=person.full_name)
     if identity is None:
         return None
 
@@ -176,11 +174,18 @@ async def reconcile_people(
     if not prepared:
         return result
 
+    # Look up the name-based key alongside the real one, so a page that finally
+    # publishes an address adopts the record built from a page that did not.
+    name_keys = {
+        _name_key(fields): key
+        for key, (_, fields) in prepared.items()
+        if _name_key(fields) and _name_key(fields) != key
+    }
     existing_rows = (
         await session.execute(
             select(Record).where(
                 Record.site_id == context.site_id,
-                Record.identity_key.in_(list(prepared)),
+                Record.identity_key.in_([*prepared, *name_keys]),
             )
         )
     ).scalars().all()
@@ -188,7 +193,9 @@ async def reconcile_people(
 
     for identity_key, (person, fields) in prepared.items():
         await _attach_program(session, context.site_id, fields)
-        record = by_identity.get(identity_key)
+        record = by_identity.get(identity_key) or _adopt_name_record(
+            by_identity, fields, identity_key
+        )
         if record is None:
             record = await _create_record(session, fields, person, context)
             result.new += 1
@@ -201,6 +208,47 @@ async def reconcile_people(
         result.record_ids.append(record.id)
 
     return result
+
+
+def _name_key(fields: dict[str, object]) -> str | None:
+    """The name-based identity this person would have had without an address."""
+    from ...domain.matching import normalize_name
+
+    normalized = normalize_name(str(fields.get("full_name") or "")) or None
+    return f"name:{normalized}" if normalized else None
+
+
+def _adopt_name_record(
+    by_identity: dict[str, Record],
+    fields: dict[str, object],
+    identity_key: str,
+) -> Record | None:
+    """Reuse the record built before this person's address was known.
+
+    Rosters and directories disagree about addresses: a departmental roster names
+    its residents with no address, while the institution-wide directory has the
+    address but prints one combined "Resident/Fellow" term for everyone. Keyed
+    separately, one person became two records — the correct category on one, the
+    address on the other. On Arizona that was 238 people.
+
+    Promoting the existing record to the address keeps a single row carrying
+    both, and `_update_record` then applies its usual field precedence.
+    """
+    if not str(identity_key).startswith("email:"):
+        return None
+    name_key = _name_key(fields)
+    if name_key is None:
+        return None
+    record = by_identity.get(name_key)
+    if record is None or record.email:
+        return None
+    # The address is new information about a known person, so the record takes
+    # the stronger identity rather than a second row being created beside it.
+    record.identity_key = identity_key
+    record.identity_kind = str(IdentityKind.EMAIL)
+    record.role_account = False
+    by_identity[identity_key] = record
+    return record
 
 
 async def _create_record(
@@ -252,6 +300,16 @@ async def _update_record(
         "pgy_at_capture": record.pgy_at_capture,
         "class_of": record.class_of,
     }
+    # "unknown" is the absence of a category, not a competing claim about one.
+    # An institution-wide directory prints one combined "Resident/Fellow" term
+    # and so yields `unknown` for people its departmental rosters identify
+    # exactly; whichever page happened to be fetched last was overwriting the
+    # other, and the directory is usually last because it ranks lower.
+    if fields.get("category") == str(PersonCategory.UNKNOWN) and record.category != str(
+        PersonCategory.UNKNOWN
+    ):
+        fields = {**fields, "category": record.category}
+
     changes = diff_fields(previous, _version_payload(fields))
 
     record.last_seen_at = context.captured_at

@@ -43,7 +43,7 @@ async def require_admin(
     authorization: Annotated[str | None, Header()] = None,
     token: Annotated[str | None, Query(include_in_schema=False)] = None,
 ) -> str:
-    """Staff-only areas: submitted CSVs, launching runs, spend, site stats."""
+    """Staff-only areas: launching runs, spend, site stats."""
     claims = decode_token(token_from_request(authorization, token))
     if not has_scope(claims, ADMIN_SCOPE):
         raise AppError(

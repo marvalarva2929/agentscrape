@@ -1,0 +1,843 @@
+Hospital,Specialty,R/F,Full Name,PGY,Class of,Email
+University of Chicago,Anesthesiology,RS,MAX ACKERMAN,CA3,,max.ackerman@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,PAULINE AEGERTER,CA3,,pauline.aegerter@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,VINCE BERRY,CA3,,vince.berry@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,CHRISTINE DALY,CA3,,christine.daly@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,JEREMY FOREMAN,CA3,,jeremy.foreman@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,RANA GAFFAR,CA3,,rana.gaffar@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,AVINASH GARLAPATI,CA3,,avinash.garlapati@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,KATHERINE GOHRES,CA3,,katherine.gohres@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,JOSHUA GREEN,CA3,,joshua.green@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,SAHITHI KATRAGADDA,CA3,,sahithi.katragadda@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,COREY MEEHAN,CA3,,corey.meehan@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,MATTHEW MILLETT,CA3,,matthew.millett@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,CAYLA ROY,CA3,,cayla.roy@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,DHAVAN SHAH,CA3,,dhavan.shah@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,NED SHASHOUA,CA3,,ned.shashoua@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,PETER SLOANE,CA3,,peter.sloane@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,OLIVIA SMITH,CA3,,olivia.smith@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,LONI SNEED,CA3,,loni.sneed@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,ALISON ZHONG,CA3,,alison.zhong@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,PETER CAMPBELL,CA2,,peter.campbell@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,MATHIAS CHRISTENSEN,CA2,,mathias.christensen@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,TRAVIS CURTIS,CA2,,travis.curtis@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,JANE FRAIPONT,CA2,,jaine.fraipont@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,DAVID HOLZER,CA2,,david.holzer@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,HARINI INDRAKRISHNAN,CA2,,harini.indrakrishnan@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,ANITA KODALI,CA2,,anita.kodali@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,ADAM KOENIG,CA2,,adam.koenig@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,KARISHMA KONDAPALLI,CA2,,karishma.kondapalli@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,CHRISTIAN LANKFORD,CA2,,christian.lankford@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,ANDREW MASSA,CA2,,andrew.massa@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,BRADEN MILLER,CA2,,braden.miller@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,ERIK OVROM,CA2,,erik.ovrom@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,RAJ PATEL,CA2,,raj.patel@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,JOY MORGAN SPENCER,CA2,,joy.spencer@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,JOHN SUN,CA2,,john.sun@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,PAUL THOMAS,CA2,,paul.thomas@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,ERIC TOKITA,CA2,,eric.tokita@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,NICHOLAS XIE,CA2,,nicholas.xie@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,BRANDON ALFORD,CA1,,brandon.alford@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,JOSEPH BEATY,CA1,,joseph.beaty@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,NICHOLAS BERGUM,CA1,,nicholas.bergum@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,SAI BHATTE,CA1,,sai.bhatte@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,JAMES CROSS,CA1,,
+University of Chicago,Anesthesiology,RS,TIFFANY D'CRUZE,CA1,,tiffany.dcruze@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,WILLIAM DAN,CA1,,william.dan@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,ARSALAN FAROOQI,CA1,,muhammad.farooqi@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,SERENE HOSKINS,CA1,,
+University of Chicago,Anesthesiology,RS,CHARLES HUMES,CA1,,charles.humes@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,MADISON KOLBOW,CA1,,madison.kolbow@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,CONNOR LANOUE,CA1,,connor.lanoue@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,SYDNEY LASHLEY,CA1,,sydney.lashley@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,KAYLEE LINDAHL,CA1,,
+University of Chicago,Anesthesiology,RS,THOMAS MURPHY,CA1,,
+University of Chicago,Anesthesiology,RS,"JAMES ""WALKER"" PHILLIPS",CA1,,james.phillips2@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,TERRY SMITH-ROBERTS,CA1,,terry.smith-roberts@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,NAISARG VANANI,CA1,,
+University of Chicago,Anesthesiology,RS,JORGE VINALES,CA1,,jorge.vinales@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,WILLIAM WANG,CA1,,
+University of Chicago,Anesthesiology,RS,STELLA CHO,PGY1,,stella.cho@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,TASFIA CHOWDHURY,PGY1,,tasfia.chowdhury@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,JIMENA COLLADO,PGY1,,jimena.collado@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,KEVIN CROSBY,PGY1,,kevin.crosby@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,ALLYSON DEWEY,PGY1,,allyson.dewey@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,HANA ELSHEEMY,PGY1,,hana.elsheemy@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,RYAN GANNON,PGY1,,ryan.gannon@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,BENJAMIN KAZDAN,PGY1,,benjamin.kazdan@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,YUKA KOYAMA,PGY1,,yuka.koyama@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,CHARLES NELSON,PGY1,,charles.nelson@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,ANJALI PATEL,PGY1,,anjali.patel@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,LEE-KAI SUN,PGY1,,leekai.sun@uchicagomedicine.org
+University of Chicago,Anesthesiology,RS,PRAVIN VIKRAM,PGY1,,pravin.vikram@uchicagomedicine.org
+University of Chicago,Emergency Medicine,RS,Carley Coopwood,,2027.0,
+University of Chicago,Emergency Medicine,RS,Michael Ezeana,,2027.0,
+University of Chicago,Emergency Medicine,RS,Anna Gragas,,2027.0,
+University of Chicago,Emergency Medicine,RS,Braylee Grisel,,2027.0,
+University of Chicago,Emergency Medicine,RS,Amera Hassan,,2027.0,
+University of Chicago,Emergency Medicine,RS,Bradley Heinz,,2027.0,
+University of Chicago,Emergency Medicine,RS,Daelon Morais,,2027.0,
+University of Chicago,Emergency Medicine,RS,Julia Murray,,2027.0,
+University of Chicago,Emergency Medicine,RS,"Chad Nix, MD, MSc",,2027.0,
+University of Chicago,Emergency Medicine,RS,Brandon Okeke,,2027.0,
+University of Chicago,Emergency Medicine,RS,Cat Phouybanhdyt,,2027.0,
+University of Chicago,Emergency Medicine,RS,Tanner Reed,,2027.0,
+University of Chicago,Emergency Medicine,RS,Emily Terian,,2027.0,
+University of Chicago,Emergency Medicine,RS,Michael Tsai,,2027.0,
+University of Chicago,Emergency Medicine,RS,Jada Watts,,2027.0,
+University of Chicago,Emergency Medicine,RS,Jaclyn Wecht,,2027.0,
+University of Chicago,Emergency Medicine,RS,Madeline Wegener,,2027.0,
+University of Chicago,Emergency Medicine,RS,Natalie Zink,,2027.0,
+University of Chicago,Emergency Medicine,RS,Alexsandra Biel,,2028.0,
+University of Chicago,Emergency Medicine,RS,Max Bokor,,2028.0,
+University of Chicago,Emergency Medicine,RS,Allison Broad,,2028.0,
+University of Chicago,Emergency Medicine,RS,Tori Damore,,2028.0,
+University of Chicago,Emergency Medicine,RS,Jeremiah Douchee,,2028.0,
+University of Chicago,Emergency Medicine,RS,"Michael Feijoo, MD, MA",,2028.0,
+University of Chicago,Emergency Medicine,RS,"Harrison Fillmore, MD, MSc",,2028.0,
+University of Chicago,Emergency Medicine,RS,Symphony Fletcher,,2028.0,
+University of Chicago,Emergency Medicine,RS,"Meredith Hollender, MD, MPP",,2028.0,
+University of Chicago,Emergency Medicine,RS,Kseniya Masterova,,2028.0,
+University of Chicago,Emergency Medicine,RS,Landon McNellage,,2028.0,
+University of Chicago,Emergency Medicine,RS,Lana Musa,,2028.0,
+University of Chicago,Emergency Medicine,RS,Tracy Pham,,2028.0,
+University of Chicago,Emergency Medicine,RS,Calia Schexnayder,,2028.0,
+University of Chicago,Emergency Medicine,RS,Ali Shammout,,2028.0,
+University of Chicago,Emergency Medicine,RS,Cassandra Smith,,2028.0,
+University of Chicago,Emergency Medicine,RS,"Sydni Williams, MD, MSc",,2028.0,
+University of Chicago,Emergency Medicine,RS,Asia Wooten,,2028.0,
+University of Chicago,Emergency Medicine,RS,Ayana Blair,,2029.0,
+University of Chicago,Emergency Medicine,RS,Amanda Calipo,,2029.0,
+University of Chicago,Emergency Medicine,RS,"Carolyn Carper, MD, MSc",,2029.0,
+University of Chicago,Emergency Medicine,RS,Sarah Dulaney,,2029.0,
+University of Chicago,Emergency Medicine,RS,Natalie Hardiman,,2029.0,
+University of Chicago,Emergency Medicine,RS,India Hilty,,2029.0,
+University of Chicago,Emergency Medicine,RS,Albert Howell,,2029.0,
+University of Chicago,Emergency Medicine,RS,Austin Huang,,2029.0,
+University of Chicago,Emergency Medicine,RS,Sophia Matts,,2029.0,
+University of Chicago,Emergency Medicine,RS,Marquisha Myles,,2029.0,
+University of Chicago,Emergency Medicine,RS,Nam Nguyen,,2029.0,
+University of Chicago,Emergency Medicine,RS,Rithva Ramesh,,2029.0,
+University of Chicago,Emergency Medicine,RS,Sarah Suchko,,2029.0,
+University of Chicago,Emergency Medicine,RS,Kate Swenson,,2029.0,
+University of Chicago,Emergency Medicine,RS,Montserrat Tijerina,,2029.0,
+University of Chicago,Emergency Medicine,RS,Kaitlin Verkuilen,,2029.0,
+University of Chicago,Emergency Medicine,RS,Anna Willis,,2029.0,
+University of Chicago,Emergency Medicine,RS,Gabe Rivera,,2029.0,
+Endeavor Health / NorthShore,Family Medicine,RS,Roann Abdeladl,PGY1,,
+Endeavor Health / NorthShore,Family Medicine,RS,Shreya Bellur,PGY1,,
+Endeavor Health / NorthShore,Family Medicine,RS,Hassan Hafeez,PGY1,,
+Endeavor Health / NorthShore,Family Medicine,RS,John Hill,PGY1,,
+Endeavor Health / NorthShore,Family Medicine,RS,"Sabah Munshi, MD (She/Her",PGY1,,
+Endeavor Health / NorthShore,Family Medicine,RS,Michaela Thomson,PGY1,,
+Endeavor Health / NorthShore,Family Medicine,RS,"Nora Kassis, DO, MPH (She/Her/Hers",PGY2,,
+Endeavor Health / NorthShore,Family Medicine,RS,"Eashan Kumar, MD, MPH (He/Him/His",PGY2,,
+Endeavor Health / NorthShore,Family Medicine,RS,"Julia Thelen, MD (She/Her/Hers",PGY2,,
+Endeavor Health / NorthShore,Family Medicine,RS,"Eileen Vera, MD, MS (She/Her/Hers",PGY2,,
+Endeavor Health / NorthShore,Family Medicine,RS,Clayton Vesperman,PGY2,,
+Endeavor Health / NorthShore,Family Medicine,RS,"Monay Zayed, MD (She/Her/Hers",PGY2,,
+Endeavor Health / NorthShore,Family Medicine,RS,"Alejandra Corral, MD (She/Her/Hers",PGY3,,
+Endeavor Health / NorthShore,Family Medicine,RS,"Bemnet Dechasa, MD (She/Her/Hers",PGY3,,
+Endeavor Health / NorthShore,Family Medicine,RS,"Isra Hasnain, MD, M.Sc (She/Her/Hers",PGY3,,
+Endeavor Health / NorthShore,Family Medicine,RS,"Angelika Kwak, MD, MPH (She/Her/Hers",PGY3,,
+Endeavor Health / NorthShore,Family Medicine,RS,"Jasmine Largaespada, MD (She/Her/Hers",PGY3,,
+Endeavor Health / NorthShore,Family Medicine,RS,"Michael Saporito, MD (He/Him/His",PGY3,,
+Endeavor Health / NorthShore,Family Medicine,RS,"Imshan Dhrolia, MD (He/Him/His",PGY2,,
+Endeavor Health / NorthShore,Family Medicine,RS,"Marcella Perez, DO (She/Her/Hers",PGY2,,
+Endeavor Health / NorthShore,Family Medicine,RS,"Allison Shimmel, MD (She/Her/Hers",PGY2,,
+Endeavor Health / NorthShore,Family Medicine,RS,"Sumbul Siddiqui, MD (She/Her/Hers",PGY2,,
+Endeavor Health / NorthShore,Family Medicine,RS,"Yuliya Solinski, MD (She/Her/Hers",PGY2,,
+Endeavor Health / NorthShore,Family Medicine,RS,"Izzy Totten, MD (She/Her/Hers",PGY2,,
+Endeavor Health / NorthShore,Family Medicine,RS,"Besma Aly, MD (She/Her/Hers",PGY3,,
+Endeavor Health / NorthShore,Family Medicine,RS,"Rachel Chang, MD (She/Her/Hers",PGY3,,
+Endeavor Health / NorthShore,Family Medicine,RS,"Jonathan Chen, MD (He/Him/His",PGY3,,
+Endeavor Health / NorthShore,Family Medicine,RS,"Tyler Miksanek, MD (He/Him/His",PGY3,,
+Endeavor Health / NorthShore,Family Medicine,RS,"Eva Stoops, MD (They/Them/Theirs",PGY3,,
+Endeavor Health / NorthShore,Family Medicine,RS,"Emilie Verran, DO (She/Her/Hers",PGY3,,
+University of Chicago,Internal Medicine,RS,John Bednarski,PGY1,,
+University of Chicago,Internal Medicine,RS,Logan Brown,PGY1,,
+University of Chicago,Internal Medicine,RS,Ellie Cheung,PGY1,,
+University of Chicago,Internal Medicine,RS,Alec Czaplicki,PGY1,,
+University of Chicago,Internal Medicine,RS,Alexandra Diaz-Barbe,PGY1,,
+University of Chicago,Internal Medicine,RS,Ashley Donald,PGY1,,
+University of Chicago,Internal Medicine,RS,Luke Ekdahl,PGY1,,
+University of Chicago,Internal Medicine,RS,Luana Gnatenco,PGY1,,
+University of Chicago,Internal Medicine,RS,Jamal Green,PGY1,,
+University of Chicago,Internal Medicine,RS,Emma He,PGY1,,
+University of Chicago,Internal Medicine,RS,Paula Herbst,PGY1,,
+University of Chicago,Internal Medicine,RS,Molly Herr,PGY1,,
+University of Chicago,Internal Medicine,RS,Woorin Jang,PGY1,,
+University of Chicago,Internal Medicine,RS,Sanjana Kannikeswaran,PGY1,,
+University of Chicago,Internal Medicine,RS,Aishwarya Katiki,PGY1,,
+University of Chicago,Internal Medicine,RS,Patrick Kollman,PGY1,,
+University of Chicago,Internal Medicine,RS,Victoria Lue,PGY1,,
+University of Chicago,Internal Medicine,RS,Dana Malo,PGY1,,
+University of Chicago,Internal Medicine,RS,Orry Marciano,PGY1,,
+University of Chicago,Internal Medicine,RS,Andrew Molina,PGY1,,
+University of Chicago,Internal Medicine,RS,Ye Rim Noh,PGY1,,
+University of Chicago,Internal Medicine,RS,Manuel Panzardi,PGY1,,
+University of Chicago,Internal Medicine,RS,Zaid Parekh,PGY1,,
+University of Chicago,Internal Medicine,RS,Divya Patel,PGY1,,
+University of Chicago,Internal Medicine,RS,Estefania Perez Luna,PGY1,,
+University of Chicago,Internal Medicine,RS,Leah Phillips,PGY1,,
+University of Chicago,Internal Medicine,RS,Divya Rath,PGY1,,
+University of Chicago,Internal Medicine,RS,Zachary Reinstein,PGY1,,
+University of Chicago,Internal Medicine,RS,Madeline Rocks,PGY1,,
+University of Chicago,Internal Medicine,RS,Shalini Roy,PGY1,,
+University of Chicago,Internal Medicine,RS,Diego Ruiz-Avila,PGY1,,
+University of Chicago,Internal Medicine,RS,Daniel Selgrade,PGY1,,
+University of Chicago,Internal Medicine,RS,Sohum Seth,PGY1,,
+University of Chicago,Internal Medicine,RS,Deepshika Sudhakar,PGY1,,
+University of Chicago,Internal Medicine,RS,Semaje Testamark,PGY1,,
+University of Chicago,Internal Medicine,RS,Skye Tracey,PGY1,,
+University of Chicago,Internal Medicine,RS,Lindon Tran,PGY1,,
+University of Chicago,Internal Medicine,RS,Hannah VanEvery,PGY1,,
+University of Chicago,Internal Medicine,RS,Elena Whitney,PGY1,,
+University of Chicago,Internal Medicine,RS,DeAnthoni Wilkins,PGY1,,
+University of Chicago,Internal Medicine,RS,Devan Williams,PGY1,,
+University of Chicago,Internal Medicine,RS,Asja Woodard,PGY1,,
+University of Chicago,Internal Medicine,RS,Kameron Woodard-El,PGY1,,
+University of Chicago,Internal Medicine,RS,Nicholas Yavornitzky,PGY1,,
+University of Chicago,Internal Medicine,RS,Nada Attia,PGY2,,
+University of Chicago,Internal Medicine,RS,Aamir Aziz,PGY2,,
+University of Chicago,Internal Medicine,RS,Theodora Bruun,PGY2,,
+University of Chicago,Internal Medicine,RS,Christian Carrier,PGY2,,
+University of Chicago,Internal Medicine,RS,Jenn Casparino,PGY2,,
+University of Chicago,Internal Medicine,RS,Bree Chandler,PGY2,,
+University of Chicago,Internal Medicine,RS,Michelle Cooley,PGY2,,
+University of Chicago,Internal Medicine,RS,Emily Cullum,PGY2,,
+University of Chicago,Internal Medicine,RS,Val Cyphers,PGY2,,
+University of Chicago,Internal Medicine,RS,Shreeya Dalla,PGY2,,
+University of Chicago,Internal Medicine,RS,Herlyne Das,PGY2,,
+University of Chicago,Internal Medicine,RS,Philip Desamour,PGY2,,
+University of Chicago,Internal Medicine,RS,Anna Alicent Dickson,PGY2,,
+University of Chicago,Internal Medicine,RS,Bereket Gebregziabher,PGY2,,
+University of Chicago,Internal Medicine,RS,Benhur Ghide,PGY2,,
+University of Chicago,Internal Medicine,RS,Ethan Glaser,PGY2,,
+University of Chicago,Internal Medicine,RS,Zacharie Hamilton,PGY2,,
+University of Chicago,Internal Medicine,RS,Alex Harris,PGY2,,
+University of Chicago,Internal Medicine,RS,Douglas Haslitt,PGY2,,
+University of Chicago,Internal Medicine,RS,Kenichi Haynie,PGY2,,
+University of Chicago,Internal Medicine,RS,Phillip Holovach,PGY2,,
+University of Chicago,Internal Medicine,RS,Yifei Hu,PGY2,,
+University of Chicago,Internal Medicine,RS,Osayi Ize-iyamu,PGY2,,
+University of Chicago,Internal Medicine,RS,Marielle Kamath,PGY2,,
+University of Chicago,Internal Medicine,RS,Aleisha Khan,PGY2,,
+University of Chicago,Internal Medicine,RS,George Kidess,PGY2,,
+University of Chicago,Internal Medicine,RS,Stefan King,PGY2,,
+University of Chicago,Internal Medicine,RS,Caryn Libbert,PGY2,,
+University of Chicago,Internal Medicine,RS,Abson Madola,PGY2,,
+University of Chicago,Internal Medicine,RS,Emma Mathers,PGY2,,
+University of Chicago,Internal Medicine,RS,Jonathan Matthews,PGY2,,
+University of Chicago,Internal Medicine,RS,Meagan Matuska,PGY2,,
+University of Chicago,Internal Medicine,RS,Rohan Moghe,PGY2,,
+University of Chicago,Internal Medicine,RS,Ananya Mukundan,PGY2,,
+University of Chicago,Internal Medicine,RS,Zachary Nan,PGY2,,
+University of Chicago,Internal Medicine,RS,Evan Neczypor,PGY2,,
+University of Chicago,Internal Medicine,RS,Hailee Nielsen,PGY2,,
+University of Chicago,Internal Medicine,RS,Natasha Powell,PGY2,,
+University of Chicago,Internal Medicine,RS,Gabriela Rodriguez,PGY2,,
+University of Chicago,Internal Medicine,RS,Kishan Sangani,PGY2,,
+University of Chicago,Internal Medicine,RS,Yasmeen Shahout,PGY2,,
+University of Chicago,Internal Medicine,RS,Frazer Tessema,PGY2,,
+University of Chicago,Internal Medicine,RS,Gregory Veldhuizen,PGY2,,
+University of Chicago,Internal Medicine,RS,Kaylah Walton,PGY2,,
+University of Chicago,Internal Medicine,RS,Anya Agrawal,PGY3,,
+University of Chicago,Internal Medicine,RS,Maryam Alausa,PGY3,,
+University of Chicago,Internal Medicine,RS,Adam Cardone,PGY3,,
+University of Chicago,Internal Medicine,RS,Lendy Chu,PGY3,,
+University of Chicago,Internal Medicine,RS,Meghan Connors,PGY3,,
+University of Chicago,Internal Medicine,RS,Sara Cooper,PGY3,,
+University of Chicago,Internal Medicine,RS,Michelle Dai,PGY3,,
+University of Chicago,Internal Medicine,RS,Ban Dodin,PGY3,,
+University of Chicago,Internal Medicine,RS,Taylor Ellebb,PGY3,,
+University of Chicago,Internal Medicine,RS,Keaton Erickson,PGY3,,
+University of Chicago,Internal Medicine,RS,Shannon Gordon,PGY3,,
+University of Chicago,Internal Medicine,RS,Shreeya Joshee,PGY3,,
+University of Chicago,Internal Medicine,RS,Justin Kahla,PGY3,,
+University of Chicago,Internal Medicine,RS,Maria Kaufman,PGY3,,
+University of Chicago,Internal Medicine,RS,Harveen Kaur,PGY3,,
+University of Chicago,Internal Medicine,RS,Omar Lopez,PGY3,,
+University of Chicago,Internal Medicine,RS,Fiona Lutolli,PGY3,,
+University of Chicago,Internal Medicine,RS,Caitlin Maloney,PGY3,,
+University of Chicago,Internal Medicine,RS,Frank Miralles,PGY3,,
+University of Chicago,Internal Medicine,RS,Yasmeen Murtaza,PGY3,,
+University of Chicago,Internal Medicine,RS,Priya Nair,PGY3,,
+University of Chicago,Internal Medicine,RS,Hana O’Hagan,PGY3,,
+University of Chicago,Internal Medicine,RS,Mit Patel,PGY3,,
+University of Chicago,Internal Medicine,RS,Romy Portieles Pena,PGY3,,
+University of Chicago,Internal Medicine,RS,Apoorva Ravichandran,PGY3,,
+University of Chicago,Internal Medicine,RS,Adam Scott,PGY3,,
+University of Chicago,Internal Medicine,RS,Hani Shayya,PGY3,,
+University of Chicago,Internal Medicine,RS,Abigail Sneider,PGY3,,
+University of Chicago,Internal Medicine,RS,Monika Stoskute,PGY3,,
+University of Chicago,Internal Medicine,RS,Elizabeth Terman,PGY3,,
+University of Chicago,Internal Medicine,RS,Miles Thomas,PGY3,,
+University of Chicago,Internal Medicine,RS,Tova Wasserman,PGY3,,
+University of Chicago,Internal Medicine,RS,Brandon Wheatley,PGY3,,
+University of Chicago,Internal Medicine,RS,Jessica Yamada,PGY3,,
+University of Chicago,Interventional Radiology-Integrated,RS,Jonathan Du,PGY6,,jonathan.du@uchicagomedicine.org
+University of Chicago,Interventional Radiology-Integrated,RS,Amith Rao,PGY6,,amith.rao@uchicagomedicine.org
+University of Chicago,Interventional Radiology-Integrated,RS,Elise de Bruyn,PGY5,,elise.debruyn@uchicagomedicine.org
+University of Chicago,Interventional Radiology-Integrated,RS,Kylie Zane,PGY5,,kylie.zane@uchicagomedicine.org
+University of Chicago,Interventional Radiology-Integrated,RS,Riley Draper,PGY4,,riley.draper@uchicagomedicine.org
+University of Chicago,Interventional Radiology-Integrated,RS,Wesley Lim,PGY4,,wesley.lim@uchicagomedicine.org
+University of Chicago,Interventional Radiology-Integrated,RS,Anmol Patel,PGY3,,anmol.patel@uchicagomedicine.org
+University of Chicago,Interventional Radiology-Integrated,RS,Erika Yee,PGY3,,erika.yee@uchicagomedicine.org
+University of Chicago,Interventional Radiology-Integrated,RS,Carson Middlebrook,PGY2,,carson.middlebrook@uchicagomedicine.org
+University of Chicago,Interventional Radiology-Integrated,RS,Ajay Varadhan,PGY2,,ajay.varadhan@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Julian Carrion Penagos,Chief Resident,,
+University of Chicago,Neurology (Adult),RS,Rami Morsi,Chief Resident,,rami.morsi@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Munther Queisi,Chief Resident,,
+University of Chicago,Neurology (Adult),RS,Amna Amin,PGY4,,amna.amin@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Alireza Borghei,PGY4,,alireza.borghei@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Naeva Bratina,PGY4,,naeva.bratina@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Julia Iourinets,PGY4,,julia.iourinets@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Haseeb Jafary,PGY4,,haseeb.jafary@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Stephen Lee,PGY4,,stephen.lee@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Edward Liang,PGY4,,edward.liang@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Paulina Lis,PGY4,,paulina.lis@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Shyam Patel,PGY4,,shyam.patel@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Lindy Smith,PGY4,,lindy.smith@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Sarah Arora,PGY3,,sara.arora@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Camila Contreras Rojas,PGY3,,camila.contrerasrojas@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Aidan Hannon,PGY3,,aidan.hannon@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Quentin Howlett-Prieto,PGY3,,quentin.howlettprieto@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Rim Karam,PGY3,,rim.karam@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Michael Lonigro,PGY3,,michael.lonigro@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Katherine Mott,PGY3,,katherine.mott@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Alaina O'Rourke,PGY3,,alaina.orourke@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Medha Reddy,PGY3,,medha.reddy@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Gabrielle Walsh,PGY3,,gabrielle.walsh@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Carolyn Byrne,PGY2,,carolyn.byrne@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Ahmad Chahine,PGY2,,ahmad.chahine@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Alyssa Chao,PGY2,,alyssa.chao@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Yoan Ganev,PGY2,,yoan.ganev@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Ethan Glaser,PGY2,,ethan.glaser@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Douglas Haslitt,PGY2,,douglas.haslitt@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Alice Liu,PGY2,,alice.liu@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Yosra Nadhimi,PGY2,,yosra.nadhimi@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Deepa Shankar,PGY2,,deepa.shankar@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Jordann Wilson,PGY2,,jordann.wilson@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Corey Briska,PGY1,,corey.briska@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Alyssa Kim,PGY1,,alyssa.kim@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Daniel Landek,PGY1,,daniel.landek@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Dana Malo,PGY1,,dana.malo@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Andrew Molina,PGY1,,andrew.molina@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Shilpa Namala,PGY1,,shilpa.namala@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Mira Rajani,PGY1,,mira.rajani@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Priya Reddy,PGY1,,priya.reddy@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Derek Wong,PGY1,,derek.wong@uchicagomedicine.org
+University of Chicago,Neurology (Adult),RS,Yu Wu,PGY1,,yu.wu@uchicagomedicine.org
+University of Chicago,Neurology (Child),RS,Maya Parvathaneni,PGY1,,maya.parvathaneni@uchicagomedicine.org
+University of Chicago,Neurology (Child),RS,Sarah Ishamuddin,PGY1,,sarah.ishamuddin@uchicagomedicine.org
+University of Chicago,Neurology (Child),RS,Riya Parikh,PGY2,,bbt9356@uchicagomedicine.org
+University of Chicago,Neurology (Child),RS,Shreya Joshi,PGY2,,shreya.joshi@uchicagomedicine.org
+University of Chicago,Neurology (Child),RS,Jacob Braun,PGY3,,jacob.braun@uchicagomedicine.org
+University of Chicago,Neurology (Child),RS,Burak Arikan,PGY3,,burak.arikan@uchicagomedicine.org
+University of Chicago,Neurology (Child),RS,Hok Leong Chin,PGY4,,hokleong.chin@uchicagomedicine.org
+University of Chicago,Neurology (Child),RS,Rati Khamenkhetkarn,PGY4,,rati.khamenkhetkarn@uchicagomedicine.org
+University of Chicago,Neurology (Child),RS,Agilda Dema,PGY5,,agilda.dema@uchicagomedicine.org
+University of Chicago,Neurology (Child),RS,Rainier (Rain) Rapal,PGY5,,rainiermarkloidor.rapal@uchicagomedicine.org
+University of Chicago,Neurological Surgery,RS,Yasmine Alkhalid,PGY7,,yasmine.alkhalid@uchicagomedicine.org
+University of Chicago,Neurological Surgery,RS,Ahmed Mansi,PGY7,,ahmed.mansi@uchicagomedicine.org
+University of Chicago,Neurological Surgery,RS,Ahmad Sweid,PGY6,,ahmad.sweid@uchicagomedicine.org
+University of Chicago,Neurological Surgery,RS,"Abhinav Reddy, MD, MSc",PGY5,,abhinav.reddy2@uchicagomedicine.org
+University of Chicago,Neurological Surgery,RS,Zhe (Zoey) Wang,PGY5,,zhe.wang@uchicagomedicine.org
+University of Chicago,Neurological Surgery,RS,Je Yeong (Jae) Sone,PGY4,,jeyeong.sone@uchicagomedicine.org
+University of Chicago,Neurological Surgery,RS,Miguel Tusa Lavieri,PGY3,,mariadelcarmen.ponstorres@uchicagomedicine.org
+University of Chicago,Neurological Surgery,RS,Jeffrey Farooq,PGY3,,jeffrey.farooq@uchicagomedicine.org
+University of Chicago,Neurological Surgery,RS,Roberto Alcazar Felix,PGY2,,roberto.alcazarfelix@uchicagomedicine.org
+University of Chicago,Neurological Surgery,RS,Bobak (Bobby) Khalili,PGY2,,bobak.khalili@uchicagomedicine.org
+University of Chicago,Neurological Surgery,RS,Fezaan Kazi,PGY1,,fezaan.kazi@uchicagomedicine.org
+University of Chicago,Neurological Surgery,RS,Darrian McAfee,PGY1,,darrian.mcafee@uchicagomedicine.org
+University of Chicago,Neurological Surgery,RS,Daniel Sconzo,PGY1,,daniel.sconzo@uchicagomedicine.org
+University of Chicago,Neurological Surgery,RS,Ron Zaidman,,,
+University of Chicago,Obstetrics and Gynecology,RS,Joseph Araj,PGY4,,
+University of Chicago,Obstetrics and Gynecology,RS,Jessyca Judge,PGY4,,
+University of Chicago,Obstetrics and Gynecology,RS,Nicole Michael,PGY4,,
+University of Chicago,Obstetrics and Gynecology,RS,Sanaa Nakad Borrego,PGY4,,
+University of Chicago,Obstetrics and Gynecology,RS,Samantha Neal,PGY4,,
+University of Chicago,Obstetrics and Gynecology,RS,Malavika Perinchery,PGY4,,
+University of Chicago,Obstetrics and Gynecology,RS,Neha Reddy,PGY4,,
+University of Chicago,Obstetrics and Gynecology,RS,Wendy Shwe,PGY4,,
+University of Chicago,Obstetrics and Gynecology,RS,Wei (Charlene) Tang,PGY4,,
+University of Chicago,Obstetrics and Gynecology,RS,Kaela Bynoe,PGY3,,
+University of Chicago,Obstetrics and Gynecology,RS,Kaylin Dong,PGY3,,
+University of Chicago,Obstetrics and Gynecology,RS,Christy Evans,PGY3,,
+University of Chicago,Obstetrics and Gynecology,RS,Leah Hefelfinger,PGY3,,
+University of Chicago,Obstetrics and Gynecology,RS,Alesha Kotian,PGY3,,
+University of Chicago,Obstetrics and Gynecology,RS,Angela (Rebecca) Lu,PGY3,,
+University of Chicago,Obstetrics and Gynecology,RS,Alexandria Pickett,PGY3,,
+University of Chicago,Obstetrics and Gynecology,RS,Gillian Wright,PGY3,,
+University of Chicago,Obstetrics and Gynecology,RS,Annika Brakebill,PGY2,,
+University of Chicago,Obstetrics and Gynecology,RS,Carin Carroll,PGY2,,
+University of Chicago,Obstetrics and Gynecology,RS,Jade Cook,PGY2,,
+University of Chicago,Obstetrics and Gynecology,RS,Julia DiNicola,PGY2,,
+University of Chicago,Obstetrics and Gynecology,RS,Cassidy Golden,PGY2,,
+University of Chicago,Obstetrics and Gynecology,RS,Toni Madorsky,PGY2,,
+University of Chicago,Obstetrics and Gynecology,RS,Aishwarya Natarajan,PGY2,,
+University of Chicago,Obstetrics and Gynecology,RS,Olivia Pruss,PGY2,,
+University of Chicago,Obstetrics and Gynecology,RS,Keilah Dos Santos,PGY1,,
+University of Chicago,Obstetrics and Gynecology,RS,Azure Erskine,PGY1,,
+University of Chicago,Obstetrics and Gynecology,RS,Erica Hsu,PGY1,,
+University of Chicago,Obstetrics and Gynecology,RS,Taytum Kahl,PGY1,,
+University of Chicago,Obstetrics and Gynecology,RS,Varna Kodoth,PGY1,,
+University of Chicago,Obstetrics and Gynecology,RS,Megha Prasad,PGY1,,
+University of Chicago,Obstetrics and Gynecology,RS,Fatoumata Sylla,PGY1,,
+University of Chicago,Obstetrics and Gynecology,RS,Molly Zeme,PGY1,,
+University of Chicago,Ophthalmology,RS,Sukriti Mohan,PGY4,2026.0,
+University of Chicago,Ophthalmology,RS,Nikita Mokhashi,PGY4,2026.0,
+University of Chicago,Ophthalmology,RS,Arjav Param-Shah,PGY4,2026.0,
+University of Chicago,Ophthalmology,RS,Lauren Ciulla,PGY3,2027.0,
+University of Chicago,Ophthalmology,RS,Christopher Maatouk,PGY3,2027.0,
+University of Chicago,Ophthalmology,RS,Philip Zhou,PGY3,2027.0,
+University of Chicago,Ophthalmology,RS,Melanie Martel,PGY2,2028.0,
+University of Chicago,Ophthalmology,RS,Omer Saeed,PGY2,2028.0,
+University of Chicago,Ophthalmology,RS,Tiffani Spaulding,PGY2,2028.0,
+University of Chicago,Ophthalmology,RS,Aamir Aziz,PGY1,2029.0,
+University of Chicago,Ophthalmology,RS,Shreeya Dalla,PGY1,2029.0,
+University of Chicago,Ophthalmology,RS,Benhur Ghide,PGY1,2029.0,
+University of Chicago,Orthopaedic Surgery,RS,Tony Da Lomba,PGY5,,tony.dalomba@uchicagomedicine.org
+University of Chicago,Orthopaedic Surgery,RS,Cécile Delaune,PGY5,,cecile.delaune@uchicagomedicine.org
+University of Chicago,Orthopaedic Surgery,RS,Jennifer Eurich,PGY5,,jennifer.eurich@uchicagomedicine.org
+University of Chicago,Orthopaedic Surgery,RS,Darlington Nwaudo,PGY5,,darlington.nwaudo@uchicagomedicine.org
+University of Chicago,Orthopaedic Surgery,RS,Lauren Pitz-Gonçalves,PGY5,,lauren.pitz-goncalves@uchicagomedicine.org
+University of Chicago,Orthopaedic Surgery,RS,D'Andrew Gursay,PGY4,,dandrew.gursay@uchicagomedicine.org
+University of Chicago,Orthopaedic Surgery,RS,Alexander Koo,PGY4,,alexander.koo@uchicagomedicine.org
+University of Chicago,Orthopaedic Surgery,RS,Kole Niemi,PGY4,,kole.niemi@uchicagomedicine.org
+University of Chicago,Orthopaedic Surgery,RS,Jordan Swindle,PGY4,,jordan.swindle@uchicagomedicine.org
+University of Chicago,Orthopaedic Surgery,RS,Patrick Ward,PGY4,,patrick.ward2@uchicagomedicine.org
+University of Chicago,Orthopaedic Surgery,RS,Spencer Brown,PGY3,,spencer.brown@uchicagomedicine.org
+University of Chicago,Orthopaedic Surgery,RS,Miriyam Ghali,PGY3,,miriyam.ghali@uchicagomedicine.org
+University of Chicago,Orthopaedic Surgery,RS,Alisha Ho,PGY3,,alisha.ho@uchicagomedicine.org
+University of Chicago,Orthopaedic Surgery,RS,Ryan Sanii,PGY3,,ryan.sanii@uchicagomedicine.org
+University of Chicago,Orthopaedic Surgery,RS,Byron Udegbe,PGY3,,byron.udegbe@uchicagomedicine.org
+University of Chicago,Orthopaedic Surgery,RS,Michael Cahill,PGY2,,michael.cahill@uchicagomedicine.org
+University of Chicago,Orthopaedic Surgery,RS,Giovanna Danna,PGY2,,giovanna.danna@uchicagomedicine.org
+University of Chicago,Orthopaedic Surgery,RS,Nicholas Lin,PGY2,,nicholas.lin@uchicagomedicine.org
+University of Chicago,Orthopaedic Surgery,RS,Tejas Subramanian,PGY2,,tejas.subramanian@uchicagomedicine.org
+University of Chicago,Orthopaedic Surgery,RS,Anne Timmermann,PGY2,,anne.timmermann@uchicagomedicine.org
+University of Chicago,Orthopaedic Surgery,RS,Uma Balachandran,PGY1,,uma.balachandran@uchicagomedicine.org
+University of Chicago,Orthopaedic Surgery,RS,Cadence Lee,PGY1,,cadence.lee@uchicagomedicine.org
+University of Chicago,Orthopaedic Surgery,RS,Rimel Mwamba,PGY1,,rimel.mwamba@uchicagomedicine.org
+University of Chicago,Orthopaedic Surgery,RS,Thomas Stanila,PGY1,,thomas.stanila@uchicagomedicine.org
+University of Chicago,Otolaryngology,RS,Neil Kondamuri,PGY5,,
+University of Chicago,Otolaryngology,RS,Nicholas Oberhelman,PGY5,,
+University of Chicago,Otolaryngology,RS,Megan Wu,PGY5,,
+University of Chicago,Otolaryngology,RS,Kaitlin McArthur,PGY4,,
+University of Chicago,Otolaryngology,RS,Claire Tolan,PGY4,,
+University of Chicago,Otolaryngology,RS,Arushi Mahajan,PGY3,,
+University of Chicago,Otolaryngology,RS,Tina Lam,PGY3,,
+University of Chicago,Otolaryngology,RS,Adam Morin,PGY3,,
+University of Chicago,Otolaryngology,RS,Mary Kress,PGY2,,
+University of Chicago,Otolaryngology,RS,Murtala Affini,PGY2,,
+University of Chicago,Otolaryngology,RS,Rose Dimitroyannis,PGY2,,
+University of Chicago,Otolaryngology,RS,Megan Noonan,PGY1,,
+University of Chicago,Otolaryngology,RS,Nina Patel,PGY1,,
+University of Chicago,Otolaryngology,RS,Hani Samarah,PGY1,,
+University of Chicago,Pathology,RS,Jessica T. Bui,PGY1,,jessica.bui@uchicagomedicine.org
+University of Chicago,Pathology,RS,Shatavisha Dasgupta,PGY1,,shatavisha.dasgupta@uchicagomedicine.org
+University of Chicago,Pathology,RS,Mai Mohamed,PGY1,,mai.mohamed@uchicagomedicine.org
+University of Chicago,Pathology,RS,Ndidiamaka Ojiako,PGY1,,ndidiamaka.ojiako@uchicagomedicine.org
+University of Chicago,Pathology,RS,Sophia Passaro,PGY1,,sophia.passaro@uchicagomedicine.org
+University of Chicago,Pathology,RS,John Ryan,PGY1,,john.ryan@uchicagomedicine.org
+University of Chicago,Pathology,RS,Catherine Xie,PGY1,,catherine.xie@uchicagomedicine.org
+University of Chicago,Pathology,RS,Benjamin Gibbs,PGY1,,benjamin.gibbs@uchicagomedicine.org
+University of Chicago,Pathology,RS,Jessica Lee,PGY1,,jessica.lee4@uchicagomedicine.org
+University of Chicago,Pathology,RS,Trent Davids,PGY2,,trent.davids@uchicagomedicine.org
+University of Chicago,Pathology,RS,Elaine Hu,PGY2,,elaine.hu@uchicagomedicine.org
+University of Chicago,Pathology,RS,Michael Stage,PGY2,,michael.stage@uchicagomedicine.org
+University of Chicago,Pathology,RS,Taylor Thrasher,PGY2,,taylor.thrasher@uchicagomedicine.org
+University of Chicago,Pathology,RS,Christopher J. Dennis II,PGY3,,christopher.dennis@uchicagomedicine.org
+University of Chicago,Pathology,RS,Deven V. Gupta,PGY3,,deven.gupta@uchicagomedicine.org
+University of Chicago,Pathology,RS,Sharanpreet Hira,PGY3,,rkc5544@uchicagomedicine.org
+University of Chicago,Pathology,RS,Hermon G. Kihshen,PGY3,,hermon.kihshen@uchicagomedicine.org
+University of Chicago,Pathology,RS,Lakhena L. Leang,PGY3,,lakhena.leang@uchicagomedicine.org
+University of Chicago,Pathology,RS,Priscilla Natcher,PGY3,,priscillalouise.natcher@uchicagomedicine.org
+University of Chicago,Pathology,RS,Charlotte N. Nawor,PGY3,,charlotte.nawor@uchicagomedicine.org
+University of Chicago,Pathology,RS,Ellen Willhoit,PGY3,,ellen.willhoit@uchicagomedicine.org
+University of Chicago,Pathology,RS,Dane R. Wuori,PGY3,,dane.wuori@uchicagomedicine.org
+University of Chicago,Pathology,RS,Matthew Kleinjan,PGY4,,matthew.kleinjan@uchicagomedicine.org
+University of Chicago,Pathology,RS,Sarah Mae Lammert,PGY4,,sarah.lammert@uchicagomedicine.org
+University of Chicago,Pathology,RS,Leah Osnis,PGY4,,leahosnis@uchicagomedicine.org
+University of Chicago,Pathology,RS,Victoria Duran Paredes,PGY4,,victoria.duranparedes@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Fabiha Akbar,PL1,,zmr9486@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Pareenaz Behbahani-Nejad,PL1,,pareenaz.behbahani-nejad@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Alexandra Barrett,PL1,,alexandra.barrett@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Chelsie Baylor,PL1,,chelsie.baylor@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Ryan Belloli,PL1,,rnz9293@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Nicole Cast,PL1,,nzf4557@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Nicholas Ganek,PL1,,nicholas.ganek@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Claire Ford,PL1,,claire.ford@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Zacharie Hamilton,PL1,,zacharie.hamilton@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Lana Herrmann,PL1,,lana.herrmann@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Shreya Joshi,PL1,,shreya.joshi@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Rekha Karuparthy,PL1,,rekha.karuparthy@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Aleisha Khan,PL1,,kji8943@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Ian Kuo,PL1,,ian.kuo@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Keagan Lipak,PL1,,nkx4234@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Meagan Matuska,PL1,,meagan.matuska@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Jaclyn Meyer,PL1,,jaclyn.meyer@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Ayleen Mokbel,PL1,,ayleen.mokbel@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Riya Parikh,PL1,,bbt9356@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Khang Phan,PL1,,khang.phan@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,"Bogdan Popescu, MD, PhD (PSDP Track",PL1,,bogran.popescu@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Gabriela Rodriguez,PL1,,gabriela.rodriguez2@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Perima Shah,PL1,,perima.shah@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Dawn Szeltner,PL1,,jwf3554@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Margaret Vacchiano,PL1,,margaret.vacchiano@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Jennifer Vosters,PL1,,jennifer.vosters@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Olivia Westrich,PL1,,zti8857@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Austin Weynand,PL1,,austin.weynand@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,"Reba Abraham, MD, PhD (PSDP Track",PL2,,rebecca.abraham@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Simge Acar,PL2,,simge.acar@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Burak Arikan,PL2,,burak.arikan@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Gabriela Betancourt,PL2,,gabriela.betancourt@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Kiernan Bloye,PL2,,kiernan.bloye@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Jacob Braun,PL2,,jacob.braun@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Eric Casinelli,PL2,,eric.casinelli@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Kathleen Coogan,PL2,,kathleen.coogan@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Sara Cooper,PL2,,sara.cooper@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Taylor Ellebb,PL2,,taylor.ellebb@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Swathi Ganesh,PL2,,swathi.ganesh@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,"Margaret Gifford, MD (Health Services Track",PL2,,margaret.gifford@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Daniel Green,PL2,,daniel.green@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Elisabeth Hollembaek Parr,PL2,,elisabeth.parr@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Shalini Jayaweera,PL2,,shalini.jayaweera@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Shreeya Joshee,PL2,,shreeya.joshee@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Alyssa Kalsbeek,PL2,,alyssa.kalsbeek@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Priya Karkhanis,PL2,,priya.karkhanis@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Christine Kim,PL2,,yunji.kim@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Torie Livingston,PL2,,torie.livingston@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Priya Nair,PL2,,priya.nair@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Anna Perry,PL2,,anna.perry@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Meghana Rao,PL2,,meghana.rao@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Samantha Rodriguez,PL2,,samantha.rodriguez@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Tiffany Sims,PL2,,tiffany.sims@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Sumana Shashidhar,PL2,,sumana.shashidhar@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Candace Wilson,PL2,,candace.wilson@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Simone Ymson,PL2,,simone.ymson@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Lauren Anderson,PL3,,lauren.anderson@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Samantha Bailey,PL3,,samantha.bailey@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Sierra Blashock,PL3,,sierra.blashock@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Miriam Blumenthal,PL3,,miriam.blumenthal@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Shay Bourgeois,PL3,,shay.bourgeois@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Michala Burges,PL3,,michala.burges@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Ananya Chandra,PL3,,ananya.chandra@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Habib El-Khoury,PL3,,habib.el-khoury@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,David Hong,PL3,,david.hong@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Maura Knapp,PL3,,maura.knapp@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Danica Mathew,PL3,,danica.mathew@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Maya McKee,PL3,,maya.mckee@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Cassandra Mocek,PL3,,cassandra.mocek@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Hannah Murphy,PL3,,hannah.murphy@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Emma Office,PL3,,emma.office@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,"Kathleen Osea, MD, MA",PL3,,kathleen.osea@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Dhruvil Patel,PL3,,dhruvil.patel@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Mark Perkowski,PL3,,mark.perkowski@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Stephanie Schulman,PL3,,stephanie.schulman@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Zoie Sheets,PL3,,zoie.sheets@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Courtney Sniffen,PL3,,courtnet.sniffen@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Amanda Soto Perez,PL3,,amanda.sotoperez@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Zain Talukdar,PL3,,zain.talukdar@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Katherine (Katie) Thompson,PL3,,katherine.thompson2@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Rahul Dadwani,PL4,,rahul.dadwani@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Anjani Kapadia,PL4,,anjani.kapadia@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Meredith Kline,PL4,,meredith.kline@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Ronay Thomas,PL4,,ronay.thomas@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,Aislin (Adriana) Green,Chief Resident,,aislin.green@uchicagomedicine.org
+University of Chicago,Pediatrics,RS,"Hannah Zuckerman, MD, MSc",Chief Resident,,hannah.zuckerman@uchicagomedicine.org
+University of Chicago,Plastic Surgery,RS,Elam Coalson,PGY6,,
+University of Chicago,Plastic Surgery,RS,Kanad Ghosh,PGY6,,
+University of Chicago,Plastic Surgery,RS,Maxwell Wang,PGY6,,
+University of Chicago,Plastic Surgery,RS,Sawyer Cimaroli-Wimann,PGY5,,
+University of Chicago,Plastic Surgery,RS,Ricardo Engel,PGY5,,
+University of Chicago,Plastic Surgery,RS,"Martin Morris, MD MBE",PGY5,,
+University of Chicago,Plastic Surgery,RS,Emily George,PGY4,,
+University of Chicago,Plastic Surgery,RS,Lyndsay Kandi,PGY4,,
+University of Chicago,Plastic Surgery,RS,Gaia Santiago,PGY4,,
+University of Chicago,Plastic Surgery,RS,Larissa Wietlisbach,PGY4,,
+University of Chicago,Plastic Surgery,RS,Michael Cassidy,PGY3,,
+University of Chicago,Plastic Surgery,RS,Sabrina Han,PGY3,,
+University of Chicago,Plastic Surgery,RS,Alexandra Polovneff,PGY3,,
+University of Chicago,Plastic Surgery,RS,Nathan Calzadilla,PGY2,,
+University of Chicago,Plastic Surgery,RS,Sarah Layon,PGY2,,
+University of Chicago,Plastic Surgery,RS,"Benjamin Stone, MD MSc",PGY2,,
+University of Chicago,Plastic Surgery,RS,Chloe Cottone,PGY1,,
+University of Chicago,Plastic Surgery,RS,Leah Gudex,PGY1,,
+University of Chicago,Plastic Surgery,RS,Allison Karwoski,PGY1,,
+University of Chicago,Plastic Surgery,RS,Maximilian Wagner,PGY1,,
+University of Chicago,Radiology (Diagnostic),RS,Ethan Austhof,PGY5,,ethan.austhof@uchicagomedicine.org
+University of Chicago,Radiology (Diagnostic),RS,Sophie Cemaj,PGY5,,sophie.cemaj@uchicagomedicine.org
+University of Chicago,Radiology (Diagnostic),RS,Amit Chopra,PGY5,,amit.chopra@uchicagomedicine.org
+University of Chicago,Radiology (Diagnostic),RS,David Dao,PGY5,,david.dao2@uchicagomedicine.org
+University of Chicago,Radiology (Diagnostic),RS,Cassidy Dodson,PGY5,,cassidy.dodson@uchicagomedicine.org
+University of Chicago,Radiology (Diagnostic),RS,Katie Nguyen,PGY5,,katie.nguyen@uchicagomedicine.org
+University of Chicago,Radiology (Diagnostic),RS,Tram Nguyen,PGY5,,huytram.nguyen@uchicagomedicine.org
+University of Chicago,Radiology (Diagnostic),RS,Sachin Seetharam,PGY5,,sachin.seetharam@uchicagomedicine.org
+University of Chicago,Radiology (Diagnostic),RS,Rebecca Guan,PGY4,,rebecca.guan@uchicagomedicine.org
+University of Chicago,Radiology (Diagnostic),RS,Erica Hallman,PGY4,,erica.hallman@uchicagomedicine.org
+University of Chicago,Radiology (Diagnostic),RS,Julia Miao,PGY4,,julia.miao@uchicagomedicine.org
+University of Chicago,Radiology (Diagnostic),RS,Emily Miller,PGY4,,emily.miller@uchicagomedicine.org
+University of Chicago,Radiology (Diagnostic),RS,Vanessa Peters,PGY4,,vanessa.peters@uchicagomedicine.org
+University of Chicago,Radiology (Diagnostic),RS,Amer Safdari,PGY4,,amer.safdari@uchicagomedicine.org
+University of Chicago,Radiology (Diagnostic),RS,Divya Surabhi,PGY4,,divya.surabhi@uchicagomedicine.org
+University of Chicago,Radiology (Diagnostic),RS,Jonathan Wang,PGY4,,jonathan.wang@uchicagomedicine.org
+University of Chicago,Radiology (Diagnostic),RS,Mohamed Aldallal,PGY3,,mohamed.aldallal@uchicagomedicine.org
+University of Chicago,Radiology (Diagnostic),RS,Jacob Fang,PGY3,,jacob.fang@uchicagomedicine.org
+University of Chicago,Radiology (Diagnostic),RS,Nazanin Maghsoodi,PGY3,,nazanin.maghsoodi@uchicagomedicine.org
+University of Chicago,Radiology (Diagnostic),RS,Shiv Patel,PGY3,,shiv.patel@uchicagomedicine.org
+University of Chicago,Radiology (Diagnostic),RS,Logan Ryals,PGY3,,logan.ryals@uchicagomedicine.org
+University of Chicago,Radiology (Diagnostic),RS,Abdurrahman Roussi,PGY3,,abdurrahman.roussi@uchicagomedicine.org
+University of Chicago,Radiology (Diagnostic),RS,Olasubomi Omoleye,PGY3,,olasubomi.omoleye@bsd.uchicago.edu
+University of Chicago,Radiology (Diagnostic),RS,Hyun-ji Shim,PGY3,,hyun-ji.shim@uchicagomedicine.org
+University of Chicago,Radiology (Diagnostic),RS,Adrianna Carter,PGY2,,adrianna.carter@uchicagomedicine.org
+University of Chicago,Radiology (Diagnostic),RS,Eric Chang,PGY2,,eric.chang@uchicagomedicine.org
+University of Chicago,Radiology (Diagnostic),RS,Kevin Gilotra,PGY2,,kevin.gilotra@uchicagomedicine.org
+University of Chicago,Radiology (Diagnostic),RS,Maryam Haghshoma,PGY2,,maryam.haghshomar@uchicagomedicine.org
+University of Chicago,Radiology (Diagnostic),RS,Paramesh Karandikar,PGY2,,paramesh.karandikar@uchicagomedicine.org
+University of Chicago,Radiology (Diagnostic),RS,Gustavo Leon,PGY2,,gustavo.leon@uchicagomedicine.org
+University of Chicago,Radiology (Diagnostic),RS,Charles Liu,PGY2,,charles.liu@uchicagomedicine.org
+University of Chicago,Radiology (Diagnostic),RS,Joan Tao,PGY2,,joan.tao@uchicagomedicine.org
+University of Chicago,Urology,RS,Joshua Cabral,PGY5,,
+University of Chicago,Urology,RS,David Kim,PGY5,,
+University of Chicago,Urology,RS,Gregory Raster,PGY5,,
+University of Chicago,Urology,RS,Safiya-Hana Belbina,PGY4,,
+University of Chicago,Urology,RS,Nathan Graham,PGY4,,
+University of Chicago,Urology,RS,Alexandra Hernandez Perez,PGY4,,
+University of Chicago,Urology,RS,Erin Hurley,PGY3,,
+University of Chicago,Urology,RS,Juan Ramirez,PGY3,,
+University of Chicago,Urology,RS,Quinnlyn Walcott,PGY3,,
+University of Chicago,Urology,RS,Lauren Hekman,PGY2,,
+University of Chicago,Urology,RS,Pearce Kudlata,PGY2,,
+University of Chicago,Urology,RS,Michelle Slinger,PGY2,,
+University of Chicago,Urology,RS,David Velasquez,PGY2,,
+University of Chicago,Cardiothoracic Anesthesia,FS,Mike Berken,,,
+University of Chicago,Cardiothoracic Anesthesia,FS,Yaman Kherallah,,,
+University of Chicago,Cardiothoracic Anesthesia,FS,Emma Boslet,,,
+University of Chicago,Critical Care,FS,Trent Arbough,,,
+University of Chicago,Critical Care,FS,Alexis Hall,,,
+University of Chicago,Critical Care,FS,Victoria Hans,,,
+University of Chicago,Pain Medicine,FS,Anthony Cheung,,,
+University of Chicago,Pain Medicine,FS,Joseph Donnelly,,,
+University of Chicago,Pain Medicine,FS,Richard Yeker,,,
+University of Chicago,Pain Medicine,FS,Michael Zhao,,,
+University of Chicago,Pediatric Anesthesia,FS,TARA MOJTAHED,,,
+University of Chicago,Cardiology,FS,Nikita Deshpande,,2029.0,
+University of Chicago,Cardiology,FS,Ana Lanier,,2029.0,
+University of Chicago,Cardiology,FS,Akash Mitra,,2029.0,
+University of Chicago,Cardiology,FS,Rohan Mundkur,,2029.0,
+University of Chicago,Cardiology,FS,Paolo Ramirez,,2029.0,
+University of Chicago,Cardiology,FS,Divya Velury,,2029.0,
+University of Chicago,Cardiology,FS,Ololade Akingbade,,2028.0,
+University of Chicago,Cardiology,FS,Amritpal Bahga,,2028.0,
+University of Chicago,Cardiology,FS,Siddharth Bhayani,,2028.0,
+University of Chicago,Cardiology,FS,Georg Gussak,,2028.0,
+University of Chicago,Cardiology,FS,Meaghan O'Hara,,2028.0,
+University of Chicago,Cardiology,FS,Natalie Van Ochten,,2028.0,
+University of Chicago,Cardiology,FS,Elizabeth Cabrera,,2027.0,
+University of Chicago,Cardiology,FS,Ashwin Kelkar,,2027.0,
+University of Chicago,Cardiology,FS,Akash Patel,,2027.0,
+University of Chicago,Cardiology,FS,Rukmini Roy,,2027.0,
+University of Chicago,Cardiology,FS,Cory Sejo,,2027.0,
+University of Chicago,Cardiology,FS,Mikail Siddiki,,2027.0,
+University of Chicago,Emergency Medical Services,FS,Matthew Bonomo,,,
+University of Chicago,Emergency Medical Services,FS,Zoë Curry,,,
+University of Chicago,Emergency Medical Services,FS,Karly Farr,,,
+University of Chicago,Emergency Medical Services,FS,Matthew Heffernan,,,
+University of Chicago,Emergency Medical Services,FS,Ziomara Jurado,,,
+University of Chicago,Emergency Medical Services,FS,Douglas Moss,,,
+University of Chicago,Emergency Medical Services,FS,Udoka Oji,,,
+University of Chicago,Emergency Medical Services,FS,Georgina Sorrentino,,,
+University of Chicago,Emergency Medical Services,FS,Sean Thompson,,,
+University of Chicago,Gastroenterology,FS,Blake Stagg,,,
+University of Chicago,Gastroenterology,FS,Newsha Nikzad,,,
+University of Chicago,Gastroenterology,FS,Theodore Moore,,,
+University of Chicago,Gastroenterology,FS,Zach Beller,,,
+University of Chicago,Gastroenterology,FS,Chukwunedum Aniemeka,,,
+University of Chicago,Gastroenterology,FS,Malek Ayoub,,,
+University of Chicago,Gastroenterology,FS,Ophir Gilad,,,
+University of Chicago,Gastroenterology,FS,Jeremy Klein,,,
+University of Chicago,Gastroenterology,FS,Rangesh Modi,,,
+University of Chicago,Gastroenterology,FS,Surya Khadilkar,,,
+University of Chicago,Gastroenterology,FS,Emma Levine,,,
+University of Chicago,Gastroenterology,FS,Rebecca Yao,,,
+University of Chicago,Gastroenterology,FS,Meredith Yellen,,,
+University of Chicago,Gastroenterology,FS,Emaree Cobb,,,
+University of Chicago,Gastroenterology,FS,Alvin George,,,
+University of Chicago,Gastroenterology,FS,Sriya Muralidharan,,,
+University of Chicago,Gastroenterology,FS,Sarah Park,,,
+University of Chicago,Gastroenterology,FS,Ross McMillan,,,
+University of Chicago,Gastroenterology,FS,Omar Jamil,,,
+University of Chicago,Gastroenterology,FS,Jacob DiBattista,,,
+University of Chicago,Gastroenterology,FS,Yichin Fu,,,
+University of Chicago,Gastroenterology,FS,Alan Hutchison,,,
+University of Chicago,Gastroenterology,FS,Grace Kim,,,
+University of Chicago,Gastroenterology,FS,Ariel Bowen Sims,,,
+University of Chicago,Gastroenterology,FS,Hannah Roth,,,
+University of Chicago,Gastroenterology,FS,Scott Friedberg,,,
+University of Chicago,Gastroenterology,FS,Raghavendra Paknikar,,,
+University of Chicago,Gastroenterology,FS,Wenfei Wang,,,
+University of Chicago,Gastroenterology,FS,Thomas Couri,,,
+University of Chicago,Gastroenterology,FS,Ariel Halper-Stromberg,,,
+University of Chicago,Gastroenterology,FS,Benjamin McDonald,,,
+University of Chicago,Gastroenterology,FS,Matthew Odenwald,,,
+University of Chicago,Geriatrics,FS,Amit Grewal,,,
+University of Chicago,Geriatrics,FS,Anmol Riar,,,
+University of Chicago,Geriatrics,FS,Sonya Shaikh,,,
+University of Chicago,Geriatrics,FS,Nyesha Brown,,,
+University of Chicago,Hematology/Oncology,FS,Daniela Anderson,F1,,
+University of Chicago,Hematology/Oncology,FS,Meytal Chernoff,F1,,
+University of Chicago,Hematology/Oncology,FS,Susan Feldt,F1,,
+University of Chicago,Hematology/Oncology,FS,Diana Jaber,F1,,
+University of Chicago,Hematology/Oncology,FS,Matthew Newman,F1,,
+University of Chicago,Hematology/Oncology,FS,"Daniel Olivieri, M.D., MPA",F1,,
+University of Chicago,Hematology/Oncology,FS,Sid Ramesh,F1,,
+University of Chicago,Hematology/Oncology,FS,Shree Bose,F2,,
+University of Chicago,Hematology/Oncology,FS,Bukky Tabiti,F2,,
+University of Chicago,Hematology/Oncology,FS,Kaitlin McLean,F2,,
+University of Chicago,Hematology/Oncology,FS,Betul Gok Yavuz,F2,,
+University of Chicago,Hematology/Oncology,FS,Maria Moscvin,F2,,
+University of Chicago,Hematology/Oncology,FS,Tina Zheng,F2,,
+University of Chicago,Hematology/Oncology,FS,Hemanth Potluri,F2,,
+University of Chicago,Hematology/Oncology,FS,Maha Elsebaie,F3,,
+University of Chicago,Hematology/Oncology,FS,Waqas Haque,F3,,
+University of Chicago,Hematology/Oncology,FS,Ashley Hardeman,F3,,
+University of Chicago,Hematology/Oncology,FS,Hannah Johnston,F3,,
+University of Chicago,Hematology/Oncology,FS,Eric Perkey,F3,,
+University of Chicago,Hematology/Oncology,FS,Reid Shaw,F3,,
+University of Chicago,Hematology/Oncology,FS,Shrey Sindhwani,F3,,
+University of Chicago,Hospice and Palliative Medicine,FS,Carolyn Payne,,,
+University of Chicago,Hospice and Palliative Medicine,FS,Kirsten McAuliff,,,
+University of Chicago,Hospice and Palliative Medicine,FS,Sonya Shaikh,,,
+University of Chicago,Hospice and Palliative Medicine,FS,Nyesha Brown,,,
+University of Chicago,Infectious Diseases,FS,Sara Khan,F1,,
+University of Chicago,Infectious Diseases,FS,Jordan Pennington,F1,,
+University of Chicago,Infectious Diseases,FS,Hunter Pool,F1,,
+University of Chicago,Infectious Diseases,FS,Saliba Wehbe,F1,,
+University of Chicago,Infectious Diseases,FS,Sean Conley,F2,,
+University of Chicago,Infectious Diseases,FS,Allison Giuffre,F2,,
+University of Chicago,Infectious Diseases,FS,Philip Jurasinski,F2,,
+University of Chicago,Infectious Diseases,FS,Ian Motie,F2,,
+University of Chicago,Nephrology,FS,Meenhaj Kabir,,,
+University of Chicago,Nephrology,FS,Ashley La,,,
+University of Chicago,Nephrology,FS,Katherine Quinones Cruz,,,
+University of Chicago,Nephrology,FS,Ali Shah,,,
+University of Chicago,Nephrology,FS,Gilad Guez,,,
+University of Chicago,Nephrology,FS,Megan Gwinn,,,
+University of Chicago,Nephrology,FS,Nicholas Kowalczyk,,,
+University of Chicago,Nephrology,FS,Ryan Song,,,
+University of Chicago,Rheumatology,FS,Candice Park,PGY4,,
+University of Chicago,Rheumatology,FS,Diana Solis,PGY4,,
+University of Chicago,Rheumatology,FS,Yomaira Silva,PGY5,,
+University of Chicago,Rheumatology,FS,Saman Tanveer,PGY5,,
+University of Chicago,Rheumatology,FS,Daming Shao,PGY6,,
+University of Chicago,Rheumatology,FS,Maja Ivanovic,PGY6,,
+University of Chicago,Neuromuscular Medicine,FS,Carlos Lara,,,
+University of Chicago,Neuromuscular Medicine,FS,Mohammed Alhaidar,,,
+University of Chicago,Neuromuscular Medicine,FS,Sumayyah Abumurad,,,
+University of Chicago,Vascular Neurology,FS,Rami Morsi,,,rami.morsi@uchicagomedicine.org
+University of Chicago,Vascular Neurology,FS,Andrea Arevalo Canizales,,,andrea.arevalo@uchicagomedicine.org
+University of Chicago,Vascular Neurology,FS,Lina Chervak,,,
+University of Chicago,Vascular Neurology,FS,Therese Dunne,,,
+University of Chicago,Vascular Neurology,FS,Elham Azizi,,,
+University of Chicago,Vascular Neurology,FS,Mary Hahn,,,
+University of Chicago,Gynecologic Oncology,FS,Anh Nguyen,F3,,anh.nguyen2@uchicagomedicine.org
+University of Chicago,Gynecologic Oncology,FS,Kelsey Goon,F2,,kelsey.goon2@uchicagomedicine.org
+University of Chicago,Gynecologic Oncology,FS,Grace Lee,F1,,grace.lee3@uchicagomedicine.org
+University of Chicago,Gynecologic Oncology,FS,Kelsea Grant,,,kelsea.grant@uchicagomedicine.org
+University of Chicago,Maternal-Fetal Medicine,FS,Nonye Imo,PGY7,,
+University of Chicago,Maternal-Fetal Medicine,FS,Stephanie Turcios,PGY7,,
+University of Chicago,Maternal-Fetal Medicine,FS,Nafiah Enayet,PGY6,,
+University of Chicago,Maternal-Fetal Medicine,FS,Katie Radford,PGY5,,
+Endeavor Health / NorthShore,Pelvic Medicine and Reconstructive Surgery,FS,Kaitlin Crawford,PGY5,,
+Endeavor Health / NorthShore,Pelvic Medicine and Reconstructive Surgery,FS,Anna Burgos,PGY6,,
+Endeavor Health / NorthShore,Pelvic Medicine and Reconstructive Surgery,FS,Claudia Paya-Ten,PGY7,,
+University of Chicago,Adult Reconstructive Orthopaedics,FS,P. Jahnu Reddy,,,prati.reddy@uchicagomedicine.org
+University of Chicago,Adult Reconstructive Orthopaedics,FS,Zachary Zylstra,,,zachary.zylstra@uchicagomedicine.org
+University of Chicago,Hand and Upper Extremity,FS,Jessica Flakne,,,jessica.flakne@uchicagomedicine.org
+University of Chicago,Hand and Upper Extremity,FS,"Kendra Kibble, MD, JD",,,kendra.kibble@uchicagomedicine.org
+University of Chicago,Musculoskeletal Oncology,FS,Michael Peabody,,,michael.peabody@uchicagomedicine.org
+University of Chicago,Orthopaedic Sports Medicine,FS,Hassan Choudhry,,,hassan.choudhry@uchicagomedicine.org
+University of Chicago,Orthopaedic Sports Medicine,FS,Shiv Patel,,,shiv.patel2@uchicagomedicine.org
+University of Chicago,Blood Banking/Transfusion Medicine,FS,Abdul Hanan,,,abdul.hanan@uchicagomedicine.org
+University of Chicago,Cytopathology,FS,Tung Nguyen,,,tung.nguyen@uchicagomedicine.org
+University of Chicago,Hematopathology,FS,Richard Cody Simon,,,richard.simon@uchicagomedicine.org
+University of Chicago,Hematopathology,FS,Nimra Tahir,,,nimra.tahir@uchicagomedicine.org
+University of Chicago,Molecular Genetic Pathology,FS,Hayley Zullow,,,hayley.zullow@uchicagomedicine.org
+University of Chicago,Allergy & Immunology,FS,Caroline Youssef,F1,,caroline.youssef@uchicagomedicine.org
+University of Chicago,Allergy & Immunology,FS,Lillian Nwanah,F2,,lillian.nwanah@uchicagomedicine.org
+University of Chicago,Clinical Informatics,FS,Mina Batarseh,PGY1,,mina.batarseh@uchicagomedicine.org
+University of Chicago,Clinical Informatics,FS,Michael Dohar,PGY1,,michael.dohar@uchicagomedicine.org
+University of Chicago,Clinical Informatics,FS,Alvin George,PGY1,,alvin.george@uchicagomedicine.org
+University of Chicago,Developmental Pediatrics,FS,Hira Aslam,F1,,hira.aslam@bsd.uchicago.edu
+University of Chicago,Developmental Pediatrics,FS,Kristin Mayoral-Palarz,F2,,kristin.mayoralpalarz@uchicagomedicine.org
+University of Chicago,Neonatology,FS,Catherine Fergie,F1,,catherine.fergie@uchicagomedicine.org
+University of Chicago,Neonatology,FS,Danica Mathew,F1,,danica.mathew@uchicagomedicine.org
+University of Chicago,Neonatology,FS,Sai Susmitha Ravi,F1,,sai.ravi@uchicagomedicine.org
+University of Chicago,Neonatology,FS,Brandon Tucker,F1,,brandon.tucker2@uchicagomedicine.org
+University of Chicago,Neonatology,FS,Victoria Haro,F2,,victoria.haro@uchicagomedicine.org
+University of Chicago,Neonatology,FS,Janice Prescod,F2,,janice.prescod@uchicagomedicine.org
+University of Chicago,Neonatology,FS,Salma Sadaf,F2,,salma.sadaf@uchicagomedicine.org
+University of Chicago,Neonatology,FS,Luchang Zhang,F2,,luchang.zhang@uchicagomedicine.org
+University of Chicago,Neonatology,FS,Deborah Adegbosin,F3,,deborah.adegbosin@uchicagomedicine.org
+University of Chicago,Neonatology,FS,Kuang (Ping) Liu,F3,,kuang.liu@uchicagomedicine.org
+University of Chicago,Neonatology,FS,Rinky Patel,F3,,rinky.patel@uchicagomedicine.org
+University of Chicago,Pediatric Critical Care,FS,Kevin Baker,F1,,kevin.baker@uchicagomedicine.org
+University of Chicago,Pediatric Critical Care,FS,Brett Habermehl,F1,,brett.habermehl@uchicagomedicine.org
+University of Chicago,Pediatric Critical Care,FS,Rebekah O'Connor,F1,,rebekah.oconnor@uchicagomedicine.org
+University of Chicago,Pediatric Critical Care,FS,Heidi Gorbandt,F2,,heidi.gorbandt@uchicagomedicine.org
+University of Chicago,Pediatric Critical Care,FS,Rhiya Sharma,F2,,rhiya.sharma@uchicagomedicine.org
+University of Chicago,Pediatric Critical Care,FS,Melanie Simons,F2,,melanie.simons@uchicagomedicine.org
+University of Chicago,Pediatric Critical Care,FS,Lianna Drobatz,F3,,lianna.drobatz@uchicagomedicine.org
+University of Chicago,Pediatric Critical Care,FS,Naveen Kanji,F3,,naveen.kanji@uchicagomedicine.org
+University of Chicago,Pediatric Critical Care,FS,"Sacha Magder, MBBCh",F3,,alexandr.magder@uchicagomedicine.org
+University of Chicago,Pediatric Emergency Medicine,FS,Shivam Dave,F1,,shivam.dave@uchicagomedicine.org
+University of Chicago,Pediatric Emergency Medicine,FS,Jasmine Solola,F2,,jasmine.solola@uchicagomedicine.org
+University of Chicago,Pediatric Emergency Medicine,FS,Rashi Bamzai,F3,,rashi.bamzai@uchicagomedicine.org
+University of Chicago,Pediatric Endocrinology,FS,Gabrielle Thorpe,PGY1,,gabrielle.thorpe@uchicagomedicine.org
+University of Chicago,Pediatric Endocrinology,FS,Anne Gandolfi,PGY3,,anne.gandolfi@uchicagomedicine.org
+University of Chicago,Pediatric Gastroenterology,FS,Jessica Sargon,F1,,jessica.sargon@uchicagomedicine.org
+University of Chicago,Pediatric Gastroenterology,FS,Juan Camacho Mojica,F2,,juan.camachomojica@uchicagomedicine.org
+University of Chicago,Pediatric Gastroenterology,FS,Cynthia Alvarez,F3,,cynthia.alvarez@uchicagomedicine.org
+University of Chicago,Pediatric Hematology/Oncology,FS,Emily Vakulskas,,,emily.vakulskas@uchicagomedicine.org
+University of Chicago,Pediatric Hematology/Oncology,FS,Marilyn Zahrt,,,marilyn.zahrt@uchicagomedicine.org
+University of Chicago,Pediatric Hematology/Oncology,FS,Paul Asheim,,,paul.asheim@uchicagomedicine.org
+University of Chicago,Pediatric Hematology/Oncology,FS,Lujain ALJudaibi,,,lujain.aljudaibi@uchicagomedicine.org
+University of Chicago,Pediatric Hospital Medicine,FS,Monica Larson,F1,,monica.larson@uchicagomedicine.org
+University of Chicago,Pediatric Hospital Medicine,FS,Patricia Corona,F2,,patricia.corona@uchicagomedicine.org
+University of Chicago,Pediatric Infectious Diseases,FS,Barbara (Basia) Folga,PGY1,,barbara.folga@uchicagomedicine.org
+University of Chicago,Pediatric Infectious Diseases,FS,Hunter Pool,PGY1,,hunter.pool@uchicagomedicine.org
+University of Chicago,Pediatric Infectious Diseases,FS,Yeo Won Ahn,PGY2,,yeowon.ahn@uchicagomedicine.org
+University of Chicago,Pediatric Infectious Diseases,FS,Philip Jurasinski,PGY2,,philip.jurasinski@uchicagomedicine.org
+University of Chicago,Pediatric Infectious Diseases,FS,Kristen Kelly,PGY3,,kristen.kelly2@uchicagomedicine.org
+University of Chicago,Abdominal Radiology,FS,Amer Uddin Ahmed,,,ameruddin.ahmed@uchicagomedicine.org
+University of Chicago,Abdominal Radiology,FS,Rami Naccoul,,,rami.abounaccoul@uchicagomedicine.org
+University of Chicago,Neuroradiology,FS,Quincy Ogbogu,,,quincy.ogbogu@uchicagomedicine.org
+University of Chicago,Neuroradiology,FS,Lee Rost,,,lee.rost@uchicagomedicine.org
+University of Chicago,Neuroradiology,FS,Ismail Yardimcioglu,,,ismail.yardimcioglu@uchicagomedicine.org
+University of Chicago,Cardiothoracic Surgery,FS,Matthew Wheelwright,F3,,
+University of Chicago,Cardiothoracic Surgery,FS,Micaela Collins,F2,,
+University of Chicago,Cardiothoracic Surgery,FS,Srineil Vuthaluru,F1,,
+University of Chicago,Vascular Surgery,FS,"Lutfi Barghuthi, MB, BS",F2,,
+University of Chicago,Vascular Surgery,FS,Kendra Colbert,F1,,
+University of Chicago,Vascular Surgery,FS,Eileen Lu,F1,,
+Endeavor Health / NorthShore,Cardiology,FS,Kifah Hussain,,,
+Endeavor Health / NorthShore,Cardiology,FS,Kevin Lee,,,
+Endeavor Health / NorthShore,Cardiology,FS,Senthil Balasubramanian,,,
+Endeavor Health / NorthShore,Cardiology,FS,Safwan Gaznabi,,,
+Endeavor Health / NorthShore,Cardiology,FS,Iva Minga,,,
+Endeavor Health / NorthShore,Cardiology,FS,Kaveh Rezaei Bookani,,,
+Endeavor Health / NorthShore,Cardiology,FS,Mrinali Shetty,,,
+Endeavor Health / NorthShore,Cardiology,FS,Luis Paz-Rios,,,
+Endeavor Health / NorthShore,Cardiology,FS,Omer Iftikhar,,,
+Endeavor Health / NorthShore,Cardiology,FS,Program coordinator,,,cvfellowship@northshore.org
+Endeavor Health / NorthShore,Gastroenterology,FS,Tony Cheng,PGY6,,
+Endeavor Health / NorthShore,Gastroenterology,FS,Maryam Haider,PGY6,,
+Endeavor Health / NorthShore,Gastroenterology,FS,Ushan Ranasinghe,PGY5,,
+Endeavor Health / NorthShore,Gastroenterology,FS,Paul Hong,PGY5,,
+Endeavor Health / NorthShore,Gastroenterology,FS,Samuel Engman,PGY4,,
+Endeavor Health / NorthShore,Gastroenterology,FS,Karolina Krawczyk,PGY4,,
+Endeavor Health / NorthShore,Sports Medicine,FS,Connie Hsu,,,
+Endeavor Health / NorthShore,Sports Medicine,FS,John Walton,,,

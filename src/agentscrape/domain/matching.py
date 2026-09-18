@@ -54,12 +54,6 @@ _NON_NAME = re.compile(r"[^a-z0-9' \-]+")
 _WS = re.compile(r"\s+")
 
 
-class Role(StrEnum):
-    RESIDENT = "resident"
-    FELLOW = "fellow"
-    UNKNOWN = "unknown"
-
-
 class IdentityKind(StrEnum):
     EMAIL = "email"
     NAME = "name"
@@ -128,13 +122,22 @@ class Identity:
 
 
 def build_identity(
-    *, email: str | None, full_name: str | None, role: str | None = None
+    *, email: str | None, full_name: str | None
 ) -> Identity | None:
     """Identity key for a record within one site.
 
-    Email wins unless it names an office; then we fall back to name+role so the
-    shared inbox does not merge distinct people. Returns None when there is
-    neither a usable email nor a usable name — such a record is not storable.
+    Email wins unless it names an office; then we fall back to the name, which is
+    what keeps two people behind one shared inbox apart. Returns None when there
+    is neither a usable email nor a usable name — such a record is not storable.
+
+    The role is deliberately *not* part of the key. It used to be, on the theory
+    that it separated two same-name people, but a role is read from whatever page
+    a person turned up on and is the least stable thing we record: the same
+    trainee appears as "resident" on a departmental roster and "unknown" on an
+    institution-wide directory that prints one combined "Resident/Fellow" term.
+    Keying on it split 105 Arizona people into 210 records, each holding half
+    their evidence, which is a worse error than merging a rare name collision
+    whose sightings both survive in the record's version history anyway.
     """
     normalized_email = normalize_email(email)
     role_account = is_role_account(normalized_email)
@@ -144,10 +147,7 @@ def build_identity(
 
     normalized_name = normalize_name(full_name)
     if normalized_name:
-        role_part = (role or Role.UNKNOWN).lower()
-        return Identity(
-            f"name:{normalized_name}|{role_part}", IdentityKind.NAME, role_account
-        )
+        return Identity(f"name:{normalized_name}", IdentityKind.NAME, role_account)
     return None
 
 

@@ -61,7 +61,7 @@ async def skip_check(state: SiteState, deps: PipelineDeps) -> SiteState:
         current_fingerprint[result.url] = result.content_hash
         for person in extract_people(result.text, url=result.url):
             identity = build_identity(
-                email=person.email, full_name=person.full_name, role=str(person.category)
+                email=person.email, full_name=person.full_name
             )
             if identity:
                 probe_identities.add(identity.key)

@@ -343,3 +343,162 @@ class TestJsonNullSemantics:
         assert await session.scalar(
             select(SiteRun.checkpoint_state.is_(None)).where(SiteRun.id == site_run.id)
         )
+
+
+class TestUnknownNeverOverwritesAKnownCategory:
+    """An institution-wide directory identifies nobody precisely.
+
+    Every card on one prints a single combined "Resident/Fellow" term, which
+    yields `unknown` — while the same people appear on their own departmental
+    roster labelled exactly. Plain last-write-wins let whichever page was fetched
+    last decide, and the directory is usually last because it ranks lower. That
+    blanked the category on 86 people the client's own sheet had confirmed.
+    """
+
+    async def test_a_later_unknown_leaves_the_known_category_alone(self, session):
+        site = await _make_site(session)
+        await lock_site(session, site.id)
+
+        await reconcile_people(
+            session,
+            [_person(name="Abbey Bayless", email="ab@med.example.edu")],
+            _context(site, source_url="https://med.example.edu/anesthesia/current-residents"),
+        )
+        await reconcile_people(
+            session,
+            [
+                _person(
+                    name="Abbey Bayless",
+                    email="ab@med.example.edu",
+                    category=PersonCategory.UNKNOWN,
+                    position="Resident/Fellow",
+                    pgy=None,
+                )
+            ],
+            _context(
+                site,
+                source_url="https://med.example.edu/our-team-leadership",
+                page_title="Our Team Leadership",
+            ),
+        )
+        await session.commit()
+
+        record = (
+            await session.execute(
+                select(Record).where(Record.email == "ab@med.example.edu")
+            )
+        ).scalar_one()
+        assert record.category == str(PersonCategory.RESIDENT)
+
+    async def test_a_real_category_still_replaces_an_earlier_unknown(self, session):
+        site = await _make_site(session)
+        await lock_site(session, site.id)
+
+        await reconcile_people(
+            session,
+            [
+                _person(
+                    name="Ajay Kerai",
+                    email="ak@med.example.edu",
+                    category=PersonCategory.UNKNOWN,
+                    position=None,
+                    pgy=None,
+                )
+            ],
+            _context(site, source_url="https://med.example.edu/our-team-leadership"),
+        )
+        await reconcile_people(
+            session,
+            [
+                _person(
+                    name="Ajay Kerai",
+                    email="ak@med.example.edu",
+                    category=PersonCategory.FELLOW,
+                    position="Fellow",
+                    pgy=5,
+                )
+            ],
+            _context(site, source_url="https://med.example.edu/cardiology/fellows"),
+        )
+        await session.commit()
+
+        record = (
+            await session.execute(
+                select(Record).where(Record.email == "ak@med.example.edu")
+            )
+        ).scalar_one()
+        assert record.category == str(PersonCategory.FELLOW)
+
+
+class TestAnAddressAdoptsTheRecordBuiltWithoutOne:
+    """Rosters and directories disagree about addresses.
+
+    A departmental roster names its residents and publishes no addresses; the
+    institution-wide directory has the addresses but prints one combined
+    "Resident/Fellow" term for everyone. Keyed separately, one person became two
+    records — the right category on one, the address on the other. On Arizona
+    that was 238 people, and it is why residents the client's own sheet had
+    confirmed kept reading back as `unknown`.
+    """
+
+    async def test_the_two_sightings_become_one_record(self, session):
+        site = await _make_site(session)
+        await lock_site(session, site.id)
+
+        # The roster knows what she is, but not how to reach her.
+        await reconcile_people(
+            session,
+            [_person(name="Coen Hasenkamp", email=None, position="Resident")],
+            _context(site, source_url="https://med.example.edu/obgyn/current-residents"),
+        )
+        # The directory knows how to reach her, but calls everyone the same thing.
+        await reconcile_people(
+            session,
+            [
+                _person(
+                    name="Coen Hasenkamp",
+                    email="ch@med.example.edu",
+                    category=PersonCategory.UNKNOWN,
+                    position="Resident/Fellow",
+                    pgy=None,
+                )
+            ],
+            _context(site, source_url="https://med.example.edu/our-team-leadership"),
+        )
+        await session.commit()
+
+        records = (
+            await session.execute(
+                select(Record).where(Record.full_name == "Coen Hasenkamp")
+            )
+        ).scalars().all()
+        assert len(records) == 1
+        record = records[0]
+        assert record.email == "ch@med.example.edu"
+        assert record.identity_key == "email:ch@med.example.edu"
+        # The roster's category survives the directory's ambiguity.
+        assert record.category == str(PersonCategory.RESIDENT)
+
+    async def test_a_record_that_already_has_an_address_is_left_alone(self, session):
+        """Two people with one name, each with their own address, stay separate."""
+        site = await _make_site(session)
+        await lock_site(session, site.id)
+
+        await reconcile_people(
+            session,
+            [_person(name="Jane Doe", email="jane.a@med.example.edu")],
+            _context(site),
+        )
+        await reconcile_people(
+            session,
+            [_person(name="Jane Doe", email="jane.b@med.example.edu")],
+            _context(site, source_url="https://med.example.edu/other"),
+        )
+        await session.commit()
+
+        records = (
+            await session.execute(
+                select(Record).where(Record.full_name == "Jane Doe")
+            )
+        ).scalars().all()
+        assert len(records) == 2

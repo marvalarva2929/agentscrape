@@ -1,8 +1,8 @@
-"""Client CSV requests, and the staff queue that runs them.
+"""Staff queue for historical school requests.
 
-Clients cannot start crawls: billing is per school, so they submit a CSV of the
-schools they want and staff review and launch it. The client half is one POST;
-everything else lives behind the admin password.
+Clients now request schools by email, and staff populate/run schools directly.
+The remaining endpoints are admin-only so existing queued requests can still be
+reviewed or launched if present.
 """
 
 from __future__ import annotations
@@ -10,10 +10,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, File, Form, Query, UploadFile
+from fastapi import APIRouter, Query
 from sqlalchemy import select
 
-from ...config import settings
 from ...db.enums import SubmissionStatus
 from ...db.models import CsvSubmission
 from ...domain.schemas import (
@@ -24,7 +23,7 @@ from ...domain.schemas import (
     SubmissionRunRequest,
 )
 from ...orchestrator import service
-from ..deps import AdminUser, AuthedUser, DbSession
+from ..deps import AdminUser, DbSession
 from ..errors import AppError, ErrorCode, NotFoundError
 from ..pagination import Cursor, clamp_limit
 
@@ -44,40 +43,6 @@ def _out(submission: CsvSubmission) -> SubmissionOut:
         created_at=submission.created_at,
         reviewed_at=submission.reviewed_at,
     )
-
-
-@router.post("/submissions", response_model=SubmissionOut, status_code=201)
-async def submit_csv(
-    scope: AuthedUser,
-    session: DbSession,
-    file: Annotated[UploadFile, File(description="CSV of requested schools")],
-    note: Annotated[str | None, Form()] = None,
-) -> SubmissionOut:
-    """Submit a CSV of schools to be crawled. Does not start anything."""
-    entries = service.parse_csv(await file.read())
-    if not entries:
-        raise AppError(
-            "No usable rows found in the uploaded CSV.",
-            code=ErrorCode.INVALID_CSV,
-            details={"filename": file.filename},
-        )
-
-    preview = await service.preview_csv(
-        session, entries, skip_threshold=settings.default_skip_threshold
-    )
-    submission = CsvSubmission(
-        filename=file.filename,
-        note=note,
-        status=SubmissionStatus.PENDING,
-        rows=[row.model_dump(mode="json") for row in preview.rows],
-        row_count=preview.total_rows,
-        valid_count=preview.valid_rows,
-        submitted_by=scope,
-    )
-    session.add(submission)
-    await session.flush()
-    await session.commit()
-    return _out(submission)
 
 
 @router.get("/admin/submissions", response_model=Page[SubmissionOut])

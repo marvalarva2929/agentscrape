@@ -10,11 +10,12 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field
+from html import unescape
 from xml.etree import ElementTree
 
 from ..browser.fetcher import Fetcher
 from ..config import settings
-from ..urls import canonicalize, host_of, same_registrable_domain
+from ..urls import canonicalize, host_of, in_scope, registrable_domain, same_registrable_domain
 
 log = logging.getLogger("agentscrape.discovery.sitemap")
 
@@ -148,15 +149,29 @@ async def discover_from_sitemaps(
 _LINK_RE = re.compile(r'href=["\']([^"\'>]+)["\']', re.IGNORECASE)
 
 
-def extract_links(html: str, base_url: str, *, same_domain_only: bool = True) -> list[str]:
-    """Anchor hrefs from a page, canonicalized and domain-filtered."""
+def extract_links(
+    html: str,
+    base_url: str,
+    *,
+    same_domain_only: bool = True,
+    allowed_domains: set[str] | frozenset[str] | None = None,
+) -> list[str]:
+    """Anchor hrefs from a page, canonicalized and domain-filtered.
+
+    Hrefs are HTML-unescaped first. An attribute spells its separators as
+    `&amp;`, and canonicalizing that literally turns `?a=1&amp;b=2` into a query
+    with a parameter actually named `amp;b` — a different URL from the real one,
+    and a different one again for every link to the same page. One faculty
+    directory was fetched six times that way, each time for the same 20 people.
+    """
     root_host = host_of(base_url)
+    allowed = allowed_domains or {registrable_domain(root_host)}
     out: dict[str, None] = {}
-    for href in _LINK_RE.findall(html or ""):
-        url = canonicalize(href, base=base_url)
+    for raw_href in _LINK_RE.findall(html or ""):
+        url = canonicalize(unescape(raw_href), base=base_url)
         if not url:
             continue
-        if same_domain_only and not same_registrable_domain(host_of(url), root_host):
+        if same_domain_only and not in_scope(host_of(url), allowed):
             continue
         out.setdefault(url, None)
     return list(out)

@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import Any, TypedDict
 
+from ..urls import registrable_domain
+
 
 class SiteState(TypedDict, total=False):
     # --- identity ---
@@ -16,6 +18,9 @@ class SiteState(TypedDict, total=False):
     run_id: str | None
     root_url: str
     root_domain: str
+    # Every registrable domain this institution publishes on. A medical centre
+    # routinely spans two: the university and the health system it staffs.
+    allowed_domains: list[str]
     agent_id: str
 
     # --- configuration for this site ---
@@ -38,7 +43,8 @@ class SiteState(TypedDict, total=False):
     steps_taken: int
     candidates_considered: int
     known_path_hits: int
-    # Consecutive candidate pages that produced nobody new.
+    # Consecutive candidate pages that produced nobody at all. Counting
+    # "nobody new" instead would mark every page of an unchanged site barren.
     barren_streak: int
 
     # --- results ---
@@ -60,6 +66,7 @@ def initial_state(
     site_run_id: str,
     root_url: str,
     root_domain: str,
+    allowed_domains: list[str] | None = None,
     run_id: str | None = None,
     agent_id: str = "agent-0",
     force_rescan: bool = False,
@@ -72,6 +79,9 @@ def initial_state(
         run_id=run_id,
         root_url=root_url,
         root_domain=root_domain,
+        allowed_domains=sorted(
+            {registrable_domain(root_domain), *(allowed_domains or [])}
+        ),
         agent_id=agent_id,
         force_rescan=force_rescan,
         skip_threshold=skip_threshold,
