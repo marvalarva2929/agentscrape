@@ -12,6 +12,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from ..config import settings
+
 
 class ApiModel(BaseModel):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
@@ -141,7 +143,9 @@ class RecordStats(BaseModel):
 class RunConfigIn(BaseModel):
     concurrency: int = Field(default=4, ge=1, le=8)
     skip_threshold: float = Field(default=0.90, ge=0.0, le=1.0)
-    step_budget: int = Field(default=40, ge=1, le=500)
+    # Pages per site. Defaults to DEFAULT_STEP_BUDGET, so a deployment sets it
+    # once (small for a live demo, thousands for a real crawl).
+    step_budget: int = Field(default_factory=lambda: settings.default_step_budget, ge=1, le=50_000)
     force_rescan: bool = False
     force_rescan_sites: list[str] = Field(
         default_factory=list, description="Site ids or domains to force individually"

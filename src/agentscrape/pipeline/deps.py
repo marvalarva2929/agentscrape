@@ -42,6 +42,20 @@ class PipelineDeps:
     def stop_requested(self) -> bool:
         return bool(self.should_stop and self.should_stop())
 
+    async def note(self, state: dict, message: str, **extra) -> None:
+        """A human-readable line for the live activity feed."""
+        from ..orchestrator.events import EventType
+
+        await self.emitter.emit(
+            EventType.SITE_STEP,
+            site_id=state.get("site_id"),
+            site_run_id=state.get("site_run_id"),
+            domain=state.get("root_domain"),
+            action="note",
+            message=message,
+            **extra,
+        )
+
     async def emit_stage(self, state: dict, stage: str) -> None:
         """Tell the monitor roughly where this site has got to."""
         from ..orchestrator.events import EventType

@@ -94,6 +94,7 @@ async def discover_links(state: SiteState, deps: PipelineDeps) -> SiteState:
             return True
         return False
 
+    await deps.note(state, f"Reading {root_domain}'s sitemaps and home page")
     robots = await _bounded("robots", fetch_robots(deps.fetcher, root_url), None, timeout=remaining())
     if robots is None:
         from ...discovery.sitemap import RobotsInfo
@@ -174,6 +175,10 @@ async def discover_links(state: SiteState, deps: PipelineDeps) -> SiteState:
                 samples[host].append(path)
     for host in ct_candidates:
         samples.setdefault(host, [])
+    if samples:
+        await deps.note(
+            state, f"Found {len(samples)} related websites; the agent is deciding which to explore"
+        )
     skipped_hosts = await triage_hosts(samples, root_domain=root_domain, meter=deps.meter)
 
     ct_keep = [h for h in ct_candidates if h not in skipped_hosts][:MAX_SUBDOMAIN_PROBES]
@@ -236,6 +241,11 @@ async def discover_links(state: SiteState, deps: PipelineDeps) -> SiteState:
             )
 
     if hosts_to_walk:
+        await deps.note(
+            state,
+            f"Exploring {len(hosts_to_walk)} websites the agent kept "
+            f"(ruled out {len(skipped_hosts)} as unrelated)",
+        )
         for found in await asyncio.gather(*(walk(h) for h in hosts_to_walk)):
             for url in found:
                 discovered.setdefault(url, None)
@@ -273,6 +283,9 @@ async def discover_links(state: SiteState, deps: PipelineDeps) -> SiteState:
         triaged.add(key)
         context = link_text.get(url)
         to_triage.append(context.as_dict() if context else {"url": canonical})
+    await deps.note(
+        state, f"Found {len(to_triage):,} pages; the agent is ranking which to read first"
+    )
     decisions = await triage_links(
         to_triage, source=f"sitemaps and home pages of {root_domain}", meter=deps.meter,
     )
@@ -295,6 +308,11 @@ async def discover_links(state: SiteState, deps: PipelineDeps) -> SiteState:
         root_domain, len(discovered), len(candidates), len(known_urls), len(skipped_hosts),
     )
 
+    await deps.note(
+        state,
+        f"Mapped {len(discovered):,} pages across {len(_observed_host_counts(discovered, root_domain, allowed)) + 1} "
+        f"sites; the agent kept {len(candidates):,} worth reading",
+    )
     return {
         **state,
         "candidates": candidates,

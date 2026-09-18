@@ -15,6 +15,7 @@ import logging
 import struct
 import zlib
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 from sqlalchemy import select
 
@@ -116,23 +117,62 @@ def _write_screenshot(site_run_id: str, key: str) -> str | None:
     return relative_path(path)
 
 
+SNAPSHOT_DIR = Path(__file__).resolve().parents[2] / "demo"
+
+
 async def seed_demo(*, reset: bool = False) -> dict[str, int]:
-    """Populate schools, programmes, people and provenance. Idempotent."""
+    """Populate the app with something to show. Idempotent.
+
+    Real crawl snapshots in `demo/*.json` (see `agentscrape export-school`) are
+    preferred: a demo should open on an actual institution's results. The
+    invented schools below are the fallback when no snapshot is present.
+    """
+    snapshots = sorted(SNAPSHOT_DIR.glob("*.json")) if SNAPSHOT_DIR.is_dir() else []
+    if snapshots:
+        return await _seed_snapshots(snapshots, reset=reset)
+    return await _seed_invented(reset=reset)
+
+
+async def _seed_snapshots(paths: list[Path], *, reset: bool) -> dict[str, int]:
+    from .snapshot import import_school
+
+    if reset:
+        await _truncate()
+    counts = {"schools": 0, "programs": 0, "people": 0}
+    for path in paths:
+        people = await import_school(path)
+        if people:
+            counts["schools"] += 1
+            counts["people"] += people
+    async with session_scope() as session:
+        from sqlalchemy import func
+
+        counts["programs"] = int(await session.scalar(select(func.count(Program.id))) or 0)
+    return counts
+
+
+async def _truncate() -> None:
+    from sqlalchemy import text
+
+    async with session_scope() as session:
+        await session.execute(
+            text(
+                "TRUNCATE sites, runs, site_runs, site_run_visits, records, "
+                "record_versions, known_paths, exports, programs, "
+                "csv_submissions RESTART IDENTITY CASCADE"
+            )
+        )
+
+
+async def _seed_invented(*, reset: bool = False) -> dict[str, int]:
+    """Populate invented schools, programmes, people and provenance."""
     now = datetime.now(UTC)
     counts = {"schools": 0, "programs": 0, "people": 0}
 
+    if reset:
+        await _truncate()
+
     async with session_scope() as session:
-        if reset:
-            from sqlalchemy import text
-
-            await session.execute(
-                text(
-                    "TRUNCATE sites, runs, site_runs, site_run_visits, records, "
-                    "record_versions, known_paths, exports, programs, "
-                    "csv_submissions RESTART IDENTITY CASCADE"
-                )
-            )
-
         run = Run(
             status=RunStatus.COMPLETED,
             label="demo data",

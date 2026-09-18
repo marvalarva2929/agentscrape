@@ -11,6 +11,7 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 from sqlalchemy import func, select
 
+from ...config import settings
 from ...db.models import KnownPath, Program, Record, Site, SiteRun
 from ...db.repositories import programs as programs_repo
 from ...db.repositories.query import RecordFilters, query_records
@@ -94,13 +95,20 @@ async def list_schools(
             | Site.hospital_name.ilike(f"%{q}%")
         )
 
+    featured = settings.featured_school
     decoded = Cursor.decode(cursor)
     if decoded is not None:
         statement = statement.where(Site.root_domain > decoded.sort_value)
+        if featured:
+            # The featured school was already served at the top of page one.
+            statement = statement.where(Site.root_domain != featured)
 
     limit = clamp_limit(limit)
+    order = [Site.root_domain]
+    if featured and decoded is None:
+        order.insert(0, (Site.root_domain != featured))
     rows = (
-        await session.execute(statement.order_by(Site.root_domain).limit(limit + 1))
+        await session.execute(statement.order_by(*order).limit(limit + 1))
     ).all()
     has_more = len(rows) > limit
     rows = rows[:limit]

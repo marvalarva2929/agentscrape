@@ -187,7 +187,15 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
                     url=url, records=records_here,
                 )
 
-        _update_programs(programs, candidate, outcome, trainees_here)
+        covered = _update_programs(programs, candidate, outcome, trainees_here)
+        if covered:
+            done = sum(1 for p in programs if p.get("status") != PENDING)
+            await deps.note(
+                state,
+                f"Roster found for {covered} ({trainees_here} residents/fellows) "
+                f"\u2014 {done} of {len(programs)} programs covered",
+                program=covered,
+            )
 
         # Last-resort stop signal only; program coverage and link priority are
         # the real ones. A page we could not read is evidence of blocking, not
@@ -220,6 +228,8 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
             )
             await session.commit()
 
+        if outcome.duplicate:
+            continue
         await deps.emitter.emit(
             EventType.SITE_STEP,
             site_id=state["site_id"],
@@ -227,6 +237,11 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
             url=url,
             action=f"fetch:{outcome.fetch_mode}",
             records=records_here,
+            trainees=trainees_here,
+            title=outcome.title or None,
+            page_type=outcome.reading.page_type if outcome.reading and outcome.reading.ok else None,
+            program=outcome.reading.program if outcome.reading and outcome.reading.ok else None,
+            message=_describe(outcome, records_here, trainees_here),
             screenshot_url=(
                 f"/api/v1/artifacts/{outcome.screenshot_rel}" if outcome.screenshot_rel else None
             ),
@@ -311,6 +326,18 @@ async def _process_page(
 # Browser pages open at once in the site's context. Renders were the
 # bottleneck when serialized: a render plus tab clicks runs 15-60 seconds.
 RENDER_CONCURRENCY = 4
+
+
+def _describe(outcome: PageOutcome, records: int, trainees: int) -> str:
+    """One line for the live feed: what the agent made of the page."""
+    name = outcome.title or outcome.url
+    reading = outcome.reading
+    kind = reading.page_type if reading and reading.ok else "page"
+    if records:
+        who = f"{records} people" + (f", {trainees} residents/fellows" if trainees else "")
+        verb = "rendered and read" if outcome.fetch_mode == FetchMode.BOTH else "read"
+        return f"{verb} {kind} \u201c{name}\u201d: {who}"
+    return f"checked {kind} \u201c{name}\u201d: nobody listed"
 
 
 def _render_lock(deps: PipelineDeps) -> asyncio.Semaphore:
@@ -443,11 +470,12 @@ async def _render_and_extract(
 
 def _update_programs(
     programs: list[dict], candidate: dict, outcome: PageOutcome, trainees: int
-) -> None:
+) -> str | None:
     """Attribute the page to a program and mark the program covered once a
-    current trainee roster with people on it has been read."""
+    current trainee roster with people on it has been read. Returns the
+    program's name when this page is what covered it."""
     if not programs or outcome.duplicate:
-        return
+        return None
     reading = outcome.reading
     program = match_program(
         programs,
@@ -455,7 +483,7 @@ def _update_programs(
         outcome.url,
     )
     if program is None:
-        return
+        return None
     program["pages"] = program.get("pages", 0) + 1
     visits = program.setdefault("visited", [])
     if len(visits) < _PROGRAM_VISITS_KEPT:
@@ -465,6 +493,8 @@ def _update_programs(
         if program.get("status") == PENDING:
             program["status"] = FOUND
             log.info("program covered: %s (%d trainees on %s)", program["name"], trainees, outcome.url)
+            return program["name"]
+    return None
 
 
 def pending_program_names(programs: list[dict]) -> list[str]:

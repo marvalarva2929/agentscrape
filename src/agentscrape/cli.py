@@ -228,6 +228,47 @@ def seed_demo_command(
     asyncio.run(_go())
 
 
+@app.command("export-school")
+def export_school_command(
+    domain: str = typer.Argument(..., help="The school's root domain, as stored"),
+    path: str = typer.Argument(..., help="Where to write the JSON snapshot"),
+) -> None:
+    """Write one school's people and provenance to a JSON snapshot."""
+    from pathlib import Path
+
+    from .db.session import dispose_engine
+    from .snapshot import export_school
+
+    async def _go() -> None:
+        count = await export_school(domain, Path(path))
+        await dispose_engine()
+        console.print(f"[green]Exported[/green] {count} people from {domain} to {path}")
+
+    asyncio.run(_go())
+
+
+@app.command("import-school")
+def import_school_command(
+    path: str = typer.Argument(..., help="A snapshot written by export-school"),
+    replace: bool = typer.Option(False, "--replace", help="Delete the school first"),
+) -> None:
+    """Load a school snapshot, so a fresh database opens on real results."""
+    from pathlib import Path
+
+    from .db.session import dispose_engine
+    from .snapshot import import_school
+
+    async def _go() -> None:
+        count = await import_school(Path(path), replace=replace)
+        await dispose_engine()
+        console.print(
+            f"[green]Imported[/green] {count} people from {path}"
+            if count else f"{path}: school already has people; nothing imported"
+        )
+
+    asyncio.run(_go())
+
+
 @app.command()
 def sweep() -> None:
     """Expire screenshots and exports past their retention window."""

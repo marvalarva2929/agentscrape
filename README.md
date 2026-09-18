@@ -77,19 +77,49 @@ $env:PGBIN = "D:\Postgres\18\bin"
 .\scripts\dev.ps1 -DatabaseUrl "postgresql+asyncpg://postgres:PASSWORD@localhost:5432/agentscrape"
 ```
 
-### Crawling a real institution
+### Demo: open on Arizona, run a live crawl
 
-The demo data is seeded, not scraped. To run the actual pipeline you need a
-vision model on an OpenAI-compatible endpoint (`LLM_BASE_URL` in `.env`):
+`seed-demo` (run by `dev.sh`) loads the real crawl snapshots in `demo/`
+instead of invented schools; `demo/arizona.json` holds the University of
+Arizona results. `FEATURED_SCHOOL=medicine.arizona.edu` lists it first, so the
+UI opens on it. On a fresh deployment:
 
 ```bash
-uv run agentscrape site medicine.uchicago.edu --dry-run   # ranked candidates only
+uv run alembic upgrade head
+uv run agentscrape seed-demo            # or: agentscrape import-school demo/arizona.json
+uv run agentscrape llm-check            # the model must answer before a live run
+```
+
+Starting an update from the UI (admin password) opens the run monitor, which
+streams what the agent is doing — sites mapped, programs identified, each page
+read and who was on it, each program covered — and shows totals, time and model
+spend at the end. For a demo-length run (about 5–10 minutes) set:
+
+```
+DEFAULT_STEP_BUDGET=60
+DISCOVERY_TIMEOUT_SECONDS=120
+ENABLE_CRT_SH=false
+```
+
+A real crawl uses `DEFAULT_STEP_BUDGET=5000`. The model runs on the Hugging Face
+router (`LLM_API_KEY=hf_...`); the account needs prepaid credits or PRO, or
+every site stops with `LLM_UNAVAILABLE`. `agentscrape export-school <domain>
+<file>` snapshots any crawled school for the same purpose.
+
+### Crawling a real institution
+
+The model drives the crawl: it reads every page, decides which links and sites
+to follow, and tracks which programs still lack a roster. It needs a working
+OpenAI-compatible endpoint (`LLM_BASE_URL`, `LLM_API_KEY` in `.env`); check it
+first with `agentscrape llm-check`.
+
+```bash
+uv run agentscrape site medicine.uchicago.edu --dry-run   # discovery and ranking only
 uv run agentscrape site radonc.uchicago.edu               # full pipeline
 ```
 
-Most rosters are plain HTML, so `--no-browser` finishes a whole medical school
-in a few minutes and needs no model endpoint at all; the browser and the vision
-model only earn their cost on the pages HTML parsing cannot read.
+`--no-browser` skips Chromium (faster, but misses rosters rendered by
+JavaScript); the model is still used on every page.
 
 ### Checking a school against the client's sheet
 

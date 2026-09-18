@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     # origin from the API, so "*" is both unsafe and insufficient here.
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
+    # --- demo -----------------------------------------------------------
+    # A root domain listed first in /schools, so the UI opens on it.
+    featured_school: str = ""
+
     # --- database -------------------------------------------------------
     database_url: str = (
         "postgresql+asyncpg://agentscrape:agentscrape@localhost:5433/agentscrape"

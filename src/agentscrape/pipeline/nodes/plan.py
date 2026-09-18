@@ -112,6 +112,12 @@ async def plan_programs(state: SiteState, deps: PipelineDeps) -> SiteState:
     candidates = merge_frontier(state.get("candidates", []), state.get("cursor", 0), additions)
     triaged = set(state.get("triaged", []))
     triaged.update(link_key(a["url"]) for a in additions)
+    if programs:
+        await deps.note(
+            state,
+            f"Identified {len(programs)} residency and fellowship programs to cover",
+            programs=len(programs),
+        )
     return {**state, "programs": programs, "candidates": candidates, "triaged": sorted(triaged)}
 
 
@@ -168,6 +174,11 @@ async def gap_fill(state: SiteState, deps: PipelineDeps) -> SiteState:
     )
     triaged = set(state.get("triaged", []))
     triaged.update(link_key(a["url"]) for a in additions)
+    await deps.note(
+        state,
+        f"{len(pending)} programs still have no roster; the agent suggested "
+        f"{len(additions)} more pages to check",
+    )
     return {
         **state,
         "programs": programs,
