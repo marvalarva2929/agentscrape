@@ -24,6 +24,8 @@ SYNC_DATABASE_URL = TEST_DATABASE_URL.replace("+asyncpg", "+psycopg")
 
 # Must be set before anything reads settings.
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
+# Tests control their own data; the startup seed is tested explicitly.
+os.environ["SEED_DEMO_ON_STARTUP"] = "false"
 
 from sqlalchemy import create_engine, text  # noqa: E402
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine  # noqa: E402

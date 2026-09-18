@@ -117,7 +117,33 @@ def _write_screenshot(site_run_id: str, key: str) -> str | None:
     return relative_path(path)
 
 
-SNAPSHOT_DIR = Path(__file__).resolve().parents[2] / "demo"
+def snapshot_dir() -> Path:
+    """The configured snapshot folder, else demo/ in the repository or the
+    working directory (an installed package has no repository beside it)."""
+    if settings.demo_snapshot_dir:
+        return Path(settings.demo_snapshot_dir)
+    for candidate in (Path(__file__).resolve().parents[2] / "demo", Path.cwd() / "demo"):
+        if candidate.is_dir():
+            return candidate
+    return Path.cwd() / "demo"
+
+
+async def seed_if_empty() -> int:
+    """Seed the demo snapshots when no school exists yet. Returns people loaded."""
+    from sqlalchemy import func
+
+    async with session_scope() as session:
+        schools = await session.scalar(select(func.count(Site.id)))
+    if schools:
+        return 0
+    folder = snapshot_dir()
+    snapshots = sorted(folder.glob("*.json")) if folder.is_dir() else []
+    if not snapshots:
+        log.warning("database is empty and no demo snapshots were found in %s", folder)
+        return 0
+    counts = await _seed_snapshots(snapshots, reset=False)
+    log.info("seeded an empty database: %d schools, %d people", counts["schools"], counts["people"])
+    return counts["people"]
 
 
 async def seed_demo(*, reset: bool = False) -> dict[str, int]:
@@ -127,7 +153,8 @@ async def seed_demo(*, reset: bool = False) -> dict[str, int]:
     preferred: a demo should open on an actual institution's results. The
     invented schools below are the fallback when no snapshot is present.
     """
-    snapshots = sorted(SNAPSHOT_DIR.glob("*.json")) if SNAPSHOT_DIR.is_dir() else []
+    folder = snapshot_dir()
+    snapshots = sorted(folder.glob("*.json")) if folder.is_dir() else []
     if snapshots:
         return await _seed_snapshots(snapshots, reset=reset)
     return await _seed_invented(reset=reset)

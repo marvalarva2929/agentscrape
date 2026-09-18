@@ -50,6 +50,15 @@ async def lifespan(app: FastAPI):
             log.exception("startup retention sweep failed")
 
     sweep_task = asyncio.create_task(_sweep())
+
+    if settings.seed_demo_on_startup:
+        # Before serving, so the first request already sees the schools.
+        from ..demo import seed_if_empty
+
+        try:
+            await seed_if_empty()
+        except Exception:
+            log.exception("seeding the empty database failed; the school list will be empty")
     yield
     sweep_task.cancel()
     await dispose_engine()

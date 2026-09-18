@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     # --- demo -----------------------------------------------------------
     # A root domain listed first in /schools, so the UI opens on it.
     featured_school: str = ""
+    # Load the crawl snapshots in demo/ when the API starts on an empty
+    # database, so a fresh deployment never opens on an empty school list.
+    seed_demo_on_startup: bool = True
+    # Where those snapshots live; blank means the repository's demo/ folder.
+    demo_snapshot_dir: str = ""
 
     # --- database -------------------------------------------------------
     database_url: str = (
