@@ -34,7 +34,7 @@ from .extract import link_key, merge_frontier
 log = logging.getLogger("agentscrape.pipeline.plan")
 
 # Program-list pages read per site, entry page included.
-MAX_PROGRAM_PAGES = 8
+MAX_PROGRAM_PAGES = 30
 PROGRAM_PRIORITY = 92.0
 GAP_PRIORITY = 97.0
 MAX_GAP_ROUNDS = 2

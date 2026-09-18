@@ -239,9 +239,10 @@ maps/parking, privacy/terms, social media, calendars, general news articles
 unrelated to trainees, job postings, downloads of forms. Patient-facing
 "find a physician/doctor" directories are not trainee rosters: give them 10-25.
 
-Return ONLY JSON: {"links": [{"i": <number>, "p": <priority 1-100> | "skip",
-"program": <program name or null>}, ...]}
-Include every link number exactly once.
+Return ONLY JSON: {"links": [{"i": <number>, "p": <priority 1-100 or "skip">}, ...]}
+Add "program": "<name>" to an item only when the link clearly belongs to a
+specific residency or fellowship program; otherwise leave the key out.
+"skip" must be a quoted string. Include every link number exactly once.
 """
 
 TRIAGE_USER_TEMPLATE = """\
@@ -287,8 +288,12 @@ You get a page's text and its links (numbered). Return ONLY JSON:
   ],
   "more_program_lists": [<numbers of links that lead to further lists of
                           programs, e.g. 'All fellowships', 'Programs A-Z',
-                          a department's list of its fellowships>]
+                          a department's list of its fellowships, and EVERY
+                          pagination link of this list (page 2, 3, ..., "Next",
+                          "?page=1")>]
 }
+
+A list that shows only some programs per page is common; follow its pages.
 
 List every residency and fellowship program named on the page, including
 sub-specialty fellowships and programs at other campuses/hospitals. Do not list

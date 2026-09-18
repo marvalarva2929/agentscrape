@@ -46,8 +46,14 @@ def parse_json_response(text: str) -> Any:
         return json.loads(cleaned)
     except json.JSONDecodeError:
         pass
-    # Fall back to the outermost balanced array/object.
-    for opener, closer in (("[", "]"), ("{", "}")):
+    # Fall back to the outermost array/object, trying whichever opens first:
+    # trying arrays first pulled the inner list out of {"hosts": [...]} and
+    # lost the object that was actually asked for.
+    pairs = sorted(
+        (("[", "]"), ("{", "}")),
+        key=lambda pair: (cleaned.find(pair[0]) == -1, cleaned.find(pair[0])),
+    )
+    for opener, closer in pairs:
         start, end = cleaned.find(opener), cleaned.rfind(closer)
         if start != -1 and end > start:
             try:

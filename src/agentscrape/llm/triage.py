@@ -10,7 +10,9 @@ first: an unneeded fetch costs seconds, a missed roster costs the client.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import re
 from dataclasses import dataclass
 
 from ..config import settings
@@ -21,9 +23,16 @@ from .usage import LLMUnavailable, UsageMeter
 
 log = logging.getLogger("agentscrape.llm.triage")
 
-LINK_BATCH = 150
-URL_ONLY_BATCH = 300
+LINK_BATCH = 120
+URL_ONLY_BATCH = 200
 HOST_BATCH = 150
+# One decision object, tolerant of what breaks strict JSON in long outputs: an
+# unquoted skip, a truncated tail, stray prose between items.
+_ENTRY = re.compile(
+    r'\{\s*"i"\s*:\s*(\d+)\s*,\s*"p"\s*:\s*("?skip"?|\d+(?:\.\d+)?)'
+    r'(?:\s*,\s*"program"\s*:\s*("(?:[^"\\]|\\.)*"|null))?\s*\}',
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -45,6 +54,21 @@ def heuristic_priority(score: float) -> float:
     return max(5.0, min(60.0, 25.0 + score * 2.5))
 
 
+def salvage_links(text: str) -> dict | None:
+    """Recover every well-formed decision from output that is not valid JSON."""
+    items = []
+    for index, priority, program in _ENTRY.findall(text or ""):
+        entry: dict = {"i": int(index)}
+        entry["p"] = "skip" if "skip" in priority.lower() else float(priority)
+        if program and program != "null":
+            try:
+                entry["program"] = json.loads(program)
+            except json.JSONDecodeError:
+                pass
+        items.append(entry)
+    return {"links": items} if items else None
+
+
 async def _call(
     provider: VisionProvider, system: str, user: str, meter: UsageMeter | None, what: str
 ) -> dict | None:
@@ -52,7 +76,7 @@ async def _call(
         try:
             response = await provider.complete(
                 system=system, user=user, meter=meter, model=settings.text_model,
-                max_tokens=8_000,
+                max_tokens=12_000,
             )
         except LLMUnavailable:
             raise
@@ -64,7 +88,14 @@ async def _call(
         payload = response.json()
         if isinstance(payload, dict):
             return payload
-        log.warning("%s returned unparseable output (attempt %d)", what, attempt + 1)
+        salvaged = salvage_links(response.text) if system is TRIAGE_SYSTEM else None
+        if salvaged:
+            log.info("%s: recovered %d decisions from malformed output", what, len(salvaged["links"]))
+            return salvaged
+        log.warning(
+            "%s returned unparseable output (attempt %d): %r", what, attempt + 1,
+            (response.text or "")[-200:],
+        )
     if meter is not None:
         meter.note_failure(what, "unparseable output")
     return None
