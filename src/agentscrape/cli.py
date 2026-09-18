@@ -240,6 +240,66 @@ def sweep() -> None:
     asyncio.run(_go())
 
 
+@app.command("llm-check")
+def llm_check() -> None:
+    """Confirm the model endpoint answers text, image and JSON requests.
+
+    Run this before any crawl: the pipeline now depends on the model for every
+    page, and a misconfigured endpoint aborts sites rather than degrading.
+    """
+    from .llm.provider import get_provider
+
+    async def _go() -> bool:
+        provider = get_provider()
+        ok = True
+        checks = [
+            ("text", settings.text_model, None,
+             'Return ONLY this JSON: {"people": [{"full_name": "Ada Lovelace"}]}'),
+            ("image", settings.llm_model, _solid_png(64, 32, (220, 20, 20)),
+             'What colour is the attached image? Return ONLY JSON: {"colour": "<name>"}'),
+        ]
+        for label, model, image, prompt in checks:
+            try:
+                response = await provider.complete(
+                    system="You answer with strict JSON only.", user=prompt,
+                    image_bytes=image, model=model, max_tokens=200,
+                )
+            except Exception as exc:  # report every failure mode plainly
+                console.print(f"[red]FAIL[/red] {label} ({model}): {type(exc).__name__}: {exc}")
+                ok = False
+                continue
+            parsed = response.json()
+            status = "[green]ok[/green]" if isinstance(parsed, dict) else "[red]FAIL (not JSON)[/red]"
+            ok = ok and isinstance(parsed, dict)
+            console.print(
+                f"{status} {label} ({model}): {response.text.strip()[:200]!r} "
+                f"[dim]{response.usage.input_tokens} in / {response.usage.output_tokens} out[/dim]"
+            )
+        return ok
+
+    console.print(f"endpoint {settings.llm_base_url}")
+    if not asyncio.run(_go()):
+        raise typer.Exit(1)
+
+
+def _solid_png(width: int, height: int, rgb: tuple[int, int, int]) -> bytes:
+    """A tiny solid-colour PNG, so the image check needs no fixture file."""
+    import struct
+    import zlib
+
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        body = kind + data
+        return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body))
+
+    row = b"\x00" + bytes(rgb) * width
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(row * height))
+        + chunk(b"IEND", b"")
+    )
+
+
 @app.command()
 def config() -> None:
     """Print effective configuration."""

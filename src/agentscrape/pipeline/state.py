@@ -38,7 +38,8 @@ class SiteState(TypedDict, total=False):
     error_message: str | None
 
     # --- work list ---
-    candidates: list[dict[str, Any]]   # {url, score, is_known_path}
+    # {url, score (heuristic), priority (model), program, is_known_path}
+    candidates: list[dict[str, Any]]
     cursor: int
     steps_taken: int
     candidates_considered: int
@@ -46,6 +47,15 @@ class SiteState(TypedDict, total=False):
     # Consecutive candidate pages that produced nobody at all. Counting
     # "nobody new" instead would mark every page of an unchanged site barren.
     barren_streak: int
+    # Every link the model has already been asked about, by case-folded hash,
+    # so site-wide navigation is triaged once rather than on every page.
+    triaged: list[str]
+    # Content hashes of pages already read; a duplicate body is not re-read.
+    processed_hashes: list[str]
+    # The institution's programs and whether each has a roster yet:
+    # {name, kind, landing_url, status, people, pages, visited}
+    programs: list[dict[str, Any]]
+    gap_rounds: int
 
     # --- results ---
     records_new: int
@@ -99,6 +109,10 @@ def initial_state(
         candidates_considered=0,
         known_path_hits=0,
         barren_streak=0,
+        triaged=[],
+        processed_hashes=[],
+        programs=[],
+        gap_rounds=0,
         records_new=0,
         records_changed=0,
         records_unchanged=0,

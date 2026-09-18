@@ -32,6 +32,10 @@ class Usage:
         )
 
 
+class LLMUnavailable(RuntimeError):
+    """Too many model calls in a row failed; the site cannot be read by the agent."""
+
+
 @dataclass
 class UsageMeter:
     """Accumulates usage for one scope (a SiteRun) and reports upward.
@@ -43,6 +47,11 @@ class UsageMeter:
     scope: str = "global"
     total: Usage = field(default_factory=Usage)
     calls: int = 0
+    # Every failed model call, and the current run of them. A success resets
+    # the run; too long a run means the endpoint is down, not that one page
+    # was awkward.
+    failures: int = 0
+    consecutive_failures: int = 0
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
     on_usage: object = None  # async callable(Usage) -> None
 
@@ -50,6 +59,7 @@ class UsageMeter:
         async with self._lock:
             self.total = self.total + usage
             self.calls += 1
+            self.consecutive_failures = 0
             snapshot = self.total
         if self.on_usage is not None:
             await self.on_usage(usage)  # type: ignore[operator]
@@ -58,3 +68,14 @@ class UsageMeter:
     @property
     def cost_usd(self) -> float:
         return self.total.cost_usd
+
+    def note_failure(self, what: str, exc: BaseException | str) -> None:
+        """Count a failed model call; raise once failures stop being isolated."""
+        self.failures += 1
+        self.consecutive_failures += 1
+        limit = settings.llm_max_consecutive_failures
+        if limit and self.consecutive_failures >= limit:
+            raise LLMUnavailable(
+                f"{self.consecutive_failures} model calls failed in a row "
+                f"(last: {what}: {exc})"
+            )

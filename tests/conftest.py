@@ -31,6 +31,26 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine  # no
 from agentscrape.db.models import Base  # noqa: E402
 
 
+class OfflineProvider:
+    """Stands in for the model endpoint: every call fails at once, so tests
+    exercise the heuristic fallbacks and never touch the network. Tests about
+    model behaviour install their own fake with `set_provider`."""
+
+    async def complete(self, **kwargs):
+        raise ConnectionError("model endpoint is offline in tests")
+
+
+@pytest.fixture(autouse=True)
+def offline_model(monkeypatch):
+    from agentscrape.config import settings
+    from agentscrape.llm import provider
+
+    monkeypatch.setattr(provider, "_provider", OfflineProvider())
+    # Every call fails here by design; the abort is tested explicitly.
+    monkeypatch.setattr(settings, "llm_max_consecutive_failures", 0)
+    yield
+
+
 @pytest.fixture(scope="session")
 def schema():
     """Create the schema once for the whole test session."""

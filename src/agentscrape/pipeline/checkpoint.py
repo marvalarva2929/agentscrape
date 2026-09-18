@@ -26,7 +26,7 @@ from .state import SiteState
 
 log = logging.getLogger("agentscrape.checkpoint")
 
-CHECKPOINT_VERSION = 1
+CHECKPOINT_VERSION = 2
 
 # Fields worth restoring. Everything else is either configuration (supplied
 # fresh on resume) or derivable.
@@ -34,6 +34,7 @@ CHECKPOINTED_FIELDS = (
     "candidates", "cursor", "steps_taken", "candidates_considered",
     "known_path_hits", "records_new", "records_changed", "records_unchanged",
     "seen_record_ids", "fingerprint", "dominant_specialty", "similarity_score",
+    "barren_streak", "triaged", "processed_hashes", "programs", "gap_rounds",
 )
 
 

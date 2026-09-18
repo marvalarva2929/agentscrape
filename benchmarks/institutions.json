@@ -8,8 +8,8 @@
     "affiliated_domains": [
       "bannerhealth.com"
     ],
-    "needs_browser": false,
-    "step_budget": 1500
+    "needs_browser": true,
+    "step_budget": 5000
   },
   "texas-tech": {
     "name": "Texas Tech University Health Sciences Center",
@@ -18,8 +18,8 @@
     "sheet": "benchmarks/sheets/texas-tech.csv",
     "expected_residents_fellows": 901,
     "affiliated_domains": [],
-    "needs_browser": false,
-    "step_budget": 1500
+    "needs_browser": true,
+    "step_budget": 5000
   },
   "bcm": {
     "name": "Baylor College of Medicine",
@@ -28,8 +28,8 @@
     "sheet": "benchmarks/sheets/bcm.csv",
     "expected_residents_fellows": 1516,
     "affiliated_domains": [],
-    "needs_browser": false,
-    "step_budget": 2500
+    "needs_browser": true,
+    "step_budget": 5000
   },
   "uchicago": {
     "name": "University of Chicago Medicine",
@@ -41,7 +41,7 @@
       "uchicagomedicine.org"
     ],
     "needs_browser": true,
-    "step_budget": 900
+    "step_budget": 5000
   },
   "baylor-scott-white": {
     "name": "Baylor Scott & White Health",
@@ -50,7 +50,7 @@
     "sheet": "benchmarks/sheets/baylor-scott-white.csv",
     "expected_residents_fellows": 918,
     "affiliated_domains": [],
-    "needs_browser": false,
-    "step_budget": 2500
+    "needs_browser": true,
+    "step_budget": 5000
   }
 }

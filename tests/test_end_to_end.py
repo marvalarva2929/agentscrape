@@ -17,6 +17,7 @@ from agentscrape.domain.schemas import RunConfigIn, RunCreate
 from agentscrape.orchestrator.limits import RunLimits
 from agentscrape.orchestrator.pool import RunOrchestrator
 from agentscrape.orchestrator.service import create_run
+from agentscrape.pipeline.checkpoint import CHECKPOINT_VERSION
 
 from .fixture_server import serve
 
@@ -305,7 +306,7 @@ class TestResume:
             # Put the site back in the queue as a restart would, and make
             # discovery fail loudly if it is reached again.
             checkpoint = {
-                "version": 1,
+                "version": CHECKPOINT_VERSION,
                 "candidates": [
                     {"url": f"{site.base}/residents", "score": 9.0, "is_known_path": False},
                     {"url": f"{site.base}/fellows", "score": 9.0, "is_known_path": False},

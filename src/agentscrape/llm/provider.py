@@ -68,6 +68,7 @@ class VisionProvider(ABC):
         image_bytes: bytes | None = None,
         meter: UsageMeter | None = None,
         max_tokens: int | None = None,
+        model: str | None = None,
     ) -> ModelResponse: ...
 
 
@@ -97,6 +98,23 @@ class OpenAICompatibleProvider(VisionProvider):
         image_bytes: bytes | None = None,
         meter: UsageMeter | None = None,
         max_tokens: int | None = None,
+        model: str | None = None,
+    ) -> ModelResponse:
+        async with _gate():
+            return await self._complete(
+                system=system, user=user, image_bytes=image_bytes, meter=meter,
+                max_tokens=max_tokens, model=model or self.model,
+            )
+
+    async def _complete(
+        self,
+        *,
+        system: str,
+        user: str,
+        image_bytes: bytes | None,
+        meter: UsageMeter | None,
+        max_tokens: int | None,
+        model: str,
     ) -> ModelResponse:
         content: list[dict[str, Any]] = [{"type": "text", "text": user}]
         if image_bytes:
@@ -117,14 +135,17 @@ class OpenAICompatibleProvider(VisionProvider):
         for attempt in range(settings.llm_max_retries):
             try:
                 response = await self._client.chat.completions.create(
-                    model=self.model,
+                    model=model,
                     messages=messages,  # type: ignore[arg-type]
                     max_tokens=max_tokens or settings.llm_max_output_tokens,
                     temperature=0.0,  # extraction, not generation
                 )
             except (RateLimitError, APIConnectionError) as exc:
                 last_error = exc
-                delay = min(2**attempt, 15)
+                delay = min(2**attempt, 30)
+                retry_after = _retry_after(exc)
+                if retry_after is not None:
+                    delay = min(max(retry_after, 1.0), 60.0)
                 log.warning(
                     "model call failed (%s), retrying in %ss", type(exc).__name__, delay
                 )
@@ -145,11 +166,37 @@ class OpenAICompatibleProvider(VisionProvider):
             if meter is not None:
                 await meter.record(usage)
             text = (response.choices[0].message.content or "") if response.choices else ""
-            return ModelResponse(text=text, usage=usage, model=self.model)
+            return ModelResponse(text=text, usage=usage, model=model)
 
         raise RuntimeError(
             f"model call failed after {settings.llm_max_retries} attempts: {last_error}"
         )
+
+
+def _retry_after(exc: Exception) -> float | None:
+    """Seconds the server asked us to wait, when it said."""
+    response = getattr(exc, "response", None)
+    headers = getattr(response, "headers", None)
+    if not headers:
+        return None
+    try:
+        return float(headers.get("retry-after"))
+    except (TypeError, ValueError):
+        return None
+
+
+_semaphore: asyncio.Semaphore | None = None
+_semaphore_loop: asyncio.AbstractEventLoop | None = None
+
+
+def _gate() -> asyncio.Semaphore:
+    """One process-wide cap on model calls in flight, bound to the running loop."""
+    global _semaphore, _semaphore_loop
+    loop = asyncio.get_running_loop()
+    if _semaphore is None or _semaphore_loop is not loop:
+        _semaphore = asyncio.Semaphore(max(settings.llm_concurrency, 1))
+        _semaphore_loop = loop
+    return _semaphore
 
 
 _provider: VisionProvider | None = None

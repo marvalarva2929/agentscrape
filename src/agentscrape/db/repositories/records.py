@@ -309,6 +309,18 @@ async def _update_record(
         PersonCategory.UNKNOWN
     ):
         fields = {**fields, "category": record.category}
+    # Within one run, a program roster naming someone a resident or fellow
+    # outranks a generic directory or alumni page that files them otherwise:
+    # the trainee label is the product, and whichever page is read last used to
+    # decide it. Across runs the category may still change (graduation).
+    trainees = (str(PersonCategory.RESIDENT), str(PersonCategory.FELLOW))
+    if (
+        record.category in trainees
+        and fields.get("category") not in trainees
+        and record.last_run_id is not None
+        and record.last_run_id == context.run_id
+    ):
+        fields = {**fields, "category": record.category}
 
     changes = diff_fields(previous, _version_payload(fields))
 

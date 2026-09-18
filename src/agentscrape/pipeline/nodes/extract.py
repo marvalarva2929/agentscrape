@@ -1,11 +1,19 @@
-"""Stage 4 and 5: work the candidate list, extracting and reconciling as we go.
+"""Stage 4 and 5: work the frontier, with the model reading every page.
 
-Cost discipline, cheapest first:
-  1. plain HTML fetch (no browser)  -> sufficient for most static rosters
-  2. rendered page + screenshot     -> only when HTML came up empty on a page
-                                       that looks like a roster
-  3. one interaction step           -> only when the accessibility tree offers
-                                       pagination or a "load more" control
+For each page:
+  1. plain HTML fetch
+  2. the model reads the page text (hidden tabs, mailto addresses, alt text and
+     embedded JSON included) and says who is on it, what kind of page it is,
+     and whether people are hidden or missing
+  3. escalate to a rendered page when the model says the people are not in the
+     HTML, or it counts more people than it could read; activate up to five
+     tabs / "load more" controls it picks from the accessibility tree; read the
+     screenshot with the vision model when text still falls short
+  4. every link on the page (with its anchor text and heading) goes to the
+     model for triage, and the unvisited tail is re-sorted by its priority
+
+The regex extractor still runs on every page, to fill in addresses and as the
+fallback whenever a model call fails.
 
 Reconciliation runs per batch rather than once at the end, so a run that is
 stopped mid-site still has valid, persisted partial results.
@@ -15,18 +23,21 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from ...config import settings
-from ...db.enums import ExtractionMethod, FetchMode
+from ...db.enums import ExtractionMethod, FetchMode, PersonCategory
 from ...db.repositories.records import ExtractionContext, lock_site, reconcile_people
 from ...db.repositories.sites import claim_url, record_path_outcome, update_visit
-from ...discovery.scoring import rank_candidates
-from ...discovery.sitemap import extract_links
+from ...discovery.sitemap import LinkContext, extract_link_contexts
 from ...extraction.html_people import extract_people, page_looks_thin
 from ...extraction.person import ExtractedPerson
-from ...extraction.vision import extract_with_vision
+from ...extraction.text import html_to_model_text
 from ...llm.navigation import decide_navigation
+from ...llm.planner import FOUND, PENDING, match_program
+from ...llm.reader import PageReading, combine_with_regex, fold, merge_people, read_page
+from ...llm.triage import triage_links
 from ...orchestrator.events import EventType
 from ...storage.artifacts import (
     png_dimensions,
@@ -41,14 +52,34 @@ from ..state import SiteState
 
 log = logging.getLogger("agentscrape.pipeline.extract")
 
-# How many candidates to pull per loop iteration. Cheap fetches run concurrently
-# inside a batch; any browser work in the batch is serialized afterwards.
-BATCH_SIZE = 8
-# A link has to look like a roster to earn a place in the work list. Sitemap
-# discovery can afford a floor of 1.0 because it runs once; this runs on every
-# page fetched, so a low floor would let a department's own navigation refill
-# the list faster than the crawl drains it.
-FRONTIER_MIN_SCORE = 6.0
+# Pages per loop iteration. Fetches and model reads in a batch run concurrently;
+# browser work is serialized on the site's one browser context.
+BATCH_SIZE = 16
+_TRAINEES = (PersonCategory.RESIDENT, PersonCategory.FELLOW)
+# How many visited pages to remember per program for gap filling.
+_PROGRAM_VISITS_KEPT = 60
+
+
+@dataclass
+class PageOutcome:
+    url: str
+    people: list[ExtractedPerson] = field(default_factory=list)
+    fetch_mode: FetchMode = FetchMode.HTML
+    screenshot_rel: str | None = None
+    shot_size: tuple[int | None, int | None] = (None, None)
+    field_locations: dict[str, dict[str, int]] = field(default_factory=dict)
+    title: str = ""
+    links: list[LinkContext] = field(default_factory=list)
+    reading: PageReading | None = None
+    steps: int = 1
+    duplicate: bool = False
+
+
+def link_key(url: str) -> str:
+    """Identity for "have we already considered this link". Case-folded, because
+    CMSs serve the same page under several capitalizations of its path and
+    fetching each one spent Baylor Scott & White's budget three times over."""
+    return url_hash(url.lower())[:20]
 
 
 async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
@@ -76,83 +107,54 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
         return {**state, "cursor": cursor + len(batch)}
 
     results = await deps.fetcher.get_many([c["url"] for c in claimed])
-
     allowed = set(
         state.get("allowed_domains") or [registrable_domain(state["root_domain"])]
     )
-    new = changed = unchanged = missing_total = 0
-    discovered_links: dict[str, None] = {}
-    preferred_links: list[str] = []
+    processed_hashes = set(state.get("processed_hashes", []))
+
+    outcomes = await asyncio.gather(*(
+        _process_page(deps, state, candidate, result, processed_hashes)
+        for candidate, result in zip(claimed, results, strict=True)
+    ))
+
+    new = changed = unchanged = 0
     known_hits = state.get("known_path_hits", 0)
     barren_streak = state.get("barren_streak", 0)
     seen_ids = list(state.get("seen_record_ids", []))
     fingerprint = dict(state.get("fingerprint", {}))
+    programs = [dict(p) for p in state.get("programs", [])]
     steps_used = 0
+    new_links: dict[str, dict] = {}
 
-    for candidate, result in zip(claimed, results, strict=True):
+    for candidate, result, outcome in zip(claimed, results, outcomes, strict=True):
         if deps.stop_requested():
             log.info("stop requested; halting extraction for %s", state["root_domain"])
             break
-
-        steps_used += 1
-        url = result.final_url or candidate["url"]
-        people: list[ExtractedPerson] = []
-        fetch_mode = FetchMode.HTML
-        screenshot_rel: str | None = None
-        shot_size: tuple[int | None, int | None] = (None, None)
-        field_locations: dict[str, dict[str, int]] = {}
-        page_title = ""
-
+        steps_used += outcome.steps
+        url = outcome.url
         if result.ok and result.is_html:
-            page_title = _title_of(result.text)
-            people = extract_people(result.text, page_title=page_title, url=url)
-            # Discovery is one-shot and sitemap-driven, so it never sees a page
-            # that is only reachable by following a link. Harvesting links from
-            # the pages we fetch anyway turns the ranked list into a frontier:
-            # a programme landing page leads to its own roster.
-            discovered_links.update(
-                dict.fromkeys(extract_links(result.text, url, allowed_domains=allowed))
-            )
-
-        should_render, why = (
-            page_looks_thin(result.text, result.text, len(people))
-            if result.ok
-            else (True, f"fetch failed: {result.error}")
-        )
-
-        if should_render and deps.can_render and steps_taken + steps_used < budget:
-            steps_used += 1
-            log.info("escalating to browser for %s (%s)", url, why)
-            rendered = await _render_and_extract(
-                deps, url, state, candidate, why
-            )
-            if rendered is not None:
-                (
-                    people, fetch_mode, screenshot_rel, field_locations,
-                    page_title, shot_size, navigation_links,
-                ) = rendered
-                preferred_links.extend(navigation_links)
-                discovered_links.update(dict.fromkeys(navigation_links))
+            processed_hashes.add(result.content_hash)
 
         records_here = 0
-        if people:
+        trainees_here = sum(1 for p in outcome.people if p.category in _TRAINEES)
+        if outcome.people:
             context = ExtractionContext(
                 site_id=state["site_id"],
                 site_host=state["root_domain"],
                 source_url=url,
-                page_title=page_title or None,
+                page_title=outcome.title or None,
                 extraction_method=(
                     ExtractionMethod.KNOWN_PATH
                     if candidate.get("is_known_path")
                     else ExtractionMethod.DISCOVERY
                 ),
-                fetch_mode=fetch_mode,
-                screenshot_path=screenshot_rel,
-                screenshot_expires_at=screenshot_expiry() if screenshot_rel else None,
-                screenshot_width=shot_size[0],
-                screenshot_height=shot_size[1],
-                field_locations=field_locations,
-                page_score=float(candidate.get("score", 0.0)),
+                fetch_mode=outcome.fetch_mode,
+                screenshot_path=outcome.screenshot_rel,
+                screenshot_expires_at=screenshot_expiry() if outcome.screenshot_rel else None,
+                screenshot_width=outcome.shot_size[0],
+                screenshot_height=outcome.shot_size[1],
+                field_locations=outcome.field_locations,
+                page_score=float(candidate.get("priority", candidate.get("score", 0.0))),
                 run_id=state.get("run_id"),
                 site_run_id=state["site_run_id"],
                 captured_at=datetime.now(UTC),
@@ -161,20 +163,19 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
             async with deps.sessionmaker() as session:
                 # Sites run in parallel; one site's reconciliation never does.
                 await lock_site(session, state["site_id"])
-                outcome = await reconcile_people(session, people, context)
+                reconciled = await reconcile_people(session, outcome.people, context)
                 await session.commit()
 
-            new += outcome.new
-            changed += outcome.changed
-            unchanged += outcome.unchanged
-            seen_ids.extend(outcome.record_ids)
-            records_here = outcome.total_seen
+            new += reconciled.new
+            changed += reconciled.changed
+            unchanged += reconciled.unchanged
+            seen_ids.extend(reconciled.record_ids)
+            records_here = reconciled.total_seen
 
-            # Fingerprint only the pages that actually produced records: those
-            # are the ones the next run's skip probe will re-fetch, and the two
-            # sets have to line up for the cheap comparison to ever match. The
-            # hash is of the plain HTTP body even when the records came from a
-            # render, because the probe is plain HTTP too.
+            # Fingerprint only the pages that produced records: those are the
+            # ones the next run's skip probe re-fetches. The hash is of the
+            # plain HTTP body even when records came from a render, because the
+            # probe is plain HTTP too.
             if result.ok and result.is_html:
                 fingerprint[canonicalize(url) or url] = result.content_hash
 
@@ -186,28 +187,25 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
                     url=url, records=records_here,
                 )
 
-        # Track how long we have gone without finding anybody. Candidates are
-        # ranked, so a long barren stretch means the productive pages are behind
-        # us. This counts people *found*, not people new or changed: a re-scrape
-        # of a site whose rosters have not moved yields nothing new on every
-        # page, and counting that as barren stopped the second run of a site
-        # eight pages in, before it reached anything it had not seen.
-        #
-        # A page we could not read is not evidence that the site has stopped
-        # giving — it is evidence we were blocked. Baylor Scott & White starts
-        # returning 403 under load, and counting those as barren ended the crawl
-        # after 120 of its 1,500 steps with most of its rosters unvisited.
+        _update_programs(programs, candidate, outcome, trainees_here)
+
+        # Last-resort stop signal only; program coverage and link priority are
+        # the real ones. A page we could not read is evidence of blocking, not
+        # of the site running dry, so it does not count.
         if records_here:
             barren_streak = 0
-        elif result.ok:
+        elif result.ok and not outcome.duplicate:
             barren_streak += 1
+
+        for link in outcome.links:
+            new_links.setdefault(link.url, link.as_dict())
 
         async with deps.sessionmaker() as session:
             await update_visit(
                 session,
                 site_run_id=state["site_run_id"],
                 url=candidate["url"],
-                fetch_mode=str(fetch_mode),
+                fetch_mode=str(outcome.fetch_mode),
                 http_status=result.status,
                 content_hash=result.content_hash if result.ok else None,
                 records_yielded=records_here,
@@ -227,17 +225,18 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
             site_id=state["site_id"],
             site_run_id=state["site_run_id"],
             url=url,
-            action=f"fetch:{fetch_mode}",
+            action=f"fetch:{outcome.fetch_mode}",
             records=records_here,
             screenshot_url=(
-                f"/api/v1/artifacts/{screenshot_rel}" if screenshot_rel else None
+                f"/api/v1/artifacts/{outcome.screenshot_rel}" if outcome.screenshot_rel else None
             ),
             steps_taken=steps_taken + steps_used,
         )
 
-    candidates = _merge_frontier(
-        candidates, cursor + len(batch), discovered_links,
-        allowed=allowed, preferred=preferred_links,
+    triaged = set(state.get("triaged", []))
+    candidates, triaged = await _grow_frontier(
+        deps, state, candidates, cursor + len(batch), new_links,
+        allowed=allowed, triaged=triaged, programs=programs,
     )
 
     updated: SiteState = {
@@ -248,11 +247,13 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
         "records_new": state.get("records_new", 0) + new,
         "records_changed": state.get("records_changed", 0) + changed,
         "records_unchanged": state.get("records_unchanged", 0) + unchanged,
-        "records_missing": state.get("records_missing", 0) + missing_total,
         "seen_record_ids": seen_ids,
         "known_path_hits": known_hits,
         "barren_streak": barren_streak,
         "fingerprint": fingerprint,
+        "programs": programs,
+        "triaged": sorted(triaged),
+        "processed_hashes": sorted(processed_hashes),
     }
 
     # Checkpoint after every batch, so an interrupted site resumes here instead
@@ -264,105 +265,73 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
     return updated
 
 
-def _merge_frontier(
-    candidates: list[dict],
-    cursor: int,
-    links: dict[str, None],
-    *,
-    allowed: set[str] | frozenset[str],
-    preferred: list[str] | tuple[str, ...] = (),
-) -> list[dict]:
-    """Fold newly seen links into the part of the work list not yet visited.
+async def _process_page(
+    deps: PipelineDeps, state: SiteState, candidate: dict, result, processed_hashes: set[str]
+) -> PageOutcome:
+    url = result.final_url or candidate["url"]
+    outcome = PageOutcome(url=url)
+    allowed = set(state.get("allowed_domains") or [registrable_domain(state["root_domain"])])
 
-    Only the tail is touched, so the caller's cursor stays valid. The tail is
-    re-sorted by score, which is what lets a roster found on page 3 be visited
-    before the eighty faculty pages already queued behind it. Everything already
-    visited keeps its place and is never re-scored.
-    """
-    if not links:
-        return candidates
-
-    known = {c["url"] for c in candidates}
-    preferred_urls: list[str] = []
-    for url in preferred:
-        canonical = canonicalize(url)
-        if (
-            canonical
-            and canonical not in preferred_urls
-            and in_scope(host_of(canonical), allowed)
-        ):
-            preferred_urls.append(canonical)
-    preferred_set = set(preferred_urls)
-    fresh = [
-        {"url": scored.url, "score": scored.score, "is_known_path": False}
-        for scored in rank_candidates(
-            [u for u in links if u not in known and u not in preferred_set],
-            limit=settings.max_candidates,
-            min_score=FRONTIER_MIN_SCORE,
-        )
-        if in_scope(host_of(scored.url), allowed)
-    ]
-    model_fresh = [
-        {
-            "url": url,
-            # Kept for the existing candidate schema; semantic precedence is
-            # represented explicitly by llm_selected, not a fabricated score.
-            "score": 0.0,
-            "is_known_path": False,
-            "llm_selected": True,
-        }
-        for url in preferred_urls
-        if url not in known
-    ]
-    if not fresh and not model_fresh and not preferred_set.intersection(known):
-        return candidates
-
-    head, tail = candidates[:cursor], candidates[cursor:]
-    promoted = []
-    tail_by_url = {c["url"]: c for c in tail}
-    for url in preferred_urls:
-        existing = tail_by_url.pop(url, None)
-        if existing is not None:
-            promoted.append({**existing, "llm_selected": True})
-    tail = list(tail_by_url.values())
-    room = max(settings.max_candidates - len(candidates), 0)
-    if room <= 0:
-        # The list is already at its cap. A new page still displaces a queued one
-        # when it scores higher, so a late discovery is not simply lost.
-        merged = [
-            *promoted,
-            *model_fresh,
-            *sorted(
-                tail + fresh,
-                key=lambda c: (not c.get("llm_selected", False), -c["score"]),
-            ),
-        ]
-        merged = merged[: max(len(candidates) - len(head), 0)]
+    if result.ok and result.is_html:
+        if result.content_hash in processed_hashes:
+            # Same body under another URL (case variants, mirrors, redirects).
+            # Everything on it was already read; it costs no step.
+            outcome.duplicate = True
+            outcome.steps = 0
+            return outcome
+        outcome.title = _title_of(result.text)
+        outcome.links = extract_link_contexts(result.text, url, allowed_domains=allowed)
+        text = html_to_model_text(result.text)
+        regex_people = extract_people(result.text, page_title=outcome.title, url=url)
+        reading = await read_page(url=url, title=outcome.title, text=text, meter=deps.meter)
+        outcome.reading = reading
+        if reading.ok:
+            outcome.people = combine_with_regex(reading.people, regex_people, fold(text))
+            should_render = reading.needs_render or reading.looks_incomplete
+            why = reading.render_reason or reading.hidden_content or (
+                f"model counted {reading.expected_people_count}, read {len(reading.people)}"
+            )
+        else:
+            outcome.people = regex_people
+            should_render, why = page_looks_thin(result.text, result.text, len(regex_people))
     else:
-        additions = [*model_fresh, *fresh]
-        merged = [
-            *promoted,
-            *additions[:room],
-            *sorted(
-                tail,
-                key=lambda c: (not c.get("llm_selected", False), -c["score"]),
-            ),
-        ]
-    queued = {c["url"] for c in merged}
-    admitted = sum(
-        1 for c in [*model_fresh, *fresh] if c["url"] in queued
-    )
-    log.info(
-        "frontier: %d of %d new links queued (work list now %d, %d unvisited)",
-        admitted, len(fresh) + len(model_fresh), len(head) + len(merged), len(merged),
-    )
-    return [*head, *merged]
+        should_render, why = True, f"fetch failed: {result.error or result.status}"
+
+    budget_left = state["step_budget"] - state.get("steps_taken", 0)
+    if should_render and deps.can_render and budget_left > 0:
+        outcome.steps += 1
+        log.info("escalating to browser for %s (%s)", url, why)
+        async with _render_lock(deps):
+            rendered = await _render_and_extract(deps, url, state, outcome)
+        if rendered is not None:
+            outcome.links = _merge_links(outcome.links, rendered.links)
+    return outcome
+
+
+def _render_lock(deps: PipelineDeps) -> asyncio.Lock:
+    """One browser context per site, so browser work within a batch is serial."""
+    lock = getattr(deps, "_render_lock", None)
+    if lock is None:
+        lock = asyncio.Lock()
+        deps._render_lock = lock  # type: ignore[attr-defined]
+    return lock
+
+
+def _merge_links(first: list[LinkContext], second: list[LinkContext]) -> list[LinkContext]:
+    seen = {link.url for link in first}
+    return [*first, *(link for link in second if link.url not in seen)]
+
+
+@dataclass
+class _Rendered:
+    links: list[LinkContext]
 
 
 async def _render_and_extract(
-    deps: PipelineDeps, url: str, state: SiteState, candidate: dict, why: str
-):
-    """Browser escalation: render, screenshot, read with vision, measure boxes."""
+    deps: PipelineDeps, url: str, state: SiteState, outcome: PageOutcome
+) -> _Rendered | None:
+    """Browser escalation: render, read, work hidden controls, read the
+    screenshot if text still falls short, then measure field boxes."""
     from ...browser.renderer import click_by_accessible_name, render_page
 
     try:
@@ -377,45 +346,65 @@ async def _render_and_extract(
         log.warning("render failed for %s: %s", url, rendered.error)
         return None
 
-    people = extract_people(rendered.html, page_title=rendered.title, url=url)
-
-    decision = await decide_navigation(
-        url=rendered.final_url,
-        title=rendered.title,
-        text=rendered.text,
-        links=rendered.links,
-        controls=rendered.controls,
-        screenshot=rendered.screenshot,
-        meter=deps.meter,
+    allowed = set(state.get("allowed_domains") or [registrable_domain(state["root_domain"])])
+    links = extract_link_contexts(rendered.html, rendered.final_url, allowed_domains=allowed)
+    text = html_to_model_text(rendered.html)
+    folded = fold(text + "\n" + (rendered.text or ""))
+    regex_people = extract_people(rendered.html, page_title=rendered.title, url=url)
+    reading = await read_page(url=url, title=rendered.title, text=text, meter=deps.meter)
+    people = (
+        combine_with_regex(reading.people, regex_people, folded) if reading.ok else regex_people
     )
-    if decision.reason:
-        log.info(
-            "navigation decision for %s: %s (%s)",
-            url, decision.page_type, decision.reason,
-        )
+    people = merge_people(people, outcome.people)
 
-    # The model may choose one supplied accessibility target. It never produces
-    # pixel coordinates, and the decision is validated against the real controls.
-    if decision.control:
-        control = decision.control
-        log.info("interacting with %r on %s", control["name"], url)
-        after = await click_by_accessible_name(
-            deps.browser_context, url, control["role"], control["name"]
-        )
-        if after.ok:
-            after_people = extract_people(after.html, page_title=after.title, url=url)
-            if after_people:
-                people = after_people
-
-    if not people:
-        # Vision reads what the DOM does not expose: contacts published as images,
-        # or layout that carries meaning.
-        people = await extract_with_vision(
-            url=url, title=rendered.title, text=rendered.text,
+    # Tabs, accordions, "load more": the model picks from the real
+    # accessibility controls, never pixel coordinates.
+    if rendered.controls and (
+        reading.hidden_content or reading.looks_incomplete or not reading.ok
+    ):
+        decision = await decide_navigation(
+            url=rendered.final_url, title=rendered.title, text=rendered.text,
+            links=rendered.links, controls=rendered.controls,
             screenshot=rendered.screenshot, meter=deps.meter,
         )
+        if decision.reason:
+            log.info("navigation for %s: %s (%s)", url, decision.page_type, decision.reason)
+        for control in decision.controls:
+            log.info("activating %s %r on %s", control["role"], control["name"], url)
+            after = await click_by_accessible_name(
+                deps.browser_context, url, control["role"], control["name"]
+            )
+            if not after.ok:
+                continue
+            after_text = html_to_model_text(after.html)
+            after_reading = await read_page(
+                url=url, title=after.title, text=after_text, meter=deps.meter
+            )
+            after_regex = extract_people(after.html, page_title=after.title, url=url)
+            people = merge_people(
+                people,
+                combine_with_regex(after_reading.people, after_regex, fold(after_text))
+                if after_reading.ok else after_regex,
+            )
+            links = _merge_links(
+                links, extract_link_contexts(after.html, after.final_url, allowed_domains=allowed)
+            )
 
-    # Measure where each value sits, from the real DOM rather than the model.
+    # Contacts published as images, or layout that carries the meaning: read
+    # the screenshot itself when the text still falls short of what the page
+    # shows.
+    expected = max(
+        reading.expected_people_count,
+        outcome.reading.expected_people_count if outcome.reading else 0,
+    )
+    if rendered.screenshot and (not people or len(people) < expected * 0.75):
+        vision = await read_page(
+            url=url, title=rendered.title, text=rendered.text or text,
+            screenshot=rendered.screenshot, meter=deps.meter,
+        )
+        if vision.ok:
+            people = merge_people(people, vision.people)
+
     field_locations = rendered.field_locations
     hints = [h for person in people for h in person.locate_hints]
     if hints and not field_locations:
@@ -424,22 +413,142 @@ async def _render_and_extract(
         )
         field_locations = located.field_locations if located.ok else {}
 
-    screenshot_rel = None
-    shot_size: tuple[int | None, int | None] = (None, None)
     if rendered.screenshot:
         path = save_screenshot(
             rendered.screenshot,
             site_run_id=state["site_run_id"],
             url_hash=url_hash(url),
         )
-        screenshot_rel = relative_path(path)
+        outcome.screenshot_rel = relative_path(path)
         # Needed to place the field boxes, which are in screenshot pixels.
-        shot_size = png_dimensions(rendered.screenshot)
+        outcome.shot_size = png_dimensions(rendered.screenshot)
 
-    return (
-        people, FetchMode.BOTH, screenshot_rel, field_locations, rendered.title,
-        shot_size, list(decision.visit_urls),
+    outcome.people = people
+    outcome.fetch_mode = FetchMode.BOTH
+    outcome.field_locations = field_locations
+    outcome.title = rendered.title or outcome.title
+    if reading.ok and (
+        outcome.reading is None
+        or not outcome.reading.ok
+        or len(reading.people) >= len(outcome.reading.people)
+    ):
+        outcome.reading = reading
+    return _Rendered(links=links)
+
+
+def _update_programs(
+    programs: list[dict], candidate: dict, outcome: PageOutcome, trainees: int
+) -> None:
+    """Attribute the page to a program and mark the program covered once a
+    current trainee roster with people on it has been read."""
+    if not programs or outcome.duplicate:
+        return
+    reading = outcome.reading
+    program = match_program(
+        programs,
+        (reading.program if reading and reading.program else None) or candidate.get("program"),
+        outcome.url,
     )
+    if program is None:
+        return
+    program["pages"] = program.get("pages", 0) + 1
+    visits = program.setdefault("visited", [])
+    if len(visits) < _PROGRAM_VISITS_KEPT:
+        visits.append({"url": outcome.url, "records": len(outcome.people), "trainees": trainees})
+    if trainees and (reading is None or reading.is_current_trainee_roster or trainees >= 3):
+        program["people"] = program.get("people", 0) + trainees
+        if program.get("status") == PENDING:
+            program["status"] = FOUND
+            log.info("program covered: %s (%d trainees on %s)", program["name"], trainees, outcome.url)
+
+
+def pending_program_names(programs: list[dict]) -> list[str]:
+    return [p["name"] for p in programs if p.get("status") == PENDING]
+
+
+async def _grow_frontier(
+    deps: PipelineDeps,
+    state: SiteState,
+    candidates: list[dict],
+    cursor: int,
+    links: dict[str, dict],
+    *,
+    allowed: set[str],
+    triaged: set[str],
+    programs: list[dict],
+) -> tuple[list[dict], set[str]]:
+    """Send links not yet considered to the model, and queue what it keeps."""
+    known = {link_key(c["url"]) for c in candidates}
+    fresh: list[dict] = []
+    for url, link in links.items():
+        canonical = canonicalize(url)
+        if not canonical or not in_scope(host_of(canonical), allowed):
+            continue
+        key = link_key(canonical)
+        if key in triaged or key in known:
+            continue
+        triaged.add(key)
+        fresh.append({**link, "url": canonical})
+    if not fresh:
+        return candidates, triaged
+
+    pending = pending_program_names(programs)
+    context = (
+        "Programs still missing a roster: " + "; ".join(pending[:80]) if pending else ""
+    )
+    decisions = await triage_links(
+        fresh, source=f"pages on {state['root_domain']}", context=context, meter=deps.meter,
+    )
+    additions = [
+        {
+            "url": d.url, "score": d.heuristic, "priority": d.priority,
+            "program": d.program, "is_known_path": False,
+        }
+        for d in decisions
+        if not d.skipped and not _is_asset(d.heuristic)
+    ]
+    return merge_frontier(candidates, cursor, additions), triaged
+
+
+def _is_asset(heuristic: float) -> bool:
+    # score_url marks non-HTML files and unfetchable URLs with -100.
+    return heuristic <= -100
+
+
+def merge_frontier(candidates: list[dict], cursor: int, additions: list[dict]) -> list[dict]:
+    """Fold new candidates into the unvisited tail and re-sort it by priority.
+
+    Only the tail is touched, so the caller's cursor stays valid. Everything
+    already visited keeps its place.
+    """
+    if not additions:
+        return candidates
+    head, tail = candidates[:cursor], candidates[cursor:]
+    by_key = {link_key(c["url"]): c for c in tail}
+    visited = {link_key(c["url"]) for c in head}
+    for addition in additions:
+        key = link_key(addition["url"])
+        if key in visited:
+            continue
+        existing = by_key.get(key)
+        if existing is None or addition.get("priority", 0) > existing.get("priority", 0):
+            by_key[key] = {
+                **(existing or {}),
+                **{k: v for k, v in addition.items() if v is not None},
+            }
+    merged = sorted(
+        by_key.values(),
+        key=lambda c: (-float(c.get("priority", 0.0)), -float(c.get("score", 0.0))),
+    )
+    room = max(settings.max_candidates - len(head), 0)
+    if len(merged) > room:
+        log.info("frontier at capacity; dropping %d lowest-priority links", len(merged) - room)
+        merged = merged[:room]
+    log.info(
+        "frontier: %d links added, %d unvisited (top priority %.0f)",
+        len(additions), len(merged), merged[0].get("priority", 0) if merged else 0,
+    )
+    return [*head, *merged]
 
 
 def _title_of(html: str) -> str:

@@ -22,6 +22,13 @@ inventing trainees; far below means we are missing rosters.
     uv run python scripts/benchmark.py              # every institution
     uv run python scripts/benchmark.py bcm uchicago # named ones
     uv run python scripts/benchmark.py --misses bcm # list who we missed
+    uv run python scripts/benchmark.py --clean      # also score a cleaned sheet
+
+`--clean` scores against the sheet with its own noise removed: "Headshot of X"
+rows (the human scraper copied alt text) are read as X, and a row repeating a
+person already on the sheet (same address, or same name with no address) is
+counted once. Both numbers are printed so a cleaner sheet can never pass for a
+better crawler.
 """
 
 from __future__ import annotations
@@ -134,12 +141,31 @@ async def scraped_records(host: str) -> list[dict[str, str]]:
     ]
 
 
-def score_one(slug: str, cfg: dict, records: list[dict]) -> Score:
+_HEADSHOT = re.compile(r"^\s*(head\s*shot|photo|image|picture)\s+of\s+", re.IGNORECASE)
+
+
+def clean_rows(rows: list[dict]) -> list[dict]:
+    """The sheet's own duplicates and alt-text artifacts removed."""
+    out, seen = [], set()
+    for row in rows:
+        name = _HEADSHOT.sub("", row.get("Full Name") or "").strip()
+        email = (row.get("Email") or "").strip().lower()
+        key = ("email", email) if email else ("name", first_last(name))
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({**row, "Full Name": name})
+    return out
+
+
+def score_one(slug: str, cfg: dict, records: list[dict], *, clean: bool = False) -> Score:
     target_rows = [
         r
         for r in csv.DictReader((ROOT / cfg["sheet"]).open(newline=""))
         if (r.get("Full Name") or "").strip()
     ]
+    if clean:
+        target_rows = clean_rows(target_rows)
     out = Score(
         slug=slug,
         name=cfg["name"],
@@ -235,6 +261,10 @@ def main() -> int:
     parser.add_argument("slugs", nargs="*", help="institutions to score (default: all)")
     parser.add_argument("--misses", action="store_true", help="list the failures")
     parser.add_argument("--limit", type=int, default=15)
+    parser.add_argument(
+        "--clean", action="store_true",
+        help="also score against the sheet with its duplicate and alt-text rows removed",
+    )
     args = parser.parse_args()
 
     config = json.loads(CONFIG.read_text())
@@ -243,13 +273,18 @@ def main() -> int:
     if unknown:
         raise SystemExit(f"unknown institution(s): {', '.join(unknown)}")
 
-    scores = []
+    scores, cleaned = [], []
     for slug in slugs:
         cfg = config[slug]
         records = asyncio.run(scraped_records(cfg["host"]))
         scores.append(score_one(slug, cfg, records))
+        cleaned.append(score_one(slug, cfg, records, clean=True))
 
+    print("raw sheet")
     print_scoreboard(scores)
+    if args.clean:
+        print("\ncleaned sheet (duplicates and 'Headshot of' rows removed)")
+        print_scoreboard(cleaned)
     if args.misses:
         for s in scores:
             print_failures(s, args.limit)

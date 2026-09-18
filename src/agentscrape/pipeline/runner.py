@@ -20,7 +20,7 @@ from ..db.enums import SiteRunStatus
 from ..db.models import SiteRun
 from ..db.repositories.sites import upsert_site
 from ..db.session import get_sessionmaker
-from ..llm.usage import UsageMeter
+from ..llm.usage import LLMUnavailable, UsageMeter
 from ..orchestrator.events import EventEmitter, EventType, NullEmitter
 from ..urls import canonicalize, host_of
 from .deps import PipelineDeps
@@ -34,7 +34,9 @@ log = logging.getLogger("agentscrape.runner")
 def _recursion_limit(step_budget: int) -> int:
     from .nodes.extract import BATCH_SIZE
 
-    return max(25, (step_budget // max(BATCH_SIZE, 1)) * 2 + 20)
+    # Duplicates and already-claimed pages cost no step, and gap filling adds
+    # loops, so the node count is not bounded by budget / batch alone.
+    return max(200, (step_budget // max(BATCH_SIZE, 1)) * 6 + 400)
 
 
 async def ensure_site_run(
@@ -149,6 +151,11 @@ async def run_site(
         )
         return final
 
+    except LLMUnavailable as exc:
+        log.error("site %s aborted: model unavailable (%s)", domain, exc)
+        return await _fail(
+            state, site_run_id, "LLM_UNAVAILABLE", str(exc)[:500], emitter, meter,
+        )
     except TimeoutError:
         return await _fail(
             state, site_run_id, "SITE_TIMEOUT",

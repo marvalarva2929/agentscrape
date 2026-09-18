@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from html import unescape
 from xml.etree import ElementTree
 
@@ -175,3 +175,84 @@ def extract_links(
             continue
         out.setdefault(url, None)
     return list(out)
+
+
+@dataclass(frozen=True)
+class LinkContext:
+    """A link as a person reading the page sees it, not just its href.
+
+    The anchor text and the heading it sits under are what tell "Meet our
+    interns" apart from "Apply now"; the URL alone often says neither.
+    """
+
+    url: str
+    text: str = ""
+    heading: str = ""
+    in_nav: bool = False
+
+    def as_dict(self) -> dict:
+        return asdict(self)
+
+
+_CHROME_TAGS = frozenset({"nav", "header", "footer"})
+_HEADING_TAGS = frozenset({"h1", "h2", "h3", "h4", "h5", "h6"})
+_SPACE = re.compile(r"\s+")
+
+
+def extract_link_contexts(
+    html: str,
+    base_url: str,
+    *,
+    allowed_domains: set[str] | frozenset[str] | None = None,
+) -> list[LinkContext]:
+    """Every in-scope anchor with its text, nearest preceding heading, and
+    whether it sits in site chrome. Hidden tabs and menus are included: a link
+    that is not painted is still a link."""
+    from selectolax.parser import HTMLParser
+
+    root_host = host_of(base_url)
+    allowed = allowed_domains or {registrable_domain(root_host)}
+    tree = HTMLParser(html or "")
+    root = tree.body or tree.root
+    if root is None:
+        return []
+
+    out: dict[str, LinkContext] = {}
+    heading = ""
+    # (node, chrome_depth) in document order, iteratively: CMS markup nests too
+    # deeply for recursion.
+    stack: list[tuple[object, bool]] = [(root, False)]
+    while stack:
+        node, in_chrome = stack.pop()
+        tag = node.tag  # type: ignore[attr-defined]
+        if tag in ("script", "style", "noscript", "svg", "-text", "-comment"):
+            continue
+        if tag in _HEADING_TAGS:
+            heading = _SPACE.sub(" ", node.text(separator=" ")).strip()[:120]  # type: ignore[attr-defined]
+        if tag == "a":
+            raw_href = node.attributes.get("href") or ""  # type: ignore[attr-defined]
+            url = canonicalize(unescape(raw_href.strip()), base=base_url) if raw_href else None
+            if url and in_scope(host_of(url), allowed):
+                text = _SPACE.sub(" ", node.text(separator=" ")).strip()  # type: ignore[attr-defined]
+                if not text:
+                    img = node.css_first("img")  # type: ignore[attr-defined]
+                    text = (
+                        node.attributes.get("aria-label")  # type: ignore[attr-defined]
+                        or node.attributes.get("title")  # type: ignore[attr-defined]
+                        or (img.attributes.get("alt") if img is not None else "")
+                        or ""
+                    ).strip()
+                existing = out.get(url)
+                # Keep the most informative sighting: body text beats a menu entry.
+                if existing is None or (existing.in_nav and not in_chrome) or (
+                    not existing.text and text
+                ):
+                    out[url] = LinkContext(
+                        url=url, text=text[:160], heading=heading, in_nav=in_chrome
+                    )
+            continue
+        child_chrome = in_chrome or tag in _CHROME_TAGS
+        children = list(node.iter())  # type: ignore[attr-defined]
+        for child in reversed(children):
+            stack.append((child, child_chrome))
+    return list(out.values())

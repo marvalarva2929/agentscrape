@@ -33,14 +33,25 @@ class Settings(BaseSettings):
     db_max_overflow: int = 10
 
     # --- model provider (OpenAI-compatible) -----------------------------
-    llm_base_url: str = "http://localhost:8000/v1"
+    llm_base_url: str = "https://router.huggingface.co/v1"
     llm_api_key: str = "not-needed"
-    llm_model: str = "Qwen/Qwen2.5-VL-72B-Instruct"
+    llm_model: str = "Qwen/Qwen3-VL-235B-A22B-Instruct"
     llm_price_input_per_mtok: float = 0.30
     llm_price_output_per_mtok: float = 0.90
-    llm_timeout_seconds: int = 120
-    llm_max_retries: int = 3
-    llm_max_output_tokens: int = 4096
+    # Text-only calls (page reading, link triage, planning) can use a stronger
+    # or longer-context model than the vision one. Blank means `llm_model`.
+    llm_text_model: str = ""
+    llm_timeout_seconds: int = 180
+    llm_max_retries: int = 6
+    # A 100-person roster is several thousand tokens of JSON; 4096 truncated it.
+    llm_max_output_tokens: int = 16_000
+    # Model calls in flight at once, across every site in the process.
+    llm_concurrency: int = 16
+    # This many model failures in a row abort the site. A broken endpoint used
+    # to degrade silently into a heuristic-only crawl that looked like success.
+    llm_max_consecutive_failures: int = 20
+    # Page text is read in chunks of this many characters.
+    llm_page_chunk_chars: int = 40_000
 
     # --- crawling -------------------------------------------------------
     user_agent: str = "agentscrape/0.1 (+contact: ops@example.com)"
@@ -52,8 +63,10 @@ class Settings(BaseSettings):
     max_html_bytes: int = 4_000_000
 
     # --- discovery ------------------------------------------------------
-    max_candidates: int = 2_500
-    discovery_timeout_seconds: int = 180
+    # Only a memory bound now: the model, not a count, decides what is worth
+    # visiting.
+    max_candidates: int = 20_000
+    discovery_timeout_seconds: int = 600
     discovery_source_timeout_seconds: int = 60
     enable_crt_sh: bool = True
     crt_sh_timeout_seconds: int = 30
@@ -73,18 +86,18 @@ class Settings(BaseSettings):
     # Measured, not guessed: across five benchmarked institutions every run
     # spent its budget with 91-99% of the pages it had visited still yielding
     # people, so the crawl was being cut off mid-harvest every time.
-    default_step_budget: int = 1_500
+    default_step_budget: int = 5_000
     # Stop a site once this many consecutive candidate pages yield nobody at all.
     # Candidates are ranked, so a long barren stretch means the good pages are
     # behind us. Replaces a fixed people-goal: the run ends when the site stops
     # giving, not at an arbitrary count. It has to be well above the length of
     # one department's run of brochure pages, or the crawl stops between two
     # departments that both have rosters.
-    stop_after_barren_pages: int = 30
+    stop_after_barren_pages: int = 150
     run_timeout_seconds: int = 86_400
     # A large institution at the raised step budget runs for well over half
     # an hour, and longer again when pages have to be rendered.
-    site_timeout_seconds: int = 7_200
+    site_timeout_seconds: int = 14_400
     max_concurrent_contexts: int = 8
     estimated_mb_per_context: int = 350
     memory_safety_factor: float = 0.75
@@ -107,6 +120,10 @@ class Settings(BaseSettings):
         if isinstance(v, str) and v.strip() == "":
             return None
         return v
+
+    @property
+    def text_model(self) -> str:
+        return self.llm_text_model or self.llm_model
 
     @property
     def screenshot_dir(self) -> Path:

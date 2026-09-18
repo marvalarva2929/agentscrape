@@ -1,119 +1,101 @@
-"""The work list has to grow as pages are read.
+"""The work list grows as pages are read, ordered by the model's priority.
 
-Sitemap discovery runs once, before anything is fetched, so it cannot see a page
-that is only reachable by following a link. Several Arizona rosters were exactly
-that, and the fix is to fold the links off each fetched page back into the
-ranked list — without disturbing the cursor the extract loop reads with.
+Discovery runs once, before anything is fetched, so it cannot see a page that is
+only reachable by following a link. Links off every page are triaged by the
+model and folded into the unvisited tail without disturbing the cursor. Nothing
+is dropped for lacking a keyword: BCM's CA-3 anesthesia roster sat behind a
+seven-token slug that the old score floor threw away.
 """
 
 from __future__ import annotations
 
-from agentscrape.config import settings
-from agentscrape.pipeline.nodes.extract import FRONTIER_MIN_SCORE, _merge_frontier
+import json
 
-ALLOWED = {"arizona.edu"}
-ROSTER = "https://medicine.arizona.edu/derm/residency-program/current-residents"
+import pytest
+
+from agentscrape.llm.provider import ModelResponse, VisionProvider
+from agentscrape.llm.triage import heuristic_priority, triage_links
+from agentscrape.llm.usage import Usage
+from agentscrape.pipeline.nodes.extract import merge_frontier
+
+CA3 = (
+    "https://www.bcm.edu/departments/anesthesiology/education/"
+    "anesthesiology-residency/residents/clinical-anesthesia-year-3-pgy-4-1"
+)
 
 
-def candidate(url: str, score: float) -> dict:
-    return {"url": url, "score": score, "is_known_path": False}
+def candidate(url: str, priority: float, score: float = 0.0) -> dict:
+    return {"url": url, "score": score, "priority": priority, "is_known_path": False}
 
 
-def test_a_roster_found_mid_crawl_is_queued_ahead_of_weaker_candidates() -> None:
-    queued = [
-        candidate("https://medicine.arizona.edu/a/faculty", 6.5),
-        candidate("https://medicine.arizona.edu/b/our-team", 5.5),
-    ]
-    merged = _merge_frontier(queued, 0, {ROSTER: None}, allowed=ALLOWED)
-    assert merged[0]["url"] == ROSTER
+class TriageProvider(VisionProvider):
+    def __init__(self, verdicts: dict[int, object]) -> None:
+        self.verdicts = verdicts
+        self.prompts: list[str] = []
+
+    async def complete(self, **kwargs) -> ModelResponse:
+        self.prompts.append(kwargs["user"])
+        body = {"links": [{"i": i, "p": p} for i, p in self.verdicts.items()]}
+        return ModelResponse(text=json.dumps(body), usage=Usage(), model="fake")
+
+
+def test_higher_priority_additions_go_ahead_of_the_queue() -> None:
+    queued = [candidate("https://x.edu/faculty", 40), candidate("https://x.edu/team", 35)]
+    merged = merge_frontier(queued, 0, [candidate(CA3, 98)])
+    assert merged[0]["url"] == CA3
 
 
 def test_visited_candidates_keep_their_positions() -> None:
     """The caller's cursor indexes this list, so the head must not move."""
-    visited = [candidate(f"https://medicine.arizona.edu/seen/{i}", 9.0) for i in range(3)]
-    queued = [candidate("https://medicine.arizona.edu/queued", 2.0)]
-    merged = _merge_frontier(
-        [*visited, *queued], len(visited), {ROSTER: None}, allowed=ALLOWED
+    visited = [candidate(f"https://x.edu/seen/{i}", 10) for i in range(3)]
+    merged = merge_frontier(
+        [*visited, candidate("https://x.edu/queued", 20)], 3, [candidate(CA3, 98)]
     )
     assert [c["url"] for c in merged[:3]] == [c["url"] for c in visited]
-    assert merged[3]["url"] == ROSTER
+    assert merged[3]["url"] == CA3
 
 
-def test_links_already_on_the_list_are_not_duplicated() -> None:
-    queued = [candidate(ROSTER, 17.0)]
-    merged = _merge_frontier(queued, 0, {ROSTER: None}, allowed=ALLOWED)
+def test_case_variants_of_a_queued_or_visited_page_are_not_added() -> None:
+    visited = [candidate("https://x.edu/GME/Residents", 90)]
+    merged = merge_frontier(visited, 1, [candidate("https://x.edu/gme/residents", 95)])
     assert len(merged) == 1
 
 
-def test_navigation_links_are_below_the_admission_floor() -> None:
-    """Every page carries the department's own nav; admitting it would refill
-    the list faster than the crawl drains it."""
-    noise = {
-        "https://medicine.arizona.edu/about/contact-us": None,
-        "https://medicine.arizona.edu/education/apply": None,
-        "https://medicine.arizona.edu/giving": None,
-    }
-    assert _merge_frontier([], 0, noise, allowed=ALLOWED) == []
-    assert FRONTIER_MIN_SCORE > 0
+def test_a_rediscovered_link_keeps_its_best_priority_and_program() -> None:
+    queued = [{**candidate(CA3, 60), "program": "Anesthesiology Residency"}]
+    merged = merge_frontier(queued, 0, [{**candidate(CA3, 97), "program": None}])
+    assert merged[0]["priority"] == 97
+    assert merged[0]["program"] == "Anesthesiology Residency"
 
 
-def test_model_selected_link_bypasses_keyword_floor_and_moves_to_front() -> None:
-    conceptual = "https://medicine.arizona.edu/education/people-we-serve"
-    weak = candidate("https://medicine.arizona.edu/b/our-team", 5.5)
-    merged = _merge_frontier(
-        [weak], 0, {conceptual: None}, allowed=ALLOWED, preferred=[conceptual]
-    )
-    assert merged[0]["url"] == conceptual
-    assert merged[0]["llm_selected"] is True
-
-
-def test_links_off_the_institution_are_refused() -> None:
-    offsite = {"https://acgme.org/residency-program/current-residents": None}
-    assert _merge_frontier([], 0, offsite, allowed=ALLOWED) == []
-
-
-def test_an_affiliated_domain_is_followed() -> None:
-    """A medical centre spans the university and the health system it staffs.
-
-    Chicago's trainees are published on uchicagomedicine.org while its GME site
-    is uchicago.edu; scoping to the entry domain alone put 374 of its 377
-    addresses permanently out of reach.
-    """
-    roster = "https://www.uchicagomedicine.org/gme/anesthesia/current-residents"
-    merged = _merge_frontier(
-        [], 0, {roster: None}, allowed={"uchicago.edu", "uchicagomedicine.org"}
-    )
-    assert [c["url"] for c in merged] == [roster]
-    # And still refused when that domain is not one of the institution's.
-    assert _merge_frontier([], 0, {roster: None}, allowed={"uchicago.edu"}) == []
-
-
-def test_a_full_list_admits_a_better_page_by_displacing_a_worse_one() -> None:
-    queued = [
-        candidate(f"https://medicine.arizona.edu/pad/{i}", 6.5)
-        for i in range(settings.max_candidates)
+@pytest.mark.asyncio
+async def test_model_keeps_a_roster_the_keyword_score_rejected() -> None:
+    provider = TriageProvider({0: 98, 1: "skip"})
+    links = [
+        {"url": CA3, "text": "Clinical Anesthesia Year 3 (PGY-4)", "in_nav": True},
+        {"url": "https://www.bcm.edu/giving", "text": "Give now"},
     ]
-    merged = _merge_frontier(queued, 0, {ROSTER: None}, allowed=ALLOWED)
-    assert len(merged) == settings.max_candidates
-    assert merged[0]["url"] == ROSTER
+    decisions = await triage_links(links, source="test", provider=provider)
+    assert decisions[0].priority == 98 and decisions[0].by_model
+    assert decisions[0].heuristic < 6.0  # the old frontier floor
+    assert decisions[1].skipped
+    # The anchor text is what the model judges by.
+    assert "Clinical Anesthesia Year 3 (PGY-4)" in provider.prompts[0]
 
 
-def test_no_links_leaves_the_list_untouched() -> None:
-    queued = [candidate(ROSTER, 17.0)]
-    assert _merge_frontier(queued, 0, {}, allowed=ALLOWED) is queued
-
-
-def test_href_entities_are_decoded_before_canonicalizing() -> None:
-    """`&amp;` in an attribute is one separator, not a parameter called "amp".
-
-    Canonicalizing it literally produced a distinct URL per link to the same
-    page, and one faculty directory was fetched six times for the same people.
-    """
-    from agentscrape.discovery.sitemap import extract_links
-
-    html = (
-        '<a href="/directory?types=5&amp;sort=title_ASC&amp;page=0">a</a>'
-        '<a href="/directory?page=0&amp;sort=title_ASC&amp;types=5">b</a>'
+@pytest.mark.asyncio
+async def test_links_the_model_does_not_mention_are_kept() -> None:
+    decisions = await triage_links(
+        [{"url": CA3}, {"url": "https://www.bcm.edu/about"}],
+        source="test", provider=TriageProvider({0: 90}),
     )
-    links = extract_links(html, "https://www.ttuhsc.edu/")
-    assert links == ["https://www.ttuhsc.edu/directory?page=0&sort=title_ASC&types=5"]
+    assert not decisions[1].skipped
+    assert not decisions[1].by_model
+
+
+@pytest.mark.asyncio
+async def test_a_failed_triage_call_keeps_everything_by_heuristic() -> None:
+    """The conftest provider is offline: nothing may be lost to that."""
+    decisions = await triage_links([{"url": CA3}, {"url": "https://x.edu/a"}], source="test")
+    assert all(not d.skipped and not d.by_model for d in decisions)
+    assert decisions[0].priority == heuristic_priority(decisions[0].heuristic)
