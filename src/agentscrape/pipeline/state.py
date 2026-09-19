@@ -52,6 +52,9 @@ class SiteState(TypedDict, total=False):
     # Consecutive candidate pages that produced nobody at all. Counting
     # "nobody new" instead would mark every page of an unchanged site barren.
     barren_streak: int
+    # Refused HTTP requests seen after the entry page. A handful of protected
+    # pages is normal; repeated refusals mean the site has blocked the crawl.
+    http_refusals: int
     # Every link the model has already been asked about, by case-folded hash,
     # so site-wide navigation is triaged once rather than on every page.
     triaged: list[str]
@@ -126,6 +129,7 @@ def initial_state(
         candidates_considered=0,
         known_path_hits=0,
         barren_streak=0,
+        http_refusals=0,
         triaged=[],
         processed_hashes=[],
         programs=[],

@@ -110,6 +110,31 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
         return {**state, "cursor": cursor + len(batch)}
 
     results = await _fetch(deps, [c["url"] for c in claimed])
+    rate_limited = sum(result.status == 429 for result in results)
+    refusals = state.get("http_refusals", 0) + sum(
+        result.status == 403 for result in results
+    )
+    # A 429 is an explicit request to stop. A single 403 can be one protected
+    # page, but several mean the site has blocked the crawler. Do not spend the
+    # rest of the page budget or escalate to the browser in either case.
+    if rate_limited or refusals >= 3:
+        code = "SITE_RATE_LIMITED" if rate_limited else "SITE_BLOCKED"
+        message = (
+            "The site rate-limited this crawl (HTTP 429). "
+            "This site could not be crawled; try again later."
+            if rate_limited
+            else "The site repeatedly blocked automated requests (HTTP 403). "
+            "This site could not be crawled; try again later."
+        )
+        await deps.note(state, message)
+        return {
+            **state,
+            "http_refusals": refusals,
+            "status": "failed",
+            "terminated": True,
+            "error_code": code,
+            "error_message": message,
+        }
     allowed = set(
         state.get("allowed_domains") or [registrable_domain(state["root_domain"])]
     )
@@ -255,6 +280,7 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
                 f"/api/v1/artifacts/{outcome.screenshot_rel}" if outcome.screenshot_rel else None
             ),
             steps_taken=steps_taken + steps_used,
+            step_budget=state["step_budget"],
         )
 
     triaged = set(state.get("triaged", []))
@@ -274,6 +300,7 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
         "seen_record_ids": list(seen_ids),
         "known_path_hits": known_hits,
         "barren_streak": barren_streak,
+        "http_refusals": refusals,
         "fingerprint": fingerprint,
         "programs": programs,
         "triaged": sorted(triaged),

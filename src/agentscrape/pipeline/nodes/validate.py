@@ -55,6 +55,7 @@ async def validate_institution(state: SiteState, deps: PipelineDeps) -> SiteStat
     """Explicit scope gate. A rejection is a stated reason, never a silent drop."""
     root_url = state["root_url"]
     domain = state["root_domain"]
+    result_status: int | None = None
 
     verdict = classify_domain(root_url)
 
@@ -69,9 +70,22 @@ async def validate_institution(state: SiteState, deps: PipelineDeps) -> SiteStat
                 if retry.ok:
                     result = retry
         if not result.ok:
+            result_status = result.status
+            if result.status == 403:
+                reason = (
+                    f"{root_url} blocked automated requests (HTTP 403). "
+                    "This site could not be crawled; try again later."
+                )
+            elif result.status == 429:
+                reason = (
+                    f"{root_url} rate-limited this crawl (HTTP 429). "
+                    "This site could not be crawled; try again later."
+                )
+            else:
+                reason = f"Could not load {root_url}: {result.error or 'unknown error'}"
             verdict = InstitutionVerdict(
                 ValidationStatus.UNREACHABLE,
-                f"Could not load {root_url}: {result.error or 'unknown error'}",
+                reason,
             )
         else:
             from selectolax.parser import HTMLParser
@@ -102,6 +116,10 @@ async def validate_institution(state: SiteState, deps: PipelineDeps) -> SiteStat
     code = (
         "K12_INSTITUTION_REJECTED"
         if verdict.status == ValidationStatus.K12_REJECTED
+        else "SITE_BLOCKED"
+        if verdict.status == ValidationStatus.UNREACHABLE and result_status == 403
+        else "SITE_RATE_LIMITED"
+        if verdict.status == ValidationStatus.UNREACHABLE and result_status == 429
         else "SITE_UNREACHABLE"
         if verdict.status == ValidationStatus.UNREACHABLE
         else "INSTITUTION_NOT_POST_SECONDARY"

@@ -82,6 +82,7 @@ async def run_site(
     browser_context=None,
     emitter: EventEmitter | None = None,
     should_stop=None,
+    on_usage=None,
     fetcher: Fetcher | None = None,
     crawl_strategy: str | None = None,
     modes: list[str] | None = None,
@@ -134,7 +135,9 @@ async def run_site(
         modes=modes,
     )
 
-    meter = UsageMeter(scope=site_run_id)
+    # Keep the run-wide spend meter current after every model call, so both
+    # spend limits and the live monitor see costs while work is in flight.
+    meter = UsageMeter(scope=site_run_id, on_usage=on_usage)
     owns_fetcher = fetcher is None
 
     try:

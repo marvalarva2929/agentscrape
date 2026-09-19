@@ -166,6 +166,7 @@ class RunOrchestrator:
                         browser_context=context,
                         emitter=self.emitter,
                         should_stop=lambda: self.limits.should_stop,
+                        on_usage=meter_hook,
                         fetcher=fetcher,
                         crawl_strategy=self.crawl_strategy,
                         modes=self.modes,
