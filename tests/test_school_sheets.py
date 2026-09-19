@@ -77,3 +77,35 @@ async def test_loading_is_an_idempotent_upsert(session, tmp_path) -> None:
     assert site.directory_url.startswith("https://people.example.edu")
     # A different directory has to be learned again.
     assert site.directory_config is None
+
+
+@pytest.mark.asyncio
+async def test_several_sheets_merge_instead_of_failing(session, tmp_path) -> None:
+    """Two rows for one host used to abort the whole load (unique key), and a
+    later sheet's blank directory cell erased an earlier sheet's link."""
+    (tmp_path / "a-hubs.csv").write_text(
+        "Institution,Official Website,Residency / Fellowship Hub,School / People Directory\n"
+        "UChicago Medicine,https://www.uchicagomedicine.org/,https://gme.uchicago.edu/programs/,"
+        "https://directory.uchicago.edu/\n"
+    )
+    (tmp_path / "b-more.csv").write_text(
+        '"Institution","Crawler Hub","Directory"\n'
+        '"University of Chicago","https://www.uchicagomedicine.org/","DIRECTORY NOT AVAILABLE"\n'
+        '"Naval Medical Center","https://health.mil/","DIRECTORY NOT AVAILABLE"\n'
+        '"SAUSHEC","https://health.mil/","DIRECTORY NOT AVAILABLE"\n'
+        '"Tower Health","https://towerhealth.org/","https://towerhealth.org/providers"\n'
+    )
+    result = await load_school_sheets(session, tmp_path)
+    assert (result.created, result.merged_rows, result.failed_rows) == (3, 2, 0)
+
+    sites = {s.root_domain: s for s in (await session.execute(select(Site))).scalars()}
+    uchicago = sites["gme.uchicago.edu"]
+    # The most specific entry and the directory link both survive the second sheet.
+    assert uchicago.canonical_url.startswith("https://gme.uchicago.edu/programs")
+    assert uchicago.directory_url == "https://directory.uchicago.edu/"
+    assert uchicago.name == "UChicago Medicine"
+    assert "www.uchicagomedicine.org" not in sites
+    assert sites["health.mil"].name == "Naval Medical Center"
+
+    again = await load_school_sheets(session, tmp_path)
+    assert (again.created, again.updated) == (0, 0)

@@ -304,6 +304,7 @@ def load_schools_command(
         console.print(
             f"[green]Loaded[/green] {target}: {result.created} created, "
             f"{result.updated} updated, {result.unchanged} unchanged, "
+            f"{result.merged_rows} duplicate rows merged, {result.failed_rows} failed, "
             f"{result.skipped_files} unreadable files."
         )
         await dispose_engine()

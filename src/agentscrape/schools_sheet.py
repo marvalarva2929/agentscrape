@@ -17,8 +17,9 @@ import csv
 import io
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -176,31 +177,94 @@ class LoadResult:
     updated: int = 0
     unchanged: int = 0
     skipped_files: int = 0
+    # Rows naming a school another row already named, folded into it.
+    merged_rows: int = 0
+    failed_rows: int = 0
+
+
+def school_key(row: SchoolRow) -> str:
+    """Which institution a row is about: its website's host, without "www.".
+
+    Sheets disagree on where to *start* a crawl (one gives UChicago's GME
+    programs page on gme.uchicago.edu, another its home page on
+    uchicagomedicine.org), but agree on the institution's website.
+    """
+    host = host_of(row.website)
+    return host.removeprefix("www.")
+
+
+def _depth(url: str) -> int:
+    return len([part for part in urlsplit(url).path.split("/") if part])
+
+
+def merge_school_rows(rows: list[tuple[str, SchoolRow]]) -> list[SchoolRow]:
+    """One row per institution across every sheet, in first-seen order.
+
+    A school listed more than once keeps its first name, the most specific
+    crawl entry any sheet gives (a residency hub beats a bare home page), and
+    the first directory link any sheet gives. A blank or "not available" cell
+    never erases a value another row supplied.
+    """
+    merged: dict[str, SchoolRow] = {}
+    for source, row in rows:
+        key = school_key(row)
+        current = merged.get(key)
+        if current is None:
+            merged[key] = row
+            continue
+        if current.name != row.name:
+            log.warning(
+                "%s row %d (%s) is the same institution as %r (website %s); merged into it",
+                source, row.row, row.name, current.name, key,
+            )
+        entry = row.hub_url if row.hub_url and (
+            not current.hub_url or _depth(row.hub_url) > _depth(current.hub_url)
+        ) else current.hub_url
+        merged[key] = replace(
+            current,
+            hub_url=entry,
+            directory_url=current.directory_url or row.directory_url,
+        )
+    return list(merged.values())
 
 
 async def load_school_sheets(session: AsyncSession, folder: Path | None = None) -> LoadResult:
-    """Upsert every school in every sheet in `folder`. Idempotent."""
+    """Upsert every school in every sheet in `folder`. Idempotent.
+
+    One bad row never costs the others: each school is written in its own
+    savepoint, and a failure is logged and skipped.
+    """
     folder = folder or sheets_dir()
     result = LoadResult()
     paths = sorted(
         p for p in folder.glob("*") if p.suffix.lower() in SHEET_SUFFIXES
     ) if folder.is_dir() else []
+    rows: list[tuple[str, SchoolRow]] = []
     for path in paths:
         try:
-            rows = read_school_sheet(path)
+            rows.extend((path.name, row) for row in read_school_sheet(path))
         except Exception as exc:
             result.skipped_files += 1
             log.error("school sheet %s could not be read: %s", path.name, exc)
+    schools = merge_school_rows(rows)
+    result.merged_rows = len(rows) - len(schools)
+    for school in schools:
+        try:
+            async with session.begin_nested():
+                outcome = await _upsert(session, school)
+                await session.flush()
+        except Exception as exc:
+            result.failed_rows += 1
+            log.error("school %r could not be saved: %s", school.name, exc)
             continue
-        for row in rows:
-            outcome = await _upsert(session, row)
-            setattr(result, outcome, getattr(result, outcome) + 1)
-        await session.flush()
+        setattr(result, outcome, getattr(result, outcome) + 1)
     await session.commit()
     if paths:
         log.info(
-            "school sheets: %d created, %d updated, %d unchanged (%d files, %d unreadable)",
-            result.created, result.updated, result.unchanged, len(paths), result.skipped_files,
+            "school sheets: %d created, %d updated, %d unchanged, %d duplicate rows merged, "
+            "%d failed (%d files, %d unreadable)",
+            result.created, result.updated, result.unchanged, result.merged_rows,
+            result.failed_rows, len(paths), result.skipped_files,
         )
     return result
 
@@ -219,12 +283,13 @@ async def _upsert(session: AsyncSession, row: SchoolRow) -> str:
         ))
         return "created"
     wanted = {
-        "name": row.name, "canonical_url": canonical,
-        "directory_url": row.directory_url, "affiliated_domains": affiliated,
+        "name": row.name, "canonical_url": canonical, "affiliated_domains": affiliated,
+        # A sheet without a directory link never erases one already known.
+        "directory_url": row.directory_url or site.directory_url,
     }
     if all(getattr(site, attr) == value for attr, value in wanted.items()):
         return "unchanged"
-    if site.directory_url != row.directory_url:
+    if site.directory_url != wanted["directory_url"]:
         # A different directory has to be learned again.
         site.directory_config = None
     for attr, value in wanted.items():

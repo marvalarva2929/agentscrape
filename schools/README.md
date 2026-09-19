@@ -23,6 +23,22 @@ A PDF export cannot be loaded; transcribe it to CSV beside it (see
 skipped. Loading never deletes a school or anything collected for it, and
 re-running it is safe.
 
+## Several sheets, one school list
+
+Every sheet in this folder is loaded together. Rows about the same institution
+(the same website host, ignoring `www.`) become one school, in whichever sheet
+they appear:
+
+- the first name seen is kept (sheets load in file-name order);
+- the most specific crawl entry wins — a residency hub beats a bare home page;
+- the first directory link any sheet gives is kept, and a blank or
+  "DIRECTORY NOT AVAILABLE" cell never erases one.
+
+Each merge is logged. Two different institutions that share one host (the two
+military programs on `health.mil`) become a single school, since a school is
+identified by the host it is crawled from. One row that cannot be saved is
+logged and skipped; it no longer stops the whole load.
+
 ## Corrections to `institution-links.csv`
 
 Transcribed from `institution-links.pdf` (verified by its authors 2026-09-17),
