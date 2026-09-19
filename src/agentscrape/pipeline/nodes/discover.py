@@ -202,14 +202,26 @@ async def discover_links(state: SiteState, deps: PipelineDeps) -> SiteState:
 
     ct_keep = [h for h in ct_candidates if h not in skipped_hosts][:MAX_SUBDOMAIN_PROBES]
     if ct_keep and not out_of_time():
+        # Most certificate-log hostnames no longer exist. A DNS lookup says so
+        # in milliseconds and is not an HTTP request against the institution,
+        # so only hosts that resolve spend the domain's shared request budget.
+        ct_keep = await _resolving(ct_keep, timeout=min(remaining(), 15.0))
+    if ct_keep and not out_of_time():
         # attempts=1: most CT-log hostnames no longer resolve, and retrying each
-        # dead host with backoff dominates the whole discovery stage.
-        probes = await _bounded(
-            "subdomain-probe",
-            deps.fetcher.get_many(subdomain_seed_urls(ct_keep), attempts=1),
-            [],
-            timeout=remaining(),
-        )
+        # dead host with backoff dominates the whole discovery stage. Each host
+        # is its own task and whatever answered by the deadline is kept: one
+        # all-or-nothing wait lost all 300 probes when the budget ran out, and
+        # with them UChicago's internal medicine residents on imr.bsd.
+        tasks = [
+            asyncio.ensure_future(deps.fetcher.get(url, attempts=1))
+            for url in subdomain_seed_urls(ct_keep)
+        ]
+        done, late = await asyncio.wait(tasks, timeout=max(remaining(), 1.0))
+        for task in late:
+            task.cancel()
+        if late:
+            log.info("crt.sh: %d of %d probes still waiting at the deadline", len(late), len(tasks))
+        probes = [t.result() for t in done if not t.cancelled() and t.exception() is None]
         alive = 0
         for result in probes:
             if not result.ok or not result.is_html:
@@ -360,6 +372,29 @@ async def discover_links(state: SiteState, deps: PipelineDeps) -> SiteState:
         "triaged": sorted(triaged),
         "cursor": 0,
     }
+
+
+async def _resolving(hosts: list[str], *, timeout: float) -> list[str]:
+    """The hosts with a DNS record, in their original order."""
+    loop = asyncio.get_running_loop()
+
+    async def resolves(host: str) -> bool:
+        try:
+            await asyncio.wait_for(loop.getaddrinfo(host, 443), timeout=5.0)
+            return True
+        except Exception:
+            return False
+
+    tasks = [asyncio.ensure_future(resolves(h)) for h in hosts]
+    done, late = await asyncio.wait(tasks, timeout=max(timeout, 1.0))
+    for task in late:
+        task.cancel()
+    alive = [
+        host for host, task in zip(hosts, tasks, strict=True)
+        if task in done and not task.cancelled() and task.result()
+    ]
+    log.info("crt.sh: %d of %d candidate hostnames resolve", len(alive), len(hosts))
+    return alive
 
 
 def _observed_host_counts(

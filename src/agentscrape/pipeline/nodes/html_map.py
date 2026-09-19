@@ -44,11 +44,18 @@ from ...discovery.sitemap import extract_link_contexts
 from ...domain.matching import EMAIL_RE
 from ...extraction.html_people import extract_people, page_looks_thin
 from ...extraction.text import html_to_model_text
-from ...llm.triage import heuristic_priority
+from ...llm.triage import heuristic_priority, triage_links
 from ...urls import canonicalize, host_of, in_scope, registrable_domain
 from ..deps import PipelineDeps
 from ..state import SiteState
-from .extract import _title_of, attribute_programs, link_key, merge_frontier, pending_names
+from .extract import (
+    _title_of,
+    attribute_programs,
+    link_key,
+    merge_frontier,
+    pending_order,
+    program_first,
+)
 
 log = logging.getLogger("agentscrape.pipeline.html_map")
 
@@ -69,6 +76,9 @@ SIGNAL_TOP = 90.0
 NO_SIGNAL_PRIORITY = 1.0
 # Unmapped pages rank below every mapped page with a signal.
 UNMAPPED_CAP = 55.0
+# Program pages the model ranks before the crawl starts reading. A few
+# hundred links is a handful of cheap calls; ranking a whole sitemap is not.
+PROGRAM_RANK_CAP = 400
 
 
 @dataclass(frozen=True)
@@ -107,7 +117,7 @@ async def html_map(state: SiteState, deps: PipelineDeps) -> SiteState:
     allowed = set(state.get("allowed_domains") or [registrable_domain(state["root_domain"])])
     candidates = state.get("candidates", [])
     programs = state.get("programs", [])
-    pending = pending_names(programs)
+    pending = pending_order(programs)
     deadline = time.monotonic() + settings.html_map_timeout_seconds
     cache_budget = settings.html_map_cache_mb * 1_000_000
     cached_bytes = 0
@@ -129,7 +139,8 @@ async def html_map(state: SiteState, deps: PipelineDeps) -> SiteState:
         if entry.get("is_known_path"):
             rank = 1_000.0
         elif entry.get("program") in pending:
-            rank = 500.0 + float(entry.get("priority", 0.0)) + score
+            # Residencies before other programs before fellowships.
+            rank = 500.0 + (2 - pending[entry["program"]]) * 100.0 + score
         else:
             rank = score
         heapq.heappush(queue, (-rank, order, key))
@@ -197,8 +208,14 @@ async def html_map(state: SiteState, deps: PipelineDeps) -> SiteState:
         else:
             work.append({**base, "priority": NO_SIGNAL_PRIORITY, "mapped": True, "signal": False})
 
+    texts = {entry["url"]: entry.get("link_text") or "" for entry in queued.values()}
+    ranked = await _rank_program_pages(deps, state, work, texts, programs, pending)
+
     kept = sum(1 for w in work if w.get("signal"))
-    stats = {"pages_mapped": len(mapped), "pages_with_people": kept, "urls_known": len(queued)}
+    stats = {
+        "pages_mapped": len(mapped), "pages_with_people": kept, "urls_known": len(queued),
+        "program_pages_ranked": ranked,
+    }
     log.info(
         "html map for %s: %d fetched, %d mapped, %d with a people signal, %d urls known",
         state["root_domain"], fetched, len(mapped), kept, len(queued),
@@ -218,3 +235,43 @@ async def html_map(state: SiteState, deps: PipelineDeps) -> SiteState:
         "cursor": 0,
         "html_map_stats": stats,
     }
+
+
+async def _rank_program_pages(
+    deps: PipelineDeps, state: SiteState, work: list[dict], texts: dict[str, str],
+    programs: list[dict], pending: dict[str, int],
+) -> int:
+    """Have the model rank the pages of programs still missing a roster.
+
+    Without it, a program's overview page (queued by the planner, and usually
+    only *mentioning* its current residents) was read, rendered and clicked
+    through before the roster page one link away. The model's priority puts
+    the roster first. Returns how many pages it ranked.
+    """
+    if not pending:
+        return 0
+    key = program_first(pending)
+    pages = sorted(
+        (w for w in work if w.get("program") in pending and float(w.get("priority", 0.0)) >= 5.0),
+        key=key,
+    )[:PROGRAM_RANK_CAP]
+    if not pages:
+        return 0
+    await deps.note(
+        state,
+        f"The agent is ranking {len(pages)} pages of {len(pending)} programs to read their rosters first",
+    )
+    names = [p["name"] for p in programs if p["name"] in pending]
+    decisions = await triage_links(
+        [{"url": w["url"], "text": texts.get(w["url"], "")} for w in pages],
+        source=f"pages of the residency and fellowship programs at {state['root_domain']}",
+        context="Programs still missing a roster: " + "; ".join(names[:80]),
+        meter=deps.meter,
+    )
+    ranked = 0
+    for page, decision in zip(pages, decisions, strict=True):
+        if decision.by_model:
+            page["priority"] = decision.priority
+            ranked += 1
+    log.info("ranked %d program pages with the model for %s", ranked, state["root_domain"])
+    return ranked

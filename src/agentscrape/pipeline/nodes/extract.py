@@ -61,6 +61,9 @@ log = logging.getLogger("agentscrape.pipeline.extract")
 # Pages per loop iteration. Fetches, model reads and (bounded) browser work in a
 # batch all run concurrently.
 BATCH_SIZE = 32
+# This many HTTP 403 refusals in a row, with no page served between them,
+# means the site has blocked the crawler.
+BLOCKED_AFTER_REFUSALS = 10
 _TRAINEES = (PersonCategory.RESIDENT, PersonCategory.FELLOW)
 # How many visited pages to remember per program for gap filling.
 _PROGRAM_VISITS_KEPT = 60
@@ -117,13 +120,20 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
 
     results = await _fetch(deps, [c["url"] for c in claimed])
     rate_limited = sum(result.status == 429 for result in results)
-    refusals = state.get("http_refusals", 0) + sum(
-        result.status == 403 for result in results
-    )
-    # A 429 is an explicit request to stop. A single 403 can be one protected
-    # page, but several mean the site has blocked the crawler. Do not spend the
-    # rest of the page budget or escalate to the browser in either case.
-    if rate_limited or refusals >= 3:
+    # Refusals in a row, carried across batches. A university has protected
+    # pages all over (UChicago returned 403 on 20 scattered department pages
+    # in half an hour while serving hundreds of others), so a running total
+    # stopped healthy crawls; a site that has blocked the crawler refuses
+    # everything, one request after another.
+    refusals = state.get("http_refusals", 0)
+    for result in results:
+        if result.status == 403:
+            refusals += 1
+        elif result.ok:
+            refusals = 0
+    # A 429 is an explicit request to stop. Do not spend the rest of the page
+    # budget or escalate to the browser in either case.
+    if rate_limited or refusals >= BLOCKED_AFTER_REFUSALS:
         code = "SITE_RATE_LIMITED" if rate_limited else "SITE_BLOCKED"
         message = (
             "The site rate-limited this crawl (HTTP 429). "
@@ -603,7 +613,7 @@ async def _grow_frontier(
             continue
         triaged.add(key)
         fresh.append({**link, "url": canonical})
-    pending = pending_names(programs)
+    pending = pending_order(programs)
     if not fresh:
         # Programs covered by this batch move their remaining pages back.
         return merge_frontier(candidates, cursor, [], pending if programs else None), triaged
@@ -654,23 +664,41 @@ def pending_names(programs: list[dict]) -> set[str]:
     return {p["name"] for p in programs if p.get("status") == PENDING}
 
 
-def program_first(pending: set[str]):
-    """Sort key: pages of programs still missing a roster first, then
-    everything else, then pages below the read floor; by priority within.
+# Residencies before fellowships: a residency roster lists a whole program's
+# classes (UChicago internal medicine: 122), a fellowship a handful (often 3).
+# Reaching the big rosters first is most of the recall in the first half hour.
+_KIND_ORDER = {"residency": 0, "other": 1, "fellowship": 2}
+
+
+def pending_order(programs: list[dict]) -> dict[str, int]:
+    """Programs still missing a roster, each with its place in the queue."""
+    return {
+        p["name"]: _KIND_ORDER.get(p.get("kind") or "other", 1)
+        for p in programs if p.get("status") == PENDING
+    }
+
+
+def program_first(pending: dict[str, int] | set[str]):
+    """Sort key: pages of programs still missing a roster first (residencies,
+    then other programs, then fellowships), then everything else, then pages
+    below the read floor; by priority within each.
 
     The goal of a crawl is the program list. Staff directories, department
     news and the university's business pages can hold people too, but they
     wait until every program the planner found has a roster or has been
     searched for, however many names they show."""
+    order = pending if isinstance(pending, dict) else dict.fromkeys(pending, 0)
+
     def key(candidate: dict) -> tuple:
         priority = float(candidate.get("priority", 0.0))
+        rank = 0
         if priority < _READ_FLOOR:
             tier = 2
-        elif candidate.get("program") in pending:
-            tier = 0
+        elif candidate.get("program") in order:
+            tier, rank = 0, order[candidate["program"]]
         else:
             tier = 1
-        return (tier, -priority, -float(candidate.get("score", 0.0)))
+        return (tier, rank, -priority, -float(candidate.get("score", 0.0)))
 
     return key
 
@@ -685,7 +713,7 @@ def next_is_program_page(state: SiteState) -> bool:
 
 def merge_frontier(
     candidates: list[dict], cursor: int, additions: list[dict],
-    pending: set[str] | None = None,
+    pending: dict[str, int] | set[str] | None = None,
 ) -> list[dict]:
     """Fold new candidates into the unvisited tail and re-sort it.
 

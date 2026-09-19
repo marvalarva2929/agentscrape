@@ -147,3 +147,19 @@ class TestProgramFirst:
         assert merge_frontier(tail, 0, [], pending)[0]["url"].endswith("/alumni")
         covered = [{**p, "status": "roster_found"} for p in self.PROGRAMS]
         assert merge_frontier(tail, 0, [], pending_names(covered))[0]["url"].endswith("/directory")
+
+
+def test_residency_pages_come_before_fellowship_pages():
+    from agentscrape.pipeline.nodes.extract import merge_frontier, pending_order
+
+    programs = [
+        {"name": "Vascular Surgery Fellowship", "kind": "fellowship", "status": "pending"},
+        {"name": "Internal Medicine Residency", "kind": "residency", "status": "pending"},
+    ]
+    tail = [
+        {"url": "https://x.edu/vascular/fellows", "priority": 95.0, "program": "Vascular Surgery Fellowship"},
+        {"url": "https://x.edu/im/residents", "priority": 70.0, "program": "Internal Medicine Residency"},
+    ]
+    # A 122-person residency roster before a 3-person fellowship's, whatever
+    # each page's own priority.
+    assert merge_frontier(tail, 0, [], pending_order(programs))[0]["url"].endswith("/im/residents")

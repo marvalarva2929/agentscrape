@@ -91,7 +91,10 @@ class Settings(BaseSettings):
     # Only a memory bound now: the model, not a count, decides what is worth
     # visiting.
     max_candidates: int = 20_000
-    discovery_timeout_seconds: int = 600
+    # Discovery only has to find where the programs are; the planner and the
+    # crawl's own link-following find the rest. 600 held a school for up to ten
+    # minutes before the model read a single page.
+    discovery_timeout_seconds: int = 180
     discovery_source_timeout_seconds: int = 60
     enable_crt_sh: bool = True
     crt_sh_timeout_seconds: int = 30
@@ -105,8 +108,12 @@ class Settings(BaseSettings):
     crawl_strategy: str = "hybrid"
     # Pages the HTML pass fetches before handing over to the model, and how
     # long it may take. Unmapped pages are still reachable afterwards.
-    html_map_max_pages: int = 1_500
-    html_map_timeout_seconds: int = 900
+    # The map runs program pages first and only orders the work list; pages
+    # it does not reach are still checked for people when the crawl gets to
+    # them. 1,500 pages took a quarter of an hour at a polite 2 requests a
+    # second before the model read anything.
+    html_map_max_pages: int = 400
+    html_map_timeout_seconds: int = 120
     # Bodies kept in memory from the HTML pass so the model phase does not
     # fetch them again. Lost on resume, which only costs a re-fetch.
     html_map_cache_mb: int = 200

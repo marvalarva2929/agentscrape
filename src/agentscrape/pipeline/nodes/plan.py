@@ -29,7 +29,7 @@ from ...llm.planner import (
 from ...urls import canonicalize, host_of, registrable_domain
 from ..deps import PipelineDeps
 from ..state import SiteState
-from .extract import attribute_programs, link_key, merge_frontier, pending_names
+from .extract import attribute_programs, link_key, merge_frontier, pending_order
 
 log = logging.getLogger("agentscrape.pipeline.plan")
 
@@ -74,27 +74,35 @@ async def plan_programs(state: SiteState, deps: PipelineDeps) -> SiteState:
     to_read = [state["root_url"]]
     read: set[str] = set()
 
-    while to_read and len(read) < MAX_PROGRAM_PAGES:
-        url = to_read.pop(0)
-        key = link_key(url)
-        if key in read:
-            continue
-        read.add(key)
+    async def read_list(url: str) -> tuple[list[dict], list[str]]:
         page = await _page(deps, url)
         if page is None:
-            continue
+            return [], []
         final, title, text, html = page
         links = [
             link.as_dict()
             for link in extract_link_contexts(html, final, allowed_domains=allowed)
         ]
-        found, more = await read_program_list(
+        return await read_program_list(
             url=final, title=title, text=text, links=links, meter=deps.meter,
         )
-        programs = merge_programs(programs, found)
-        for next_url in more:
-            if link_key(next_url) not in read and next_url not in to_read:
-                to_read.append(next_url)
+
+    # Program-list pages are read a wave at a time, concurrently: the
+    # residency and fellowship lists a hub points to are independent, and
+    # reading them one after another held up the crawl for minutes.
+    while to_read and len(read) < MAX_PROGRAM_PAGES:
+        wave: list[str] = []
+        for url in to_read:
+            key = link_key(url)
+            if key not in read and len(read) < MAX_PROGRAM_PAGES:
+                read.add(key)
+                wave.append(url)
+        to_read = []
+        for found, more in await asyncio.gather(*(read_list(url) for url in wave)):
+            programs = merge_programs(programs, found)
+            for next_url in more:
+                if link_key(next_url) not in read and next_url not in to_read:
+                    to_read.append(next_url)
 
     log.info(
         "%s: %d programs planned (%d with a landing page) from %d program-list pages",
@@ -115,7 +123,7 @@ async def plan_programs(state: SiteState, deps: PipelineDeps) -> SiteState:
     # to the front of the work list (see extract.program_first).
     candidates[cursor:] = attribute_programs([dict(c) for c in candidates[cursor:]], programs)
     candidates = merge_frontier(
-        candidates, cursor, additions, pending_names(programs) if programs else None
+        candidates, cursor, additions, pending_order(programs) if programs else None
     )
     triaged = set(state.get("triaged", []))
     triaged.update(link_key(a["url"]) for a in additions)
@@ -190,7 +198,7 @@ async def gap_fill(state: SiteState, deps: PipelineDeps) -> SiteState:
         **state,
         "programs": programs,
         "candidates": merge_frontier(
-            candidates, cursor, additions, pending_names(programs) if programs else None
+            candidates, cursor, additions, pending_order(programs) if programs else None
         ),
         "triaged": sorted(triaged),
         "gap_rounds": rounds,
