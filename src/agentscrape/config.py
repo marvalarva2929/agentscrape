@@ -16,7 +16,8 @@ class Settings(BaseSettings):
 
     # --- auth -----------------------------------------------------------
     app_password: str = "change-me"
-    # Staff-only areas: launching runs, spend and site stats.
+    # Signs in with the "admin" scope. Clients can browse, export and start,
+    # cancel or retry runs themselves, so the scope currently gates nothing extra.
     admin_password: str = "change-me-admin"
     token_ttl_hours: int = 720
     # Signed screenshot links, so an <img> tag can load one without a header.
@@ -31,8 +32,15 @@ class Settings(BaseSettings):
     # Load the crawl snapshots in demo/ when the API starts on an empty
     # database, so a fresh deployment never opens on an empty school list.
     seed_demo_on_startup: bool = True
+    # Pick up runs that were in flight when the API last stopped. Each school
+    # resumes from its checkpoint (after mapping, once per batch of pages).
+    resume_runs_on_startup: bool = True
     # Where those snapshots live; blank means the repository's demo/ folder.
     demo_snapshot_dir: str = ""
+    # The school spreadsheets staff are sent (CSV or .xlsx, one row per
+    # institution), loaded into the school list on startup. Blank means the
+    # repository's schools/ folder.
+    school_sheets_dir: str = ""
 
     # --- database -------------------------------------------------------
     database_url: str = (
@@ -50,17 +58,25 @@ class Settings(BaseSettings):
     # Text-only calls (page reading, link triage, planning) can use a stronger
     # or longer-context model than the vision one. Blank means `llm_model`.
     llm_text_model: str = ""
+    # High-volume, low-stakes calls (link and host triage) can run on a
+    # cheaper model; both have a heuristic fallback. Blank means `text_model`.
+    llm_cheap_model: str = ""
+    llm_cheap_price_input_per_mtok: float = 0.10
+    llm_cheap_price_output_per_mtok: float = 0.30
     llm_timeout_seconds: int = 180
     llm_max_retries: int = 6
     # A 100-person roster is several thousand tokens of JSON; 4096 truncated it.
     llm_max_output_tokens: int = 16_000
     # Model calls in flight at once, across every site in the process.
-    llm_concurrency: int = 24
+    # Kept modest: every call in flight queues at the provider, and a queued
+    # long roster read is what the router's gateway answers with a 504.
+    llm_concurrency: int = 8
     # This many model failures in a row abort the site. A broken endpoint used
     # to degrade silently into a heuristic-only crawl that looked like success.
     llm_max_consecutive_failures: int = 20
     # Page text is read in chunks of this many characters.
-    llm_page_chunk_chars: int = 40_000
+    # 40,000 produced reads long enough to hit the router's gateway timeout.
+    llm_page_chunk_chars: int = 20_000
 
     # --- crawling -------------------------------------------------------
     user_agent: str = "agentscrape/0.1 (+contact: ops@example.com)"
@@ -81,6 +97,27 @@ class Settings(BaseSettings):
     crt_sh_timeout_seconds: int = 30
     search_provider: str = "none"  # none | brave | serper
     search_api_key: str = ""
+
+    # --- crawl strategy -------------------------------------------------
+    # hybrid: a plain-HTML pass maps the site with no model calls, and the
+    # model reads only the pages that show signs of people. agent: the model
+    # triages every link and reads every page it visits.
+    crawl_strategy: str = "hybrid"
+    # Pages the HTML pass fetches before handing over to the model, and how
+    # long it may take. Unmapped pages are still reachable afterwards.
+    html_map_max_pages: int = 1_500
+    html_map_timeout_seconds: int = 900
+    # Bodies kept in memory from the HTML pass so the model phase does not
+    # fetch them again. Lost on resume, which only costs a re-fetch.
+    html_map_cache_mb: int = 200
+
+    # --- directory search -------------------------------------------------
+    # What a run does when the request does not say: "crawl", or
+    # "crawl,directory" to look everyone up in the school's directory too.
+    default_run_modes: str = "crawl"
+    directory_max_lookups: int = 2_000
+    # Each lookup through a browser takes seconds, not milliseconds.
+    directory_max_browser_lookups: int = 300
 
     # --- run defaults ---------------------------------------------------
     default_concurrency: int = 4
@@ -133,6 +170,15 @@ class Settings(BaseSettings):
     @property
     def text_model(self) -> str:
         return self.llm_text_model or self.llm_model
+
+    @property
+    def run_modes(self) -> list[str]:
+        modes = [m.strip() for m in self.default_run_modes.split(",") if m.strip()]
+        return [m for m in modes if m in ("crawl", "directory")] or ["crawl"]
+
+    @property
+    def cheap_model(self) -> str:
+        return self.llm_cheap_model or self.text_model
 
     @property
     def screenshot_dir(self) -> Path:

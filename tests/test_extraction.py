@@ -800,3 +800,36 @@ class TestEducationHistoryIsNotACurrentRole:
     )
     def test_real_student_titles_still_classify(self, text, expected):
         assert classify_person(text, "") is expected
+
+
+class TestRegexesStayLinear:
+    """One page of this shape froze the whole API for minutes: the regex engine
+    holds the GIL, so a pathological match stops every crawl in the process."""
+
+    INPUTS = {
+        "whitespace around 'at'": "name" + " " * 5_000 + "at" + " " * 5_000 + "dom",
+        "long letter run": "a" * 50_000,
+        "long dotted run": "a." * 25_000,
+        "word then whitespace": "word" + " " * 50_000 + "x",
+    }
+
+    def test_email_patterns_finish_quickly_on_pathological_text(self):
+        import time
+
+        from agentscrape.domain.matching import EMAIL_RE
+        from agentscrape.extraction.html_people import extract_people
+        from agentscrape.validation.email import deobfuscate
+
+        for name, text in self.INPUTS.items():
+            started = time.perf_counter()
+            deobfuscate(text)
+            EMAIL_RE.findall(text)
+            extract_people(f"<html><body><p>{text}</p></body></html>")
+            assert time.perf_counter() - started < 2.0, name
+
+    def test_obfuscated_addresses_still_decode(self):
+        from agentscrape.validation.email import deobfuscate
+
+        for text in ("jane.doe [at] bcm [dot] edu", "jane.doe(at)bcm(dot)edu",
+                     "jane.doe at bcm dot edu", "jane.doe&#64;bcm.edu"):
+            assert "jane.doe@bcm.edu" in deobfuscate(text), text

@@ -172,7 +172,7 @@ _TITLE_RE = re.compile(
 )
 # Noise to strip before falling back to "whatever text sits next to the name".
 _POSITION_NOISE = re.compile(
-    r"(\bclass of\s*'?\d{2,4}\b|\bpgy[-\s]?\d\b|[\w.+-]+@[\w.-]+|"
+    r"(\bclass of\s*'?\d{2,4}\b|\bpgy[-\s]?\d\b|(?<![\w.+-])[\w.+-]{1,64}@[\w.-]{1,253}|"
     r"\b\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b|https?://\S+)",
     re.IGNORECASE,
 )

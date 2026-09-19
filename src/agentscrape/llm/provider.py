@@ -11,16 +11,39 @@ import base64
 import json
 import logging
 import re
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
 
-from openai import APIConnectionError, APIStatusError, AsyncOpenAI, RateLimitError
+from openai import (
+    APIConnectionError,
+    APIStatusError,
+    APITimeoutError,
+    AsyncOpenAI,
+    RateLimitError,
+)
 
 from ..config import settings
 from .usage import Usage, UsageMeter
 
 log = logging.getLogger("agentscrape.llm")
+
+
+class ModelTimeout(RuntimeError):
+    """The request took longer than the gateway or our client would wait.
+
+    Resending the identical request times out again, and each attempt holds a
+    slot of the process-wide gate for the whole window, which starved other
+    calls into timeouts of their own. Callers shrink the request instead.
+    """
+
+
+# The Hugging Face router answers 504 when the upstream provider does not
+# finish in time; 408 and 524 are the same thing from other gateways.
+_TIMEOUT_STATUSES = frozenset({408, 504, 524})
+# One more try for a timeout, in case it was queueing rather than size.
+_TIMEOUT_ATTEMPTS = 2
 
 
 @dataclass
@@ -138,26 +161,42 @@ class OpenAICompatibleProvider(VisionProvider):
         ]
 
         last_error: Exception | None = None
+        timeouts = 0
+        limit = max_tokens or settings.llm_max_output_tokens
+        prompt_chars = len(system) + len(user)
         for attempt in range(settings.llm_max_retries):
+            started = time.monotonic()
             try:
                 response = await self._client.chat.completions.create(
                     model=model,
                     messages=messages,  # type: ignore[arg-type]
-                    max_tokens=max_tokens or settings.llm_max_output_tokens,
+                    max_tokens=limit,
                     temperature=0.0,  # extraction, not generation
                 )
+            except APITimeoutError as exc:
+                timeouts += 1
+                self._log_failure(exc, "timeout", model, prompt_chars, limit, started)
+                if timeouts >= _TIMEOUT_ATTEMPTS:
+                    raise ModelTimeout(f"model call timed out: {exc}") from exc
+                continue
             except (RateLimitError, APIConnectionError) as exc:
                 last_error = exc
                 delay = min(2**attempt, 30)
                 retry_after = _retry_after(exc)
                 if retry_after is not None:
                     delay = min(max(retry_after, 1.0), 60.0)
-                log.warning(
-                    "model call failed (%s), retrying in %ss", type(exc).__name__, delay
-                )
+                self._log_failure(exc, type(exc).__name__, model, prompt_chars, limit, started)
                 await asyncio.sleep(delay)
                 continue
             except APIStatusError as exc:
+                self._log_failure(exc, exc.status_code, model, prompt_chars, limit, started)
+                if exc.status_code in _TIMEOUT_STATUSES:
+                    timeouts += 1
+                    if timeouts >= _TIMEOUT_ATTEMPTS:
+                        raise ModelTimeout(
+                            f"model call timed out (HTTP {exc.status_code})"
+                        ) from exc
+                    continue
                 if exc.status_code >= 500 and attempt < settings.llm_max_retries - 1:
                     last_error = exc
                     await asyncio.sleep(min(2**attempt, 15))
@@ -168,6 +207,7 @@ class OpenAICompatibleProvider(VisionProvider):
             usage = Usage(
                 input_tokens=getattr(raw_usage, "prompt_tokens", 0) or 0,
                 output_tokens=getattr(raw_usage, "completion_tokens", 0) or 0,
+                model=model,
             )
             if meter is not None:
                 await meter.record(usage)
@@ -176,6 +216,19 @@ class OpenAICompatibleProvider(VisionProvider):
 
         raise RuntimeError(
             f"model call failed after {settings.llm_max_retries} attempts: {last_error}"
+        )
+
+
+    @staticmethod
+    def _log_failure(
+        exc: Exception, what: object, model: str, prompt_chars: int, max_tokens: int,
+        started: float,
+    ) -> None:
+        """Enough to tell a gateway timeout on an oversized request from an outage."""
+        log.warning(
+            "model call failed (%s) after %.0fs: model=%s prompt_chars=%d max_tokens=%d: %s",
+            what, time.monotonic() - started, model, prompt_chars, max_tokens,
+            str(exc)[:200],
         )
 
 

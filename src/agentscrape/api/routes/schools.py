@@ -44,6 +44,9 @@ def _school_out(site: Site, programs: int, people: int) -> SchoolOut:
         last_updated=site.last_scraped_at,
         validation_status=site.validation_status,
         validation_reason=site.validation_reason,
+        directory_url=site.directory_url,
+        has_crawl_data=people > 0,
+        directory_search_available=people > 0 and bool(site.directory_url),
     )
 
 

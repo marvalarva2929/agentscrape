@@ -93,6 +93,15 @@ class Site(TimestampMixin, Base):
     # Content hashes of the known-good paths at last scrape; tier-1 skip check.
     last_fingerprint: Mapped[dict[str, Any] | None] = mapped_column(JSONType)
 
+    # The institution's people/student directory, from the school sheet, and
+    # how to search it once learned (see `directory.learn`), so later runs skip
+    # the learning step.
+    directory_url: Mapped[str | None] = mapped_column(Text)
+    directory_config: Mapped[dict[str, Any] | None] = mapped_column(JSONType)
+    # Other registrable domains the institution publishes on (its website's,
+    # when the sheet's residency hub lives on another one). In crawl scope.
+    affiliated_domains: Mapped[list[str] | None] = mapped_column(JSONType)
+
     records: Mapped[list[Record]] = relationship(back_populates="site")
     known_paths: Mapped[list[KnownPath]] = relationship(back_populates="site")
 

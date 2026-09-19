@@ -9,7 +9,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...urls import canonicalize, host_of, url_hash
+from ...urls import canonicalize, entry_url, host_of, url_hash
 from ..enums import ValidationStatus
 from ..models import KnownPath, Site
 
@@ -40,7 +40,7 @@ async def upsert_site(session: AsyncSession, url: str) -> Site:
     if site is None:
         site = Site(
             root_domain=host,
-            canonical_url=canonical if canonical.endswith("/") else f"{canonical}/",
+            canonical_url=entry_url(canonical),
             validation_status=ValidationStatus.PENDING,
         )
         session.add(site)

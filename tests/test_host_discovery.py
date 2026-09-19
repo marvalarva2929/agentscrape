@@ -58,3 +58,40 @@ def test_observed_hosts_are_in_scope_siblings_only() -> None:
         "https://residents.acgme.org/x",
     ])
     assert _observed_host_counts(urls, ROOT, {"arizona.edu"}) == {"obgyn.arizona.edu": 2}
+
+
+class _SitemapFetcher:
+    """Serves a university-shaped sitemap tree: robots.txt lists many sub-site
+    indexes, each pointing at one page sitemap."""
+
+    def __init__(self, indexes: int) -> None:
+        self.indexes = indexes
+
+    async def get_many(self, urls, attempts=3):
+        from agentscrape.browser.fetcher import FetchResult
+
+        out = []
+        for url in urls:
+            body = ""
+            if url.endswith("/index.xml"):
+                site = url.split("/")[-2]
+                body = (
+                    '<sitemapindex><sitemap><loc>https://med.example.edu/'
+                    f'{site}/pages.xml</loc></sitemap></sitemapindex>'
+                )
+            elif url.endswith("/pages.xml"):
+                site = url.split("/")[-2]
+                body = f"<urlset><url><loc>https://med.example.edu/{site}/residents</loc></url></urlset>"
+            out.append(FetchResult(url=url, final_url=url, status=200 if body else 404,
+                                   text=body, content_type="text/xml", ok=bool(body)))
+        return out
+
+
+@pytest.mark.asyncio
+async def test_many_sitemap_indexes_still_yield_pages() -> None:
+    from agentscrape.discovery.sitemap import RobotsInfo, discover_from_sitemaps
+
+    robots = RobotsInfo(sitemaps=[f"https://med.example.edu/site{i}/index.xml" for i in range(60)])
+    urls = await discover_from_sitemaps(_SitemapFetcher(60), "https://med.example.edu/", robots)
+    # Every index's pages are read, not just the first 25 indexes opened.
+    assert len(urls) == 60

@@ -35,6 +35,7 @@ CHECKPOINTED_FIELDS = (
     "known_path_hits", "records_new", "records_changed", "records_unchanged",
     "seen_record_ids", "fingerprint", "dominant_specialty", "similarity_score",
     "barren_streak", "triaged", "processed_hashes", "programs", "gap_rounds",
+    "html_map_stats", "crawl_done", "directory_done", "directory_stats",
 )
 
 
@@ -66,7 +67,7 @@ async def load_checkpoint(
         # A checkpoint from an older shape is discarded rather than guessed at.
         log.info("discarding checkpoint with version %r", stored.get("version"))
         return None
-    if not stored.get("candidates"):
+    if not stored.get("candidates") and not stored.get("crawl_done"):
         # Nothing useful to resume: discovery had not finished.
         return None
     return stored

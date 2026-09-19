@@ -27,7 +27,7 @@ from ..extraction.person import ExtractedPerson
 from ..extraction.text import chunk_text
 from ..validation.email import is_plausible
 from .prompts import READER_SYSTEM, reader_user_prompt
-from .provider import VisionProvider, get_provider
+from .provider import ModelTimeout, VisionProvider, get_provider
 from .usage import LLMUnavailable, UsageMeter
 
 log = logging.getLogger("agentscrape.llm.reader")
@@ -186,10 +186,16 @@ def merge_people(*groups: list[ExtractedPerson]) -> list[ExtractedPerson]:
     return list(merged.values())
 
 
+# How many times a timed-out chunk is halved before the read is given up.
+MAX_SPLITS = 2
+_MIN_SPLIT_CHARS = 2_000
+
+
 async def _read_chunk(
     *, provider: VisionProvider, url: str, title: str, text: str, part: int, parts: int,
-    screenshot: bytes | None, meter: UsageMeter | None,
-) -> dict | None:
+    screenshot: bytes | None, meter: UsageMeter | None, splits_left: int = MAX_SPLITS,
+) -> list[dict]:
+    """Payloads for one chunk: one normally, several when a timeout split it."""
     prompt = reader_user_prompt(url=url, title=title, text=text, part=part, parts=parts)
     model = settings.llm_model if screenshot else settings.text_model
     for attempt in range(2):
@@ -200,21 +206,43 @@ async def _read_chunk(
             )
         except LLMUnavailable:
             raise
+        except ModelTimeout as exc:
+            if splits_left > 0 and len(text) > _MIN_SPLIT_CHARS:
+                # A gateway timeout means the read was too long to finish, so
+                # read half as much at a time: less text in, fewer people out.
+                halves = chunk_text(text, len(text) // 2 + 500, overlap=500)
+                log.info(
+                    "reading %s timed out; splitting %d chars into %d parts",
+                    url, len(text), len(halves),
+                )
+                results = await asyncio.gather(*(
+                    _read_chunk(
+                        provider=provider, url=url, title=title, text=half, part=part,
+                        parts=parts, screenshot=screenshot if i == 0 else None,
+                        meter=meter, splits_left=splits_left - 1,
+                    )
+                    for i, half in enumerate(halves)
+                ))
+                return [payload for group in results for payload in group]
+            log.warning("page reading timed out for %s (part %d/%d): %s", url, part, parts, exc)
+            if meter is not None:
+                meter.note_failure("read_page", exc)
+            return []
         except Exception as exc:
             log.warning("page reading failed for %s (part %d/%d): %s", url, part, parts, exc)
             if meter is not None:
                 meter.note_failure("read_page", exc)
-            return None
+            return []
         payload = response.json()
         if isinstance(payload, list):
             payload = {"people": payload}
         if isinstance(payload, dict):
-            return payload
+            return [payload]
         # Unparseable usually means the JSON was cut off; one retry, then give up.
         log.warning("page reading for %s returned unparseable output (attempt %d)", url, attempt + 1)
     if meter is not None:
         meter.note_failure("read_page", "unparseable output")
-    return None
+    return []
 
 
 async def read_page(
@@ -237,7 +265,7 @@ async def read_page(
         )
         for i, chunk in enumerate(chunks)
     ))
-    good = [p for p in payloads if p is not None]
+    good = [p for group in payloads for p in group]
     if not good:
         return PageReading(ok=False)
 

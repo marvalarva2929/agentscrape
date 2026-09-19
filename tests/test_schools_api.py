@@ -1,7 +1,8 @@
 """School -> Person navigation, removed CSV upload and admin scope.
 
 These are the endpoints the frontend actually navigates, and the access split
-that keeps clients out of billable/staff-only work.
+between the client and admin passwords. Clients start their own crawls and
+directory searches.
 """
 
 from __future__ import annotations
@@ -117,6 +118,18 @@ class TestNavigation:
         assert school["program_count"] == 1
         assert school["people_count"] == 3
 
+    async def test_school_says_whether_directory_search_is_possible(self, client, seeded, session):
+        headers = await _headers(client, CLIENT_PW)
+        school = (await client.get(f"{API}/schools", headers=headers)).json()["items"][0]
+        assert school["has_crawl_data"] is True
+        assert school["directory_search_available"] is False  # no directory link yet
+
+        seeded["site"].directory_url = "https://med.example.edu/people"
+        await session.commit()
+        school = (await client.get(f"{API}/schools", headers=headers)).json()["items"][0]
+        assert school["directory_url"] == "https://med.example.edu/people"
+        assert school["directory_search_available"] is True
+
     async def test_programs_for_a_school(self, client, seeded):
         headers = await _headers(client, CLIENT_PW)
         school_id = seeded["site"].id
@@ -225,26 +238,36 @@ class TestScreenshotLinks:
 
 
 class TestAdminScope:
-    async def test_client_password_cannot_reach_the_staff_queue(self, client):
-        headers = await _headers(client, CLIENT_PW)
-        response = await client.get(f"{API}/admin/submissions", headers=headers)
-        assert response.status_code == 403
-        assert response.json()["error"]["code"] == "AUTH_FORBIDDEN"
-
-    async def test_admin_password_can(self, client):
+    async def test_admin_password_gets_past_the_scope_check(self, client):
         headers = await _headers(client, ADMIN_PW)
-        response = await client.get(f"{API}/admin/submissions", headers=headers)
-        assert response.status_code == 200
+        # An empty site list fails validation, which is only reached once
+        # the scope check has passed.
+        response = await client.post(f"{API}/runs", json={"sites": []}, headers=headers)
+        assert response.status_code == 422
 
-    async def test_client_password_cannot_start_billable_runs(self, client):
+    async def test_client_password_can_start_runs(self, client):
         headers = await _headers(client, CLIENT_PW)
+        # Refused only for being a directory search on an uncrawled school,
+        # which is past the permission check.
         response = await client.post(
             f"{API}/runs",
-            json={"sites": ["https://med.example.edu"]},
+            json={"sites": ["https://new-school.example.edu"], "config": {"modes": ["directory"]}},
             headers=headers,
         )
-        assert response.status_code == 403
-        assert response.json()["error"]["code"] == "AUTH_FORBIDDEN"
+        assert response.status_code == 409
+        assert response.json()["error"]["code"] == "DIRECTORY_SEARCH_UNAVAILABLE"
+
+    async def test_directory_only_run_on_an_uncrawled_school_is_refused(self, client):
+        headers = await _headers(client, ADMIN_PW)
+        response = await client.post(
+            f"{API}/runs",
+            json={"sites": ["https://new-school.example.edu"], "config": {"modes": ["directory"]}},
+            headers=headers,
+        )
+        assert response.status_code == 409
+        error = response.json()["error"]
+        assert error["code"] == "DIRECTORY_SEARCH_UNAVAILABLE"
+        assert error["details"]["sites"] == {"https://new-school.example.edu": "not crawled yet"}
 
     async def test_login_reports_the_scope(self, client):
         for password, scope in ((CLIENT_PW, "client"), (ADMIN_PW, "admin")):
@@ -261,7 +284,12 @@ class TestAdminScope:
         assert body["user"]["scope"] == "admin"
 
 
-class TestRemovedCsvUpload:
+class TestRemovedUploads:
+    async def test_staff_submission_queue_is_removed(self, client):
+        headers = await _headers(client, ADMIN_PW)
+        response = await client.get(f"{API}/admin/submissions", headers=headers)
+        assert response.status_code == 404
+
     CSV = b"url\nmed.example.edu\nbrand-new-hospital.edu\nnot a url\n"
 
     async def test_public_csv_submission_endpoint_is_removed(self, client, seeded):

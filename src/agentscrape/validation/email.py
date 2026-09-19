@@ -7,9 +7,16 @@ import re
 from ..domain.matching import EMAIL_RE, normalize_email
 
 # "jane [at] uchicago [dot] edu", "jane (at) uchicago (dot) edu", "jane AT x DOT edu"
+# Every repeat is bounded and a match must start at the beginning of a word.
+# Unbounded `\s*` on both sides of an optional `\s`, over a long run of
+# whitespace, backtracked for minutes on one page; the regex engine holds the
+# GIL throughout, so that one page froze the whole API. Lengths follow RFC 5321
+# (64-character local part, 253-character domain).
 _OBFUSCATED = re.compile(
-    r"([A-Za-z0-9._%+\-]+)\s*(?:\[|\(|\{|&#64;|\s)\s*(?:at|@)\s*(?:\]|\)|\}|\s)\s*"
-    r"([A-Za-z0-9.\-]+?)\s*(?:\[|\(|\{|\s)\s*(?:dot|\.)\s*(?:\]|\)|\}|\s)\s*([A-Za-z]{2,})",
+    r"(?<![A-Za-z0-9._%+\-])([A-Za-z0-9._%+\-]{1,64})[ \t]{0,3}(?:\[|\(|\{|&#64;|[ \t])[ \t]{0,3}"
+    r"(?:at|@)[ \t]{0,3}(?:\]|\)|\}|[ \t])[ \t]{0,3}"
+    r"([A-Za-z0-9.\-]{1,253}?)[ \t]{0,3}(?:\[|\(|\{|[ \t])[ \t]{0,3}(?:dot|\.)[ \t]{0,3}"
+    r"(?:\]|\)|\}|[ \t])[ \t]{0,3}([A-Za-z]{2,24})\b",
     re.IGNORECASE,
 )
 _ENTITY_AT = re.compile(r"&#0*64;|&commat;|&#x0*40;", re.IGNORECASE)

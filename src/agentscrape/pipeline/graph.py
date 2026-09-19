@@ -1,7 +1,10 @@
 """The per-site pipeline as a LangGraph graph.
 
-    entry -> validate -> skip_check -> discover -> plan -> extract (loop)
-          -> gap_fill -> extract (loop) ... -> finalize
+    entry -> validate -> skip_check -> discover -> [html_map] -> plan
+          -> extract (loop) -> gap_fill -> extract (loop) ... -> finalize
+
+`html_map` runs on the hybrid strategy only: a plain-HTML pass that maps the
+site without the model, so the model reads only pages that show people.
 
 Any stage can terminate the site early by setting `terminated`. The extract node
 loops until the work list stops being worth working (see `_after_extract`), the
@@ -23,9 +26,11 @@ from ..config import settings
 from ..orchestrator.events import RunStage
 from .checkpoint import apply_checkpoint, load_checkpoint
 from .deps import PipelineDeps
+from .nodes.directory import directory_search
 from .nodes.discover import discover_links
 from .nodes.extract import extract_batch
 from .nodes.finalize import finalize
+from .nodes.html_map import html_map
 from .nodes.plan import MAX_GAP_ROUNDS, gap_fill, pending_programs, plan_programs
 from .nodes.skip_check import skip_check
 from .nodes.validate import validate_institution
@@ -61,6 +66,9 @@ def build_site_graph(deps: PipelineDeps):
     async def _discover(state: SiteState) -> SiteState:
         return await discover_links(state, deps)
 
+    async def _html_map(state: SiteState) -> SiteState:
+        return await html_map(state, deps)
+
     async def _plan(state: SiteState) -> SiteState:
         return await plan_programs(state, deps)
 
@@ -71,11 +79,34 @@ def build_site_graph(deps: PipelineDeps):
         await deps.emit_stage(state, RunStage.DIRECTORY)
         return await extract_batch(state, deps)
 
+    async def _directory(state: SiteState) -> SiteState:
+        await deps.emit_stage(state, RunStage.DIRECTORY)
+        return await directory_search(state, deps)
+
     async def _finalize(state: SiteState) -> SiteState:
         await deps.emit_stage(state, RunStage.FINALIZING)
         return await finalize(state, deps)
 
+    def _wants_directory(state: SiteState) -> bool:
+        return "directory" in (state.get("modes") or ["crawl"])
+
+    def _crawl_over(state: SiteState) -> str:
+        """Where a site goes once its crawl is finished or was skipped: the
+        directory search when this run asked for one, else finalize. A site
+        stopped for a reason (rejected, failed, a hard stop) goes straight
+        to finalize."""
+        if (
+            _wants_directory(state)
+            and not deps.stop_requested()
+            and state.get("status") != "failed"
+            and state.get("error_code") is None
+        ):
+            return "directory"
+        return "finalize"
+
     def _after_entry(state: SiteState) -> str:
+        if "crawl" not in (state.get("modes") or ["crawl"]) or state.get("crawl_done"):
+            return "directory"
         # A resumed site already has its ranked candidate list, so it skips
         # validation, the skip check and discovery and goes back to work.
         return "extract" if state.get("resumed") else "validate"
@@ -84,10 +115,13 @@ def build_site_graph(deps: PipelineDeps):
         return "finalize" if state.get("terminated") else "skip_check"
 
     def _after_skip(state: SiteState) -> str:
-        return "finalize" if state.get("terminated") else "discover"
+        # Skipped as unchanged: the stored people can still be looked up.
+        return _crawl_over(state) if state.get("terminated") else "discover"
 
     def _after_discover(state: SiteState) -> str:
-        return "plan" if state.get("candidates") else "finalize"
+        if not state.get("candidates"):
+            return _crawl_over(state)
+        return "html_map" if state.get("crawl_strategy") == "hybrid" else "plan"
 
     def _worklist_done(state: SiteState) -> str | None:
         """Why the work list is no longer worth working, or None."""
@@ -110,7 +144,7 @@ def build_site_graph(deps: PipelineDeps):
             return "finalize"
         if state.get("steps_taken", 0) >= state["step_budget"]:
             log.info("step budget exhausted for %s", state["root_domain"])
-            return "finalize"
+            return _crawl_over(state)
         reason = _worklist_done(state)
         if reason is None:
             return "extract"
@@ -122,29 +156,37 @@ def build_site_graph(deps: PipelineDeps):
             )
             return "gap_fill"
         log.info("%s: %s; finishing", state["root_domain"], reason)
-        return "finalize"
+        return _crawl_over(state)
 
     def _after_gap_fill(state: SiteState) -> str:
-        return "finalize" if _worklist_done(state) == "work list exhausted" else "extract"
+        return _crawl_over(state) if _worklist_done(state) == "work list exhausted" else "extract"
 
     graph = StateGraph(SiteState)
     graph.add_node("entry", _entry)
     graph.add_node("validate", _validate)
     graph.add_node("skip_check", _skip)
     graph.add_node("discover", _discover)
+    graph.add_node("html_map", _html_map)
     graph.add_node("plan", _plan)
     graph.add_node("extract", _extract)
     graph.add_node("gap_fill", _gap_fill)
+    graph.add_node("directory", _directory)
     graph.add_node("finalize", _finalize)
 
     graph.set_entry_point("entry")
-    graph.add_conditional_edges("entry", _after_entry, ["validate", "extract"])
+    graph.add_conditional_edges("entry", _after_entry, ["validate", "extract", "directory"])
     graph.add_conditional_edges("validate", _after_validate, ["skip_check", "finalize"])
-    graph.add_conditional_edges("skip_check", _after_skip, ["discover", "finalize"])
-    graph.add_conditional_edges("discover", _after_discover, ["plan", "finalize"])
+    graph.add_conditional_edges("skip_check", _after_skip, ["discover", "directory", "finalize"])
+    graph.add_conditional_edges(
+        "discover", _after_discover, ["html_map", "plan", "directory", "finalize"]
+    )
+    graph.add_edge("html_map", "plan")
     graph.add_edge("plan", "extract")
-    graph.add_conditional_edges("extract", _after_extract, ["extract", "gap_fill", "finalize"])
-    graph.add_conditional_edges("gap_fill", _after_gap_fill, ["extract", "finalize"])
+    graph.add_conditional_edges(
+        "extract", _after_extract, ["extract", "gap_fill", "directory", "finalize"]
+    )
+    graph.add_conditional_edges("gap_fill", _after_gap_fill, ["extract", "directory", "finalize"])
+    graph.add_edge("directory", "finalize")
     graph.add_edge("finalize", END)
 
     return graph.compile()

@@ -19,7 +19,11 @@ from ..urls import canonicalize, host_of, in_scope, registrable_domain, same_reg
 
 log = logging.getLogger("agentscrape.discovery.sitemap")
 
-_MAX_SITEMAPS = 25
+# Sitemap files fetched per walk. A university's robots.txt can list a hundred
+# sub-site indexes (med.virginia.edu lists 101 entries); at 25 the walk spent
+# its whole allowance opening indexes and returned no pages at all. _MAX_URLS
+# is the real bound.
+_MAX_SITEMAPS = 200
 _MAX_URLS = 20_000
 
 
@@ -134,10 +138,13 @@ async def discover_from_sitemaps(
                 url = canonicalize(page, base=root_url)
                 if url and same_registrable_domain(host_of(url), root_host):
                     found.setdefault(url, None)
-            for child in nested:
-                url = canonicalize(child, base=root_url)
-                if url and url not in seen_sitemaps:
-                    queue.append(url)
+            # An index's own sitemaps go to the front of the queue, so its pages
+            # are read before the next index is opened.
+            children = [
+                url for url in (canonicalize(child, base=root_url) for child in nested)
+                if url and url not in seen_sitemaps and url not in queue
+            ]
+            queue[:0] = children
 
     log.info(
         "sitemap discovery: %d urls from %d sitemaps for %s",

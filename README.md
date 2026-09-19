@@ -6,8 +6,11 @@ web presence** — residents, fellows, faculty, program directors, coordinators,
 staff, students and alumni — each labelled with their printed title, stored with
 full provenance, and tracked across repeated runs.
 
-Clients do not start crawls or upload CSVs. They send requested schools by
-email; staff populate the site, launch runs, and bill separately per school.
+Clients do not upload CSVs. They send a spreadsheet of schools; staff drop it
+into [`schools/`](schools/README.md), where it is loaded on startup (or with
+`agentscrape load-schools`) and the schools appear in the UI. There is no upload
+flow or admin page. Clients start crawls and directory searches on those schools
+themselves.
 
 Everything runs on one box: API, orchestrator, agents, Postgres, file storage.
 The server is started on demand and stopped when idle, so nothing assumes
@@ -55,8 +58,8 @@ Open a fresh PowerShell window afterwards so the new tools are on `PATH`.
 | UI | <http://localhost:5173> |
 | API | <http://localhost:8000/api/v1> |
 | API docs | <http://localhost:8000/api/v1/docs> |
-| Client password | `change-me` — browse schools, people, sources and exports |
-| Admin password | `change-me-admin` — the above, plus launching billable runs |
+| Client password | `change-me` — browse schools, people, sources and exports, and start crawls and directory searches |
+| Admin password | `change-me-admin` — the same access, with the `admin` scope |
 
 `--reset` wipes the database and reseeds it; `--no-seed` starts empty
 (`./scripts/dev.sh --reset`, or `.\scripts\dev.ps1 -Reset` on Windows).
@@ -90,7 +93,7 @@ uv run agentscrape seed-demo            # or: agentscrape import-school demo/ari
 uv run agentscrape llm-check            # the model must answer before a live run
 ```
 
-Starting an update from the UI (admin password) opens the run monitor, which
+Starting an update from the UI opens the run monitor, which
 streams what the agent is doing — sites mapped, programs identified, each page
 read and who was on it, each program covered — and shows totals, time and model
 spend at the end. For a demo-length run (about 5–10 minutes) set:
@@ -108,18 +111,51 @@ every site stops with `LLM_UNAVAILABLE`. `agentscrape export-school <domain>
 
 ### Crawling a real institution
 
-The model drives the crawl: it reads every page, decides which links and sites
-to follow, and tracks which programs still lack a roster. It needs a working
-OpenAI-compatible endpoint (`LLM_BASE_URL`, `LLM_API_KEY` in `.env`); check it
-first with `agentscrape llm-check`.
+Two strategies, set by `CRAWL_STRATEGY` or per run (`config.crawl_strategy`,
+`--strategy` on the CLI):
+
+- **`hybrid`** (default): a plain-HTML pass maps up to `HTML_MAP_MAX_PAGES`
+  pages with no model calls — following links, ranking them by the keyword
+  heuristic, and noting which pages show people (three or more names, two or
+  more addresses, a JavaScript shell, or a roster-like URL). The model then
+  reads only those pages, and link triage runs on the cheaper
+  `LLM_CHEAP_MODEL`. A page with one or two names (a footer, a byline, a
+  contact block) is not read.
+- **`agent`**: the model triages every link and reads every page it visits.
+
+Both need a working OpenAI-compatible endpoint (`LLM_BASE_URL`, `LLM_API_KEY` in
+`.env`); check it first with `agentscrape llm-check`.
 
 ```bash
 uv run agentscrape site medicine.uchicago.edu --dry-run   # discovery and ranking only
-uv run agentscrape site radonc.uchicago.edu               # full pipeline
+uv run agentscrape site radonc.uchicago.edu               # full pipeline, hybrid
+uv run agentscrape site radonc.uchicago.edu --strategy agent
+uv run agentscrape site radonc.uchicago.edu --mode directory   # directory search only
 ```
 
 `--no-browser` skips Chromium (faster, but misses rosters rendered by
-JavaScript); the model is still used on every page.
+JavaScript).
+
+### Directory search
+
+Each school sheet row carries the school's people directory. A run with
+`config.modes` containing `"directory"` looks up the people already found —
+residents and fellows first — and fills in only what their roster left blank:
+address, PGY, class year, title. The first run learns how to search the
+directory (its own GET form, or the URL a JavaScript search produces) and
+stores it on the site; a directory behind a sign-in is reported and skipped. A
+search that names two possible matches fills nothing. Directory-only runs need
+a school that has already been crawled.
+
+### Model timeouts (HTTP 504)
+
+The Hugging Face router answers 504 when its upstream provider does not finish
+in time — in practice a long roster read. A 504 or client timeout is retried
+once; after that the page chunk (or triage batch) is split in half and read in
+parts, instead of resending the same oversized request. Every failed attempt
+logs its status, prompt size, `max_tokens`, model and elapsed time. Keep
+`LLM_CONCURRENCY` modest (default 8): queued calls at the provider are what time
+out.
 
 ### Checking a school against the client's sheet
 
@@ -196,8 +232,10 @@ The `/api/v1` contract is implemented as specified. Four things you need:
    blank. `pgy` is exactly what was printed, never rolled forward, and
    `pgy_capture_date` says when it was read. There is no derived class-of.
 
-4. **Two passwords, Bearer tokens.** The client password grants browse and
-   export; a separate admin password grants billable run creation and spend.
+4. **Two passwords, Bearer tokens.** Both grant browse, export and starting,
+   cancelling or retrying runs (crawls and directory searches); the admin
+   password signs in with the `admin` scope. `max_spend_usd` on a run caps its
+   spend.
    Tokens rather than cookies because the frontend is
    served from GitHub Pages — a session cookie would be third-party to this API
    and blocked by Safari and increasingly Chrome. `GET /runs/{id}/events` also
@@ -212,13 +250,26 @@ The `/api/v1` contract is implemented as specified. Four things you need:
 6. **Missing people sort to the bottom** of any list rather than being filtered
    out, marked with `status: "missing"`.
 
+7. **Crawl, directory search, or both.** `POST /runs` takes
+   `config.modes`: `["crawl"]` (the default), `["directory"]` or both. Each
+   school carries `has_crawl_data`, `directory_url` and
+   `directory_search_available`; offer directory search only when the last is
+   true. A directory-only run on a school without it is refused with `409
+   DIRECTORY_SEARCH_UNAVAILABLE`, whose `details.sites` says why per school.
+   Values filled from the directory carry `extraction_method: "directory"`.
+
 ---
 
 ## How a site is processed
 
 ```
-validate → skip check → link discovery → rank → extract (loop) → reconcile → finalize
+validate → skip check → link discovery → [HTML map] → rank → extract (loop)
+         → reconcile → [directory search] → finalize
 ```
+
+The HTML map runs on the hybrid strategy; directory search runs when the run
+asks for it, and a directory-only run goes straight from entry to directory
+search.
 
 **Validate.** K-12 institutions are rejected explicitly, with a stated reason,
 never silently filtered. Hostname patterns decide the clear cases; homepage

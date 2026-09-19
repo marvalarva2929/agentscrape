@@ -86,6 +86,8 @@ class ExtractionMethod(StrEnum):
     KNOWN_PATH = "known_path"
     DISCOVERY = "discovery"
     AGENT_NAV = "agent_nav"
+    # Filled in by searching the institution's people directory.
+    DIRECTORY = "directory"
 
 
 class FetchMode(StrEnum):

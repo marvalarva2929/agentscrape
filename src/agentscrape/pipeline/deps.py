@@ -7,7 +7,7 @@ time via closure rather than carried in the checkpointed state.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from ..browser.fetcher import Fetcher
@@ -28,6 +28,9 @@ class PipelineDeps:
     meter: UsageMeter | None = None
     # Returns True when the run has hit a hard stop and work should wind down.
     should_stop: object = None  # callable() -> bool
+    # Hybrid strategy: bodies the HTML pass already fetched, by candidate URL,
+    # so the model phase reads them without fetching again. Not checkpointed.
+    page_cache: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.emitter is None:

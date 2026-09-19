@@ -168,11 +168,59 @@ async def preview_csv(
     )
 
 
+class DirectorySearchUnavailable(ValueError):
+    """Directory search was asked for on schools that cannot have it."""
+
+    def __init__(self, problems: dict[str, str]) -> None:
+        self.problems = problems
+        super().__init__(
+            "Directory search needs a school that has already been crawled and has a "
+            "directory link: " + "; ".join(f"{k}: {v}" for k, v in problems.items())
+        )
+
+
+async def directory_search_problems(
+    session: AsyncSession, sites: list[str], *, with_crawl: bool = False
+) -> dict[str, str]:
+    """Why each input cannot be directory-searched; empty when all can. With
+    `with_crawl` the same run crawls first, so no stored people are needed."""
+    problems: dict[str, str] = {}
+    for raw in sites:
+        url = normalize_site_input(raw)
+        if url is None:
+            continue
+        site = await session.scalar(select(Site).where(Site.root_domain == host_of(url)))
+        if site is None:
+            problems[raw] = (
+                "not in the school sheet" if with_crawl else "not crawled yet"
+            )
+            continue
+        if with_crawl:
+            if not site.directory_url:
+                problems[raw] = "no directory link in the school sheet"
+            continue
+        records = int(
+            await session.scalar(select(func.count(Record.id)).where(Record.site_id == site.id))
+            or 0
+        )
+        if not records:
+            problems[raw] = "not crawled yet"
+        elif not site.directory_url:
+            problems[raw] = "no directory link in the school sheet"
+    return problems
+
+
 async def create_run(session: AsyncSession, body: RunCreate) -> Run:
     """Create the Run and one SiteRun per valid site. Does not start it."""
     config = body.config
     # Reject before anything is written, so the client gets a clean error.
     check_memory_ceiling(config.concurrency)
+    if "directory" in config.modes:
+        problems = await directory_search_problems(
+            session, body.sites, with_crawl="crawl" in config.modes
+        )
+        if problems:
+            raise DirectorySearchUnavailable(problems)
 
     run = Run(
         status=RunStatus.PENDING,
@@ -228,6 +276,25 @@ async def create_run(session: AsyncSession, body: RunCreate) -> Run:
     return run
 
 
+async def resume_interrupted_runs() -> list[str]:
+    """Relaunch every run the last API process left running or pending.
+
+    The server is stopped on demand, so an in-flight run is normal, not an
+    error; its orchestrator returns running schools to the queue and each one
+    continues from its checkpoint.
+    """
+    async with get_sessionmaker()() as session:
+        run_ids = list((await session.execute(
+            select(Run.id)
+            .where(Run.status.in_([RunStatus.RUNNING, RunStatus.PENDING]))
+            .order_by(Run.created_at)
+        )).scalars())
+    for run_id in run_ids:
+        log.info("resuming interrupted run %s", run_id)
+        await launch_run(run_id)
+    return run_ids
+
+
 async def launch_run(run_id: str, *, use_browser: bool = True) -> RunOrchestrator:
     """Start the orchestrator for a run as a background task."""
     async with get_sessionmaker()() as session:
@@ -247,6 +314,8 @@ async def launch_run(run_id: str, *, use_browser: bool = True) -> RunOrchestrato
         step_budget=int(config.get("step_budget", settings.default_step_budget)),
         limits=limits,
         use_browser=use_browser,
+        crawl_strategy=config.get("crawl_strategy"),
+        modes=config.get("modes"),
     )
     register(orchestrator)
 

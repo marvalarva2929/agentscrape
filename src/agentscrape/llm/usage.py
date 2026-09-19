@@ -13,22 +13,42 @@ from dataclasses import dataclass, field
 from ..config import settings
 
 
+def price_per_mtok(model: str) -> tuple[float, float]:
+    """(input, output) USD per million tokens for the model that served a call.
+
+    Only the cheap triage model is priced separately; every other model is
+    billed at the main rate, as before.
+    """
+    cheap = settings.llm_cheap_model
+    if cheap and model == cheap and cheap != settings.text_model:
+        return settings.llm_cheap_price_input_per_mtok, settings.llm_cheap_price_output_per_mtok
+    return settings.llm_price_input_per_mtok, settings.llm_price_output_per_mtok
+
+
 @dataclass(frozen=True)
 class Usage:
     input_tokens: int = 0
     output_tokens: int = 0
+    # The model that served the call, for pricing. Blank on a sum of calls,
+    # which carries its cost in `usd` instead.
+    model: str = ""
+    usd: float | None = None
 
     @property
     def cost_usd(self) -> float:
+        if self.usd is not None:
+            return self.usd
+        price_in, price_out = price_per_mtok(self.model)
         return (
-            self.input_tokens / 1_000_000 * settings.llm_price_input_per_mtok
-            + self.output_tokens / 1_000_000 * settings.llm_price_output_per_mtok
+            self.input_tokens / 1_000_000 * price_in
+            + self.output_tokens / 1_000_000 * price_out
         )
 
     def __add__(self, other: Usage) -> Usage:
         return Usage(
             self.input_tokens + other.input_tokens,
             self.output_tokens + other.output_tokens,
+            usd=self.cost_usd + other.cost_usd,
         )
 
 

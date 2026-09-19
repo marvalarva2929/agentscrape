@@ -113,6 +113,23 @@ async def scraped_records(host: str) -> list[dict[str, str]]:
     async with get_sessionmaker()() as session:
         site_id = await session.scalar(select(Site.id).where(Site.root_domain == host))
         if site_id is None:
+            # Schools loaded from the school sheet are keyed on their residency
+            # hub's host (bittaxi.ttuhsc.edu rather than www.ttuhsc.edu): take
+            # the same institution's site with the most people.
+            from sqlalchemy import func
+
+            from agentscrape.urls import registrable_domain
+
+            domain = registrable_domain(host)
+            site_id = await session.scalar(
+                select(Site.id)
+                .outerjoin(Record, Record.site_id == Site.id)
+                .where((Site.root_domain == domain) | Site.root_domain.like(f"%.{domain}"))
+                .group_by(Site.id)
+                .order_by(func.count(Record.id).desc())
+                .limit(1)
+            )
+        if site_id is None:
             await dispose_engine()
             return []
         rows = (

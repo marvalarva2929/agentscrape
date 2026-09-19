@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any, TypedDict
 
+from ..config import settings
 from ..urls import registrable_domain
 
 
@@ -27,6 +28,10 @@ class SiteState(TypedDict, total=False):
     force_rescan: bool
     skip_threshold: float
     step_budget: int
+    # "hybrid" or "agent"; see settings.crawl_strategy.
+    crawl_strategy: str
+    # What this run does: "crawl", "directory", or both.
+    modes: list[str]
 
     # --- control flow ---
     status: str
@@ -56,6 +61,14 @@ class SiteState(TypedDict, total=False):
     # {name, kind, landing_url, status, people, pages, visited}
     programs: list[dict[str, Any]]
     gap_rounds: int
+    # Hybrid strategy: pages the HTML pass mapped, and how many it passed on.
+    html_map_stats: dict[str, int]
+    # Directory search: record ids already looked up in this site run.
+    # The crawl phase is over (or was not asked for); a resume goes straight
+    # to directory search.
+    crawl_done: bool
+    directory_done: list[str]
+    directory_stats: dict[str, int]
 
     # --- results ---
     records_new: int
@@ -82,6 +95,8 @@ def initial_state(
     force_rescan: bool = False,
     skip_threshold: float = 0.90,
     step_budget: int = 40,
+    crawl_strategy: str | None = None,
+    modes: list[str] | None = None,
 ) -> SiteState:
     return SiteState(
         site_id=site_id,
@@ -96,6 +111,8 @@ def initial_state(
         force_rescan=force_rescan,
         skip_threshold=skip_threshold,
         step_budget=step_budget,
+        crawl_strategy=crawl_strategy or settings.crawl_strategy,
+        modes=list(modes or ["crawl"]),
         status="running",
         terminated=False,
         resumed=False,
@@ -113,6 +130,10 @@ def initial_state(
         processed_hashes=[],
         programs=[],
         gap_rounds=0,
+        html_map_stats={},
+        crawl_done=False,
+        directory_done=[],
+        directory_stats={},
         records_new=0,
         records_changed=0,
         records_unchanged=0,

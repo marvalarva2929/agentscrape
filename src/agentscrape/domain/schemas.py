@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from ..config import settings
 
@@ -153,6 +153,21 @@ class RunConfigIn(BaseModel):
     max_records: int | None = Field(default=None, ge=1)
     max_spend_usd: float | None = Field(default=None, gt=0)
     label: str | None = None
+    # "crawl" finds people on the institution's pages; "directory" looks the
+    # people already found up in the school's people directory. Directory
+    # search needs stored crawl data, so it is refused on a school without.
+    # Blank means DEFAULT_RUN_MODES.
+    modes: list[Literal["crawl", "directory"]] = Field(
+        default_factory=lambda: settings.run_modes, min_length=1
+    )
+    # hybrid (HTML pass first) or agent (model everywhere). Blank means the
+    # CRAWL_STRATEGY setting.
+    crawl_strategy: Literal["hybrid", "agent"] | None = None
+
+    @field_validator("modes")
+    @classmethod
+    def _unique_modes(cls, value: list[str]) -> list[str]:
+        return list(dict.fromkeys(value))
 
 
 class RunCreate(BaseModel):
@@ -270,6 +285,12 @@ class SchoolOut(ApiModel):
     last_updated: datetime | None = None
     validation_status: str
     validation_reason: str | None = None
+    # The school's people directory, from the school sheet.
+    directory_url: str | None = None
+    # Stored crawl data exists, so a directory-only run is possible.
+    has_crawl_data: bool = False
+    # Directory search can run: crawled, and the sheet gave a directory link.
+    directory_search_available: bool = False
 
 
 class ProgramOut(ApiModel):
@@ -366,31 +387,6 @@ class ExportOut(ApiModel):
     error: str | None
     created_at: datetime
     expires_at: datetime | None
-
-
-class SubmissionOut(ApiModel):
-    """Legacy staff-visible school request shape."""
-
-    id: str
-    filename: str | None
-    note: str | None
-    status: str
-    row_count: int
-    valid_count: int
-    rows: list[CsvRowPreview] = Field(default_factory=list)
-    run_id: str | None = None
-    created_at: datetime
-    reviewed_at: datetime | None = None
-
-
-class SubmissionRunRequest(BaseModel):
-    """Staff launching a legacy school request. One number: the budget."""
-
-    max_spend_usd: float | None = Field(
-        default=None, gt=0, description="Stop the run once estimated spend reaches this"
-    )
-    concurrency: int = Field(default=4, ge=1, le=8)
-    force_rescan: bool = False
 
 
 class MetaValues(BaseModel):

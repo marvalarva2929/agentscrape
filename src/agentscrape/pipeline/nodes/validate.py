@@ -8,7 +8,7 @@ from ...db.enums import ValidationStatus
 from ...db.repositories.sites import get_site, record_validation
 from ...llm.prompts import INSTITUTION_SYSTEM, institution_user_prompt
 from ...llm.provider import get_provider
-from ...urls import host_of
+from ...urls import home_url, host_of
 from ...validation.institution import InstitutionVerdict, classify_content, classify_domain
 from ..deps import PipelineDeps
 from ..state import SiteState
@@ -60,6 +60,14 @@ async def validate_institution(state: SiteState, deps: PipelineDeps) -> SiteStat
 
     if verdict is None or verdict.needs_model_review:
         result = await deps.fetcher.get(root_url)
+        if not result.ok:
+            # A dead entry link is not a dead site: judge the home page instead
+            # (discovery falls back to it the same way).
+            home = home_url(root_url)
+            if home != root_url:
+                retry = await deps.fetcher.get(home)
+                if retry.ok:
+                    result = retry
         if not result.ok:
             verdict = InstitutionVerdict(
                 ValidationStatus.UNREACHABLE,

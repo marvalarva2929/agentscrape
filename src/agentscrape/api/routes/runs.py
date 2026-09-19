@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Query
@@ -18,7 +19,7 @@ from ...domain.schemas import (
 )
 from ...orchestrator import service
 from ...orchestrator.limits import MemoryCeilingExceeded
-from ..deps import AdminUser, AuthedUser, DbSession
+from ..deps import AuthedUser, DbSession
 from ..errors import AppError, ErrorCode, NotFoundError, ResourceLimitError
 from ..pagination import Cursor, clamp_limit
 from ..sse import event_stream
@@ -46,12 +47,18 @@ def _run_out(run: Run, pending: int = 0) -> RunOut:
 
 
 @router.post("", response_model=RunOut, status_code=201)
-async def create_run(body: RunCreate, _: AdminUser, session: DbSession) -> RunOut:
-    """Create and start a run. Staff-only because each crawl is billable."""
+async def create_run(body: RunCreate, _: AuthedUser, session: DbSession) -> RunOut:
+    """Create and start a run: a crawl, a directory search, or both. Open to
+    clients as well as staff; `config.max_spend_usd` is what bounds spend."""
     try:
         run = await service.create_run(session, body)
     except MemoryCeilingExceeded as exc:
         raise ResourceLimitError(str(exc), details={"concurrency": body.config.concurrency}) from exc
+    except service.DirectorySearchUnavailable as exc:
+        raise AppError(
+            str(exc), code=ErrorCode.DIRECTORY_SEARCH_UNAVAILABLE, status_code=409,
+            details={"sites": exc.problems},
+        ) from exc
 
     if run.sites_total == 0:
         raise AppError(
@@ -78,9 +85,15 @@ async def list_runs(
 
     decoded = Cursor.decode(cursor)
     if decoded is not None:
+        # The cursor carries the timestamp as ISO text; Postgres will not
+        # compare text with a timestamptz, so page two used to fail with a 500.
+        try:
+            after = datetime.fromisoformat(str(decoded.sort_value))
+        except ValueError as exc:
+            raise AppError("Invalid cursor.", code=ErrorCode.INVALID_CURSOR) from exc
         statement = statement.where(
-            (Run.created_at < decoded.sort_value)
-            | ((Run.created_at == decoded.sort_value) & (Run.id < decoded.id))
+            (Run.created_at < after)
+            | ((Run.created_at == after) & (Run.id < decoded.id))
         )
 
     limit = clamp_limit(limit)
@@ -186,7 +199,7 @@ async def run_events(run_id: str, _: AuthedUser, session: DbSession) -> Streamin
 
 
 @router.post("/{run_id}/cancel", response_model=RunOut)
-async def cancel_run(run_id: str, _: AdminUser, session: DbSession) -> RunOut:
+async def cancel_run(run_id: str, _: AuthedUser, session: DbSession) -> RunOut:
     run = await _get_run(session, run_id)
     if run.status in TERMINAL_RUN_STATUSES:
         raise AppError(
@@ -202,7 +215,7 @@ async def cancel_run(run_id: str, _: AdminUser, session: DbSession) -> RunOut:
 
 @router.post("/{run_id}/sites/{site_id}/retry", response_model=SiteRunOut)
 async def retry_site(
-    run_id: str, site_id: str, _: AdminUser, session: DbSession
+    run_id: str, site_id: str, _: AuthedUser, session: DbSession
 ) -> SiteRunOut:
     """Retry one failed or skipped site. Always forces a rescan."""
     run = await _get_run(session, run_id)

@@ -41,12 +41,27 @@ def site(
              "--also uchicagomedicine.org (repeatable)",
     ),
     threshold: float = typer.Option(None, "--threshold", help="Skip similarity threshold"),
+    strategy: str = typer.Option(
+        None, "--strategy",
+        help="hybrid (HTML pass first, model only where people show) or agent "
+             "(model everywhere); default CRAWL_STRATEGY",
+    ),
+    mode: list[str] = typer.Option(
+        None, "--mode",
+        help="crawl and/or directory (repeatable); default crawl",
+    ),
 ) -> None:
     """Run one site end to end."""
+    if strategy not in (None, "hybrid", "agent"):
+        raise typer.BadParameter("--strategy must be hybrid or agent")
+    modes = list(dict.fromkeys(mode or ["crawl"]))
+    if any(m not in ("crawl", "directory") for m in modes):
+        raise typer.BadParameter("--mode must be crawl or directory")
     asyncio.run(
         _run_site(
             url, dry_run=dry_run, force=force, no_browser=no_browser,
             budget=budget, threshold=threshold, also=list(also or []),
+            strategy=strategy, modes=modes,
         )
     )
 
@@ -54,6 +69,7 @@ def site(
 async def _run_site(
     url: str, *, dry_run: bool, force: bool, no_browser: bool,
     budget: int | None, threshold: float | None, also: list[str] | None = None,
+    strategy: str | None = None, modes: list[str] | None = None,
 ) -> None:
     from .browser.renderer import BrowserPool
     from .db.enums import RunStatus
@@ -68,7 +84,8 @@ async def _run_site(
     async with get_sessionmaker()() as session:
         run = Run(
             status=RunStatus.RUNNING, label=f"cli:{url}",
-            config={"source": "cli", "concurrency": 1}, sites_total=1,
+            config={"source": "cli", "concurrency": 1, "crawl_strategy": strategy or settings.crawl_strategy,
+                    "modes": modes or ["crawl"]}, sites_total=1,
         )
         session.add(run)
         await session.commit()
@@ -96,6 +113,7 @@ async def _run_site(
             site_id=site_id, site_run_id=site_run_id, root_url=root_url,
             run_id=run_id, force_rescan=force, step_budget=budget,
             skip_threshold=threshold, allowed_domains=also, browser_context=context,
+            crawl_strategy=strategy, modes=modes,
         )
     finally:
         if pool is not None:
@@ -269,6 +287,30 @@ def import_school_command(
     asyncio.run(_go())
 
 
+@app.command("load-schools")
+def load_schools_command(
+    folder: str = typer.Argument(None, help="Folder of school sheets (default: schools/)"),
+) -> None:
+    """Load the school sheets in schools/ into the school list. Idempotent."""
+    from pathlib import Path
+
+    from .db.session import dispose_engine, session_scope
+    from .schools_sheet import load_school_sheets, sheets_dir
+
+    async def _go() -> None:
+        target = Path(folder) if folder else sheets_dir()
+        async with session_scope() as session:
+            result = await load_school_sheets(session, target)
+        console.print(
+            f"[green]Loaded[/green] {target}: {result.created} created, "
+            f"{result.updated} updated, {result.unchanged} unchanged, "
+            f"{result.skipped_files} unreadable files."
+        )
+        await dispose_engine()
+
+    asyncio.run(_go())
+
+
 @app.command()
 def sweep() -> None:
     """Expire screenshots and exports past their retention window."""
@@ -299,6 +341,11 @@ def llm_check() -> None:
             ("image", settings.llm_model, _solid_png(64, 32, (220, 20, 20)),
              'What colour is the attached image? Return ONLY JSON: {"colour": "<name>"}'),
         ]
+        if settings.cheap_model != settings.text_model:
+            checks.append(
+                ("triage", settings.cheap_model, None,
+                 'Return ONLY this JSON: {"links": [{"i": 0, "p": 80}]}')
+            )
         for label, model, image, prompt in checks:
             try:
                 response = await provider.complete(

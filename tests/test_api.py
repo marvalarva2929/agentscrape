@@ -346,6 +346,24 @@ class TestRunsAndAdmin:
         assert "success_rate" in row and "skip_rate" in row
         assert row["total_site_runs"] == 1
 
+    async def test_run_list_pages_past_the_first_page(self, client, auth, session):
+        now = datetime.now(UTC)
+        for minutes in range(5):
+            session.add(Run(status="completed", config={}, created_at=now - timedelta(minutes=minutes)))
+        await session.commit()
+
+        seen, cursor = [], None
+        while True:
+            params = {"limit": 2, **({"cursor": cursor} if cursor else {})}
+            response = await client.get(f"{API}/runs", params=params, headers=auth)
+            assert response.status_code == 200, response.text
+            body = response.json()
+            seen += [r["id"] for r in body["items"]]
+            cursor = body["next_cursor"]
+            if not body["has_more"]:
+                break
+        assert len(seen) == len(set(seen)) == 5
+
     async def test_cancelling_a_finished_run_is_a_clean_conflict(self, client, seeded):
         login = await client.post(f"{API}/auth/login", json={"password": "change-me-admin"})
         admin_auth = {"Authorization": f"Bearer {login.json()['token']}"}

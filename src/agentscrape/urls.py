@@ -127,6 +127,23 @@ def host_of(url: str) -> str:
         return ""
 
 
+def entry_url(url: str) -> str:
+    """A crawl entry point as the site serves it: a bare host gets its "/",
+    a page keeps its own path. Appending a slash to every entry turned
+    medicine.arizona.edu/education/residency-fellowship into a 404."""
+    try:
+        path = urlsplit(url).path
+    except ValueError:
+        return url
+    return url if path else f"{url}/"
+
+
+def home_url(url: str) -> str:
+    """The home page of the site `url` is on, keeping its scheme and port."""
+    parts = urlsplit(url)
+    return f"{parts.scheme or 'https'}://{parts.netloc}/"
+
+
 def path_depth(url: str) -> int:
     try:
         path = urlsplit(url).path

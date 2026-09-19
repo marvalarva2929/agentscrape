@@ -199,6 +199,8 @@ class RenderResult:
     ok: bool = True
     error: str | None = None
     status: int | None = None
+    # URLs of the GET requests the page made (search_in_browser only).
+    requests: list[str] = field(default_factory=list)
 
 
 class BrowserPool:
@@ -381,6 +383,58 @@ async def click_by_accessible_name(
             html=await page.content(),
             text=await page.evaluate("() => document.body ? document.body.innerText : ''"),
             ok=True,
+        )
+    except PlaywrightError as exc:
+        return RenderResult(url=url, final_url=url, title="", html="", text="",
+                            ok=False, error=str(exc)[:300])
+    finally:
+        if page is not None:
+            try:
+                await page.close()
+            except PlaywrightError:
+                pass
+
+
+async def search_in_browser(
+    context: BrowserContext, url: str, fields: dict[str, tuple[str, str]]
+) -> RenderResult:
+    """Type into a page's search inputs and submit, the way a person would.
+
+    `fields` maps a role to (CSS selector, text). Every GET request the page
+    makes afterwards is recorded, so a JavaScript directory's own search API
+    can be found and then called directly without the browser.
+    """
+    await get_rate_limiter().acquire(host_of(url))
+    page: Page | None = None
+    requests: list[str] = []
+    try:
+        page = await context.new_page()
+        await page.goto(url, wait_until="domcontentloaded",
+                        timeout=settings.page_timeout_seconds * 1000)
+        try:
+            await page.wait_for_load_state("networkidle", timeout=5_000)
+        except PlaywrightError:
+            pass
+        page.on(
+            "request",
+            lambda request: requests.append(request.url) if request.method == "GET" else None,
+        )
+        last = None
+        for selector, text in fields.values():
+            last = page.locator(selector).first
+            await last.fill(text, timeout=10_000)
+        if last is not None:
+            await last.press("Enter")
+        try:
+            await page.wait_for_load_state("networkidle", timeout=8_000)
+        except PlaywrightError:
+            pass
+        await _wait_for_content(page)
+        return RenderResult(
+            url=url, final_url=page.url, title=await page.title(),
+            html=await page.content(),
+            text=await page.evaluate("() => document.body ? document.body.innerText : ''"),
+            ok=True, requests=list(dict.fromkeys(requests)),
         )
     except PlaywrightError as exc:
         return RenderResult(url=url, final_url=url, title="", html="", text="",

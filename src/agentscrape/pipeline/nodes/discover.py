@@ -15,6 +15,7 @@ from urllib.parse import urlsplit
 from ...config import settings
 from ...db.repositories.sites import active_known_paths
 from ...discovery.crt_sh import discover_subdomains, subdomain_seed_urls
+from ...discovery.scoring import score_url
 from ...discovery.search import discover_via_search
 from ...discovery.sitemap import (
     LinkContext,
@@ -22,8 +23,8 @@ from ...discovery.sitemap import (
     extract_link_contexts,
     fetch_robots,
 )
-from ...llm.triage import triage_hosts, triage_links
-from ...urls import canonicalize, host_of, in_scope, registrable_domain
+from ...llm.triage import LinkDecision, heuristic_priority, triage_hosts, triage_links
+from ...urls import canonicalize, home_url, host_of, in_scope, registrable_domain
 from ..deps import PipelineDeps
 from ..state import SiteState
 
@@ -119,6 +120,24 @@ async def discover_links(state: SiteState, deps: PipelineDeps) -> SiteState:
         "homepage", deps.fetcher.get(root_url, attempts=2), None,
         timeout=max(remaining(), 15.0),
     )
+    if home is None or not home.ok or not home.is_html:
+        # The school sheet's entry page can be dead (Arizona's and UVA's hub
+        # links both returned 404): fall back to the host's home page, and hand
+        # the working page to the planner as the site's entry.
+        fallback = home_url(root_url)
+        if fallback != root_url:
+            retry = await _bounded(
+                "homepage fallback", deps.fetcher.get(fallback, attempts=2), None,
+                timeout=max(remaining(), 15.0),
+            )
+            if retry is not None and retry.ok and retry.is_html:
+                log.warning(
+                    "entry page %s failed (%s); starting from %s instead",
+                    root_url, home.error or home.status if home else "timeout", fallback,
+                )
+                await deps.note(state, f"The entry page {root_url} is unavailable; starting from {fallback}")
+                home, root_url = retry, fallback
+                state = {**state, "root_url": fallback}
     link_text: dict[str, LinkContext] = {}
     if home is not None and home.ok and home.is_html:
         discovered.setdefault(home.final_url, None)
@@ -283,12 +302,20 @@ async def discover_links(state: SiteState, deps: PipelineDeps) -> SiteState:
         triaged.add(key)
         context = link_text.get(url)
         to_triage.append(context.as_dict() if context else {"url": canonical})
-    await deps.note(
-        state, f"Found {len(to_triage):,} pages; the agent is ranking which to read first"
-    )
-    decisions = await triage_links(
-        to_triage, source=f"sitemaps and home pages of {root_domain}", meter=deps.meter,
-    )
+    if state.get("crawl_strategy") == "hybrid":
+        # The HTML pass that follows ranks these by what the pages hold, so
+        # the keyword heuristic is enough to decide what it fetches first.
+        decisions = []
+        for link in to_triage:
+            score = score_url(link["url"], title=link.get("text") or None).score
+            decisions.append(LinkDecision(link["url"], heuristic_priority(score), None, False, score))
+    else:
+        await deps.note(
+            state, f"Found {len(to_triage):,} pages; the agent is ranking which to read first"
+        )
+        decisions = await triage_links(
+            to_triage, source=f"sitemaps and home pages of {root_domain}", meter=deps.meter,
+        )
     additions = [
         {
             "url": d.url, "score": d.heuristic,
@@ -308,6 +335,19 @@ async def discover_links(state: SiteState, deps: PipelineDeps) -> SiteState:
         root_domain, len(discovered), len(candidates), len(known_urls), len(skipped_hosts),
     )
 
+    if state.get("crawl_strategy") == "hybrid":
+        await deps.note(
+            state,
+            f"Found {len(discovered):,} pages across "
+            f"{len(_observed_host_counts(discovered, root_domain, allowed)) + 1} sites",
+        )
+        return {
+            **state,
+            "candidates": candidates,
+            "candidates_considered": len(discovered),
+            "triaged": sorted(triaged),
+            "cursor": 0,
+        }
     await deps.note(
         state,
         f"Mapped {len(discovered):,} pages across {len(_observed_host_counts(discovered, root_domain, allowed)) + 1} "

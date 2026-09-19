@@ -18,13 +18,15 @@ from dataclasses import dataclass
 from ..config import settings
 from ..discovery.scoring import score_url
 from .prompts import HOST_TRIAGE_SYSTEM, TRIAGE_SYSTEM, triage_user_prompt
-from .provider import VisionProvider, get_provider
+from .provider import ModelTimeout, VisionProvider, get_provider
 from .usage import LLMUnavailable, UsageMeter
 
 log = logging.getLogger("agentscrape.llm.triage")
 
-LINK_BATCH = 120
-URL_ONLY_BATCH = 200
+# Smaller batches keep each answer short enough to finish inside the
+# router's gateway window.
+LINK_BATCH = 60
+URL_ONLY_BATCH = 120
 HOST_BATCH = 150
 # One decision object, tolerant of what breaks strict JSON in long outputs: an
 # unquoted skip, a truncated tail, stray prose between items.
@@ -70,16 +72,25 @@ def salvage_links(text: str) -> dict | None:
 
 
 async def _call(
-    provider: VisionProvider, system: str, user: str, meter: UsageMeter | None, what: str
+    provider: VisionProvider, system: str, user: str, meter: UsageMeter | None, what: str,
+    *, raise_timeout: bool = False,
 ) -> dict | None:
+    """One triage call. With `raise_timeout`, a timeout propagates so the caller
+    can retry with a smaller batch instead of losing the whole batch."""
     for attempt in range(2):
         try:
             response = await provider.complete(
-                system=system, user=user, meter=meter, model=settings.text_model,
+                system=system, user=user, meter=meter, model=settings.cheap_model,
                 max_tokens=12_000,
             )
         except LLMUnavailable:
             raise
+        except ModelTimeout:
+            if raise_timeout:
+                raise
+            if meter is not None:
+                meter.note_failure(what, "timeout")
+            return None
         except Exception as exc:
             log.warning("%s failed: %s", what, exc)
             if meter is not None:
@@ -118,13 +129,22 @@ async def triage_links(
     size = batch_size or (LINK_BATCH if any(link.get("text") for link in links) else URL_ONLY_BATCH)
     heuristics = [score_url(link["url"], title=link.get("text") or None).score for link in links]
 
-    async def run(start: int) -> list[LinkDecision]:
-        batch = links[start : start + size]
-        payload = await _call(
-            provider, TRIAGE_SYSTEM,
-            triage_user_prompt(source=source, context=context, links=batch),
-            meter, f"triage ({source})",
-        )
+    async def run(start: int, count: int, splits_left: int = 1) -> list[LinkDecision]:
+        batch = links[start : start + count]
+        try:
+            payload = await _call(
+                provider, TRIAGE_SYSTEM,
+                triage_user_prompt(source=source, context=context, links=batch),
+                meter, f"triage ({source})", raise_timeout=splits_left > 0 and len(batch) > 1,
+            )
+        except ModelTimeout:
+            half = (len(batch) + 1) // 2
+            log.info("triage of %d links timed out; retrying as two batches", len(batch))
+            first, second = await asyncio.gather(
+                run(start, half, splits_left - 1),
+                run(start + half, len(batch) - half, splits_left - 1),
+            )
+            return [*first, *second]
         verdicts: dict[int, tuple[float, str | None]] = {}
         if payload and isinstance(payload.get("links"), list):
             for item in payload["links"]:
@@ -154,7 +174,9 @@ async def triage_links(
                 out.append(LinkDecision(link["url"], heuristic_priority(h), None, False, h))
         return out
 
-    results = await asyncio.gather(*(run(i) for i in range(0, len(links), size)))
+    results = await asyncio.gather(*(
+        run(i, min(size, len(links) - i)) for i in range(0, len(links), size)
+    ))
     decisions = [d for group in results for d in group]
     kept = sum(1 for d in decisions if not d.skipped)
     log.info(

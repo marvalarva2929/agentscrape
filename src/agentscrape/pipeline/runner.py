@@ -17,12 +17,12 @@ from sqlalchemy import update
 from ..browser.fetcher import Fetcher
 from ..config import settings
 from ..db.enums import SiteRunStatus
-from ..db.models import SiteRun
+from ..db.models import Site, SiteRun
 from ..db.repositories.sites import upsert_site
 from ..db.session import get_sessionmaker
 from ..llm.usage import LLMUnavailable, UsageMeter
 from ..orchestrator.events import EventEmitter, EventType, NullEmitter
-from ..urls import canonicalize, host_of
+from ..urls import canonicalize, entry_url, host_of
 from .deps import PipelineDeps
 from .graph import build_site_graph
 from .state import SiteState, initial_state
@@ -83,6 +83,8 @@ async def run_site(
     emitter: EventEmitter | None = None,
     should_stop=None,
     fetcher: Fetcher | None = None,
+    crawl_strategy: str | None = None,
+    modes: list[str] | None = None,
 ) -> SiteState:
     """Run one site end to end. Never raises: failures are recorded and returned."""
     emitter = emitter or NullEmitter()
@@ -95,6 +97,10 @@ async def run_site(
     domain = host_of(canonical)
 
     async with sessionmaker() as session:
+        if allowed_domains is None:
+            # Domains the school sheet says this institution also publishes on.
+            site_row = await session.get(Site, site_id)
+            allowed_domains = list((site_row.affiliated_domains if site_row else None) or [])
         await session.execute(
             update(SiteRun)
             .where(SiteRun.id == site_run_id)
@@ -116,7 +122,7 @@ async def run_site(
     state = initial_state(
         site_id=site_id,
         site_run_id=site_run_id,
-        root_url=canonical if canonical.endswith("/") else f"{canonical}/",
+        root_url=entry_url(canonical),
         root_domain=domain,
         allowed_domains=allowed_domains,
         run_id=run_id,
@@ -124,6 +130,8 @@ async def run_site(
         force_rescan=force_rescan,
         skip_threshold=threshold,
         step_budget=budget,
+        crawl_strategy=crawl_strategy,
+        modes=modes,
     )
 
     meter = UsageMeter(scope=site_run_id)

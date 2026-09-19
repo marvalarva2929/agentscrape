@@ -402,6 +402,69 @@ def _make_version(
     )
 
 
+async def fill_record_blanks(
+    session: AsyncSession,
+    record: Record,
+    found: ExtractedPerson,
+    context: ExtractionContext,
+) -> list[str]:
+    """Fill only the fields `record` lacks from `found`; never overwrite.
+
+    Used by directory search: a roster is the better source for anything it
+    printed, so a directory only supplies what the roster left blank. Writes one
+    new version carrying the filled fields. Returns the names of the fields
+    filled (empty when there was nothing to add).
+    """
+    filled: dict[str, object] = {}
+    if not record.email and found.email:
+        conflict = await session.scalar(
+            select(Record.id).where(
+                Record.site_id == record.site_id,
+                Record.id != record.id,
+                Record.email == found.email,
+            )
+        )
+        # The address already belongs to another record at this site: two
+        # rows for one person is a merge decision, not a blank to fill.
+        if conflict is None:
+            filled["email"] = found.email
+    if record.pgy_at_capture is None and found.pgy is not None:
+        filled["pgy"] = found.pgy
+    if record.class_of is None and found.class_of is not None:
+        filled["class_of"] = found.class_of
+    if not record.position and found.position:
+        filled["position"] = found.position
+    if not filled:
+        return []
+
+    category = record.category if record.category in {c.value for c in PersonCategory} else "unknown"
+    person = ExtractedPerson(
+        full_name=record.full_name,
+        email=filled.get("email", record.email),  # type: ignore[arg-type]
+        category=PersonCategory(category),
+        position=filled.get("position", record.position),  # type: ignore[arg-type]
+        pgy=filled.get("pgy", record.pgy_at_capture),  # type: ignore[arg-type]
+        class_of=filled.get("class_of", record.class_of),  # type: ignore[arg-type]
+        specialty_raw=record.specialty_raw,
+        confidence=found.confidence,
+    )
+    fields = _build_fields(person, context)
+    if fields is None:
+        return []
+    # The directory page's title says nothing about the person's specialty,
+    # and a PGY that was not filled here keeps the date it was read.
+    fields["specialty_normalized"] = record.specialty_normalized or fields["specialty_normalized"]
+    fields["specialty_raw"] = record.specialty_raw or fields["specialty_raw"]
+    if "pgy" not in filled:
+        fields["pgy_capture_date"] = record.pgy_capture_date
+    if "email" not in filled:
+        fields["identity_key"] = record.identity_key
+        fields["identity_kind"] = record.identity_kind
+        fields["role_account"] = record.role_account
+    await _update_record(session, record, fields, person, context)
+    return list(filled)
+
+
 async def mark_missing_records(
     session: AsyncSession,
     *,
@@ -420,10 +483,24 @@ async def mark_missing_records(
     if not visited_url_hashes:
         return 0
 
+    # The page a person was last *published* on: a directory lookup adds a
+    # version too, but the directory is never revisited by a crawl, so judging
+    # by it would make anyone ever looked up impossible to mark missing.
+    latest_page = (
+        select(RecordVersion.record_id, func.max(RecordVersion.version_no).label("version_no"))
+        .where(RecordVersion.extraction_method != str(ExtractionMethod.DIRECTORY))
+        .group_by(RecordVersion.record_id)
+        .subquery()
+    )
     candidates = (
         await session.execute(
             select(Record.id, RecordVersion.source_url)
-            .join(RecordVersion, Record.current_version_id == RecordVersion.id)
+            .join(latest_page, latest_page.c.record_id == Record.id)
+            .join(
+                RecordVersion,
+                (RecordVersion.record_id == Record.id)
+                & (RecordVersion.version_no == latest_page.c.version_no),
+            )
             .where(
                 Record.site_id == site_id,
                 Record.status != RecordStatus.MISSING,

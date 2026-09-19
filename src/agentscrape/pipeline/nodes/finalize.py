@@ -26,12 +26,15 @@ async def finalize(state: SiteState, deps: PipelineDeps) -> SiteState:
     site_id = state["site_id"]
     site_run_id = state["site_run_id"]
     missing = 0
+    # A directory-only run visits no pages and captures no screenshots: there
+    # is nothing to mark missing and no screenshot set to replace.
+    crawled = "crawl" in (state.get("modes") or ["crawl"]) and state.get("status") != "skipped"
 
     if state.get("status") != "rejected":
         async with deps.sessionmaker() as session:
             await lock_site(session, site_id)
             visited = await visited_hashes(session, site_run_id)
-            if state.get("status") != "skipped":
+            if crawled:
                 missing = await mark_missing_records(
                     session,
                     site_id=site_id,
@@ -47,7 +50,7 @@ async def finalize(state: SiteState, deps: PipelineDeps) -> SiteState:
         # A school keeps only its most recent run's screenshots. Skipped runs
         # capture nothing, so replacing there would delete the previous set and
         # leave the school with no screenshots at all.
-        if state.get("status") != "skipped":
+        if crawled:
             await replace_school_screenshots(site_id, site_run_id)
 
     status = _final_status(state)

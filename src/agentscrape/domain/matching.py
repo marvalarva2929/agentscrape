@@ -19,7 +19,11 @@ import unicodedata
 from dataclasses import dataclass
 from enum import StrEnum
 
-EMAIL_RE = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
+# Bounded and anchored at the start of a word, so a long run of letters or
+# dots cannot make a scan quadratic (see validation.email._OBFUSCATED).
+EMAIL_RE = re.compile(
+    r"(?<![A-Za-z0-9._%+\-])[A-Za-z0-9._%+\-]{1,64}@[A-Za-z0-9.\-]{1,253}\.[A-Za-z]{2,24}"
+)
 
 # Local parts that name an office rather than a person.
 ROLE_LOCAL_PARTS: frozenset[str] = frozenset({

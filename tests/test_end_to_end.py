@@ -40,13 +40,18 @@ def fast_and_offline(monkeypatch):
     yield
 
 
-async def _run_once(site_urls, *, concurrency=2, step_budget=20, limits=None, session=None):
+async def _run_once(
+    site_urls, *, concurrency=2, step_budget=20, limits=None, session=None,
+    crawl_strategy=None, modes=None,
+):
     body = RunCreate(
         sites=list(site_urls),
         config=RunConfigIn(
             concurrency=concurrency, step_budget=step_budget,
             skip_threshold=0.90,
             max_records=getattr(limits, "max_records", None) if limits else None,
+            crawl_strategy=crawl_strategy,
+            modes=modes or ["crawl"],
         ),
     )
     run = await create_run(session, body)
@@ -57,6 +62,8 @@ async def _run_once(site_urls, *, concurrency=2, step_budget=20, limits=None, se
         step_budget=step_budget,
         limits=limits or RunLimits(),
         use_browser=False,  # the fixture site is static; no escalation needed
+        crawl_strategy=crawl_strategy,
+        modes=modes,
     )
     await orchestrator.start()
     return run.id
@@ -64,8 +71,10 @@ async def _run_once(site_urls, *, concurrency=2, step_budget=20, limits=None, se
 
 class TestSingleSiteEndToEnd:
     async def test_extracts_reconciles_and_records_provenance(self, session):
+        # The agent strategy reads every page, including the one-person alumni
+        # page the hybrid gate leaves unread (see test_hybrid).
         with serve() as site:
-            run_id = await _run_once([site.base], session=session)
+            run_id = await _run_once([site.base], session=session, crawl_strategy="agent")
 
         run = await session.get(Run, run_id)
         await session.refresh(run)
@@ -366,3 +375,13 @@ class TestResume:
         records = (await session.execute(select(Record))).scalars().all()
         assert records
         assert all(r.current_version_id for r in records)
+
+
+class TestDeadEntryLink:
+    async def test_a_dead_entry_page_falls_back_to_the_home_page(self, session):
+        # The school sheet's hub links rot: Arizona's and UVA's returned 404.
+        with serve(hostname="deadlink.localhost") as site:
+            await _run_once([f"{site.base}/no-such-hub"], session=session)
+
+        names = {r.full_name for r in (await session.execute(select(Record))).scalars()}
+        assert {"Ann Riley", "Cara Diaz"} <= names

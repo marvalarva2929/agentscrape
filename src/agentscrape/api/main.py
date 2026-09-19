@@ -20,7 +20,6 @@ from .routes import (
     runs,
     schools,
     sites,
-    submissions,
 )
 
 logging.basicConfig(
@@ -59,6 +58,22 @@ async def lifespan(app: FastAPI):
             await seed_if_empty()
         except Exception:
             log.exception("seeding the empty database failed; the school list will be empty")
+    # After the demo seed, which only runs on an empty database.
+    from ..db.session import session_scope
+    from ..schools_sheet import load_school_sheets
+
+    try:
+        async with session_scope() as session:
+            await load_school_sheets(session)
+    except Exception:
+        log.exception("loading the school sheets failed; new schools will not be listed")
+    if settings.resume_runs_on_startup:
+        from ..orchestrator.service import resume_interrupted_runs
+
+        try:
+            await resume_interrupted_runs()
+        except Exception:
+            log.exception("resuming interrupted runs failed; restart them from the UI")
     yield
     sweep_task.cancel()
     await dispose_engine()
@@ -94,7 +109,6 @@ def create_app() -> FastAPI:
         schools.router,
         sites.router,
         sites.meta_router,
-        submissions.router,
         admin.router,
         artifacts.router,
     ):

@@ -14,7 +14,7 @@ import asyncio
 import logging
 from datetime import UTC, datetime
 
-from sqlalchemy import update
+from sqlalchemy import select, update
 
 from ..browser.fetcher import Fetcher
 from ..browser.renderer import BrowserPool
@@ -45,8 +45,12 @@ class RunOrchestrator:
         step_budget: int,
         limits: RunLimits,
         use_browser: bool = True,
+        crawl_strategy: str | None = None,
+        modes: list[str] | None = None,
     ) -> None:
         self.run_id = run_id
+        self.crawl_strategy = crawl_strategy
+        self.modes = modes
         self.concurrency = max(1, min(concurrency, settings.max_concurrency))
         self.skip_threshold = skip_threshold
         self.step_budget = step_budget
@@ -63,6 +67,14 @@ class RunOrchestrator:
 
     async def start(self) -> None:
         """Run until the queue drains, a limit trips, or cancellation."""
+        async with self.sessionmaker() as session:
+            sites = await session.scalar(select(Run.sites_total).where(Run.id == self.run_id))
+        # An agent per site at most: a one-school run launched from the UI
+        # opened four browser contexts and used one, so a handful of such runs
+        # side by side hit the memory ceiling.
+        if sites:
+            self.concurrency = max(1, min(self.concurrency, int(sites)))
+
         # Fail before doing any work rather than thrashing the box.
         memory = check_memory_ceiling(self.concurrency if self.use_browser else 1)
         log.info("memory check passed for concurrency %d: %s", self.concurrency, memory)
@@ -155,6 +167,8 @@ class RunOrchestrator:
                         emitter=self.emitter,
                         should_stop=lambda: self.limits.should_stop,
                         fetcher=fetcher,
+                        crawl_strategy=self.crawl_strategy,
+                        modes=self.modes,
                     )
                 except asyncio.CancelledError:
                     await self._mark_cancelled(site_run_id)

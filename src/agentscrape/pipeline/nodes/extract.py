@@ -73,6 +73,9 @@ class PageOutcome:
     reading: PageReading | None = None
     steps: int = 1
     duplicate: bool = False
+    # Hybrid strategy: the HTML showed no sign of people, so the model was
+    # not asked to read the page.
+    gated: bool = False
 
 
 def link_key(url: str) -> str:
@@ -106,7 +109,7 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
     if not claimed:
         return {**state, "cursor": cursor + len(batch)}
 
-    results = await deps.fetcher.get_many([c["url"] for c in claimed])
+    results = await _fetch(deps, [c["url"] for c in claimed])
     allowed = set(
         state.get("allowed_domains") or [registrable_domain(state["root_domain"])]
     )
@@ -120,7 +123,13 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
     new = changed = unchanged = 0
     known_hits = state.get("known_path_hits", 0)
     barren_streak = state.get("barren_streak", 0)
-    seen_ids = list(state.get("seen_record_ids", []))
+    # A dict used as an ordered set. The same person is seen on many pages —
+    # their roster, their department directory, the institution-wide one — and
+    # appending every sighting grew BCM's list to 29,164 ids for about 1,750
+    # people. The list is rewritten into the checkpoint after every batch, so
+    # that growth made the checkpoint 1.8MB and the write cost quadratic in the
+    # length of the crawl. `finalize` only ever reads it as a set.
+    seen_ids = dict.fromkeys(state.get("seen_record_ids", []))
     fingerprint = dict(state.get("fingerprint", {}))
     programs = [dict(p) for p in state.get("programs", [])]
     steps_used = 0
@@ -169,7 +178,7 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
             new += reconciled.new
             changed += reconciled.changed
             unchanged += reconciled.unchanged
-            seen_ids.extend(reconciled.record_ids)
+            seen_ids.update(dict.fromkeys(reconciled.record_ids))
             records_here = reconciled.total_seen
 
             # Fingerprint only the pages that produced records: those are the
@@ -262,7 +271,7 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
         "records_new": state.get("records_new", 0) + new,
         "records_changed": state.get("records_changed", 0) + changed,
         "records_unchanged": state.get("records_unchanged", 0) + unchanged,
-        "seen_record_ids": seen_ids,
+        "seen_record_ids": list(seen_ids),
         "known_path_hits": known_hits,
         "barren_streak": barren_streak,
         "fingerprint": fingerprint,
@@ -296,6 +305,13 @@ async def _process_page(
             return outcome
         outcome.title = _title_of(result.text)
         outcome.links = extract_link_contexts(result.text, url, allowed_domains=allowed)
+        if _gate_applies(state, candidate):
+            from .html_map import people_signal
+
+            signal = await asyncio.to_thread(people_signal, result.text, url, outcome.title)
+            if not signal.keep:
+                outcome.gated = True
+                return outcome
         text = html_to_model_text(result.text)
         regex_people = extract_people(result.text, page_title=outcome.title, url=url)
         reading = await read_page(url=url, title=outcome.title, text=text, meter=deps.meter)
@@ -323,6 +339,28 @@ async def _process_page(
     return outcome
 
 
+async def _fetch(deps: PipelineDeps, urls: list[str]):
+    """Fetch results in order, reusing bodies the HTML pass already has."""
+    cached = {url: deps.page_cache.pop(url) for url in urls if url in deps.page_cache}
+    missing = [url for url in urls if url not in cached]
+    fetched = dict(zip(missing, await deps.fetcher.get_many(missing), strict=True)) if missing else {}
+    return [cached.get(url) or fetched[url] for url in urls]
+
+
+def _gate_applies(state: SiteState, candidate: dict) -> bool:
+    """Whether the page must show people in its HTML before the model reads it.
+
+    Only on the hybrid strategy, and never for a page the HTML pass already
+    vouched for or one the planner or gap filling chose on purpose (they queue
+    at priority 92 and above).
+    """
+    if state.get("crawl_strategy") != "hybrid" or candidate.get("signal"):
+        return False
+    from .html_map import SIGNAL_TOP
+
+    return float(candidate.get("priority", 0.0)) < SIGNAL_TOP
+
+
 # Browser pages open at once in the site's context. Renders were the
 # bottleneck when serialized: a render plus tab clicks runs 15-60 seconds.
 RENDER_CONCURRENCY = 4
@@ -331,6 +369,8 @@ RENDER_CONCURRENCY = 4
 def _describe(outcome: PageOutcome, records: int, trainees: int) -> str:
     """One line for the live feed: what the agent made of the page."""
     name = outcome.title or outcome.url
+    if outcome.gated:
+        return f"skipped \u201c{name}\u201d: no people in its HTML"
     reading = outcome.reading
     kind = reading.page_type if reading and reading.ok else "page"
     if records:
