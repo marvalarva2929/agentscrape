@@ -577,7 +577,16 @@ def _update_programs(
     visits = program.setdefault("visited", [])
     if len(visits) < _PROGRAM_VISITS_KEPT:
         visits.append({"url": outcome.url, "records": len(outcome.people), "trainees": trainees})
-    if trainees and (reading is None or reading.is_current_trainee_roster or trainees >= 3):
+    # The model's call, not a head count: UChicago's internal medicine program
+    # page lists its 4 chief residents, and treating that as the roster
+    # marked a 122-resident program covered and sent its real roster page to
+    # the back of the queue. The count only stands in when the model could not
+    # read the page at all.
+    model_read = reading is not None and reading.ok
+    if trainees and (
+        (model_read and reading.is_current_trainee_roster)
+        or (not model_read and trainees >= 3)
+    ):
         program["people"] = program.get("people", 0) + trainees
         if program.get("status") == PENDING:
             program["status"] = FOUND

@@ -138,3 +138,23 @@ def test_a_trainee_roster_marks_its_program_covered() -> None:
     _update_programs(programs, {"url": outcome.url}, outcome, trainees=4)
     assert programs[0]["status"] == FOUND
     assert programs[1]["status"] == PENDING
+
+
+def test_a_few_chief_residents_do_not_cover_a_program() -> None:
+    """UChicago internal medicine: 4 chief residents on the program page marked
+    a 122-resident program covered, and its roster was never read in time."""
+    from agentscrape.llm.reader import PageReading
+
+    programs = [{"name": "Internal Medicine", "kind": "residency",
+                 "landing_url": "https://x.edu/im", "status": PENDING}]
+    outcome = PageOutcome(url="https://x.edu/im/program-info")
+    outcome.people = [ExtractedPerson(full_name=f"Chief R{i}", category=PersonCategory.RESIDENT) for i in range(4)]
+    outcome.reading = PageReading(ok=True, page_type="program", is_current_trainee_roster=False)
+    _update_programs(programs, {"url": outcome.url}, outcome, trainees=4)
+    assert programs[0]["status"] == PENDING
+
+    roster = PageOutcome(url="https://x.edu/im/residents")
+    roster.people = [ExtractedPerson(full_name=f"R R{i}", category=PersonCategory.RESIDENT) for i in range(40)]
+    roster.reading = PageReading(ok=True, page_type="roster", is_current_trainee_roster=True)
+    _update_programs(programs, {"url": roster.url}, roster, trainees=40)
+    assert programs[0]["status"] == FOUND
