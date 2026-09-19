@@ -1,8 +1,11 @@
 """The per-site pipeline as a LangGraph graph.
 
-    entry -> validate -> skip_check -> discover -> [html_map] -> plan
+    entry -> validate -> skip_check -> discover -> plan -> [html_map]
           -> extract (loop) -> gap_fill -> extract (loop) ... -> finalize
 
+`plan` runs first so everything after it works program-first: the HTML map
+fetches under program landing pages before anything else, and the work list
+puts pages of programs still missing a roster ahead of all other pages.
 `html_map` runs on the hybrid strategy only: a plain-HTML pass that maps the
 site without the model, so the model reads only pages that show people.
 
@@ -28,7 +31,7 @@ from .checkpoint import apply_checkpoint, load_checkpoint
 from .deps import PipelineDeps
 from .nodes.directory import directory_search
 from .nodes.discover import discover_links
-from .nodes.extract import extract_batch
+from .nodes.extract import extract_batch, next_is_program_page
 from .nodes.finalize import finalize
 from .nodes.html_map import html_map
 from .nodes.plan import MAX_GAP_ROUNDS, gap_fill, pending_programs, plan_programs
@@ -121,7 +124,10 @@ def build_site_graph(deps: PipelineDeps):
     def _after_discover(state: SiteState) -> str:
         if not state.get("candidates"):
             return _crawl_over(state)
-        return "html_map" if state.get("crawl_strategy") == "hybrid" else "plan"
+        return "plan"
+
+    def _after_plan(state: SiteState) -> str:
+        return "html_map" if state.get("crawl_strategy") == "hybrid" else "extract"
 
     def _worklist_done(state: SiteState) -> str | None:
         """Why the work list is no longer worth working, or None."""
@@ -142,13 +148,32 @@ def build_site_graph(deps: PipelineDeps):
     def _after_extract(state: SiteState) -> str:
         if deps.stop_requested():
             return "finalize"
+        if state.get("terminated"):
+            # Blocked or rate-limited mid-crawl (extract_batch set the reason).
+            return "finalize"
+        if deps.crawl_limit():
+            log.info("%s: the run collected as many people as it asked for", state["root_domain"])
+            return _crawl_over(state)
         if state.get("steps_taken", 0) >= state["step_budget"]:
             log.info("step budget exhausted for %s", state["root_domain"])
             return _crawl_over(state)
         reason = _worklist_done(state)
-        if reason is None:
-            return "extract"
         pending = pending_programs(state)
+        if reason is None:
+            # No queued page belongs to a program still missing a roster:
+            # ask the model where those rosters are before moving on to
+            # everything else on the site.
+            if (
+                pending
+                and not next_is_program_page(state)
+                and state.get("gap_rounds", 0) < MAX_GAP_ROUNDS
+            ):
+                log.info(
+                    "%s: no queued pages for %d programs still missing a roster; filling gaps",
+                    state["root_domain"], len(pending),
+                )
+                return "gap_fill"
+            return "extract"
         if pending and state.get("gap_rounds", 0) < MAX_GAP_ROUNDS:
             log.info(
                 "%s: %s; %d programs still uncovered, filling gaps",
@@ -177,11 +202,9 @@ def build_site_graph(deps: PipelineDeps):
     graph.add_conditional_edges("entry", _after_entry, ["validate", "extract", "directory"])
     graph.add_conditional_edges("validate", _after_validate, ["skip_check", "finalize"])
     graph.add_conditional_edges("skip_check", _after_skip, ["discover", "directory", "finalize"])
-    graph.add_conditional_edges(
-        "discover", _after_discover, ["html_map", "plan", "directory", "finalize"]
-    )
-    graph.add_edge("html_map", "plan")
-    graph.add_edge("plan", "extract")
+    graph.add_conditional_edges("discover", _after_discover, ["plan", "directory", "finalize"])
+    graph.add_conditional_edges("plan", _after_plan, ["html_map", "extract"])
+    graph.add_edge("html_map", "extract")
     graph.add_conditional_edges(
         "extract", _after_extract, ["extract", "gap_fill", "directory", "finalize"]
     )

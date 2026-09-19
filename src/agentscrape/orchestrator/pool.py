@@ -25,7 +25,7 @@ from ..db.session import get_sessionmaker
 from ..llm.usage import Usage
 from ..pipeline.runner import run_site
 from .events import EventEmitter, EventType
-from .limits import RunLimits, check_memory_ceiling
+from .limits import RunLimits, SiteCounts, check_memory_ceiling
 from .queue import claim_next_site, heartbeat, reset_running_for_resume
 
 log = logging.getLogger("agentscrape.pool")
@@ -143,7 +143,8 @@ class RunOrchestrator:
         await self.emitter.emit(EventType.AGENT_SPAWNED, agent_id=agent_id)
 
         try:
-            while not self.limits.should_stop:
+            # A count limit ends the crawl: claim no further school.
+            while not (self.limits.should_stop or self.limits.crawl_limit_reached):
                 async with self.sessionmaker() as session:
                     claim = await claim_next_site(session, self.run_id, agent_id)
                 if claim is None:
@@ -166,6 +167,8 @@ class RunOrchestrator:
                         browser_context=context,
                         emitter=self.emitter,
                         should_stop=lambda: self.limits.should_stop,
+                        crawl_limit_reached=lambda: self.limits.crawl_limit_reached,
+                        on_counts=self._counts_hook(site_run_id),
                         on_usage=meter_hook,
                         fetcher=fetcher,
                         crawl_strategy=self.crawl_strategy,
@@ -200,6 +203,12 @@ class RunOrchestrator:
 
         return hook
 
+    def _counts_hook(self, site_run_id: str):
+        async def hook(counts: SiteCounts) -> None:
+            await self.limits.report_counts(site_run_id, counts)
+
+        return hook
+
     async def _absorb(self, state, meter_hook) -> None:
         """Fold a finished site's numbers into the run's live counters."""
         found = (
@@ -207,7 +216,10 @@ class RunOrchestrator:
             + state.get("records_changed", 0)
             + state.get("records_unchanged", 0)
         )
-        await self.limits.add_records(found)
+        # A school that crawled already reported its unique counts per batch;
+        # one that never reached extraction (skipped) did not.
+        if not self.limits.has_reported(state.get("site_run_id", "")):
+            await self.limits.add_records(len(set(state.get("seen_record_ids") or [])))
 
         status = str(state.get("status") or "")
         if status in ("skipped", str(SiteRunStatus.SKIPPED)):
@@ -240,7 +252,7 @@ class RunOrchestrator:
             )
             await session.commit()
 
-        if self.limits.should_stop:
+        if self.limits.should_stop or self.limits.crawl_limit_reached:
             await self.emitter.emit(
                 EventType.RUN_STOPPED_AT_LIMIT
                 if self.limits.stopped_at_limit

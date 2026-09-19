@@ -120,6 +120,9 @@ class ExportStatus(StrEnum):
 
 class StopReason(StrEnum):
     MAX_RECORDS = "max_records"
+    # Residents and fellows collected, and people with an address.
+    MAX_TRAINEES = "max_trainees"
+    MAX_EMAILS = "max_emails"
     MAX_SPEND = "max_spend"
     CANCELLED = "cancelled"
     RUN_TIMEOUT = "run_timeout"

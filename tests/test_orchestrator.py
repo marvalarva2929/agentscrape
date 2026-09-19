@@ -19,6 +19,7 @@ from agentscrape.db.models import Run, Site, SiteRun
 from agentscrape.orchestrator.limits import (
     MemoryCeilingExceeded,
     RunLimits,
+    SiteCounts,
     check_memory_ceiling,
 )
 from agentscrape.orchestrator.queue import (
@@ -133,11 +134,34 @@ class TestHardStops:
     async def test_record_limit_trips_and_is_reported_as_stopped_at_limit(self):
         limits = RunLimits(max_records=10)
         await limits.add_records(6)
-        assert not limits.should_stop
+        assert not limits.crawl_limit_reached
         await limits.add_records(5)
-        assert limits.should_stop
+        # A count limit ends the crawl; a requested directory search may still
+        # run, so it is not a hard stop.
+        assert limits.crawl_limit_reached and not limits.should_stop
         assert limits.stop_reason is StopReason.MAX_RECORDS
         assert limits.stopped_at_limit  # not "completed", not "failed"
+
+    async def test_trainee_and_email_limits_use_live_unique_counts(self):
+        limits = RunLimits(max_trainees=50, max_emails=500)
+        await limits.report_counts("sr_a", SiteCounts(people=200, trainees=30, emails=100))
+        # A later report from the same school replaces its earlier one.
+        await limits.report_counts("sr_a", SiteCounts(people=220, trainees=40, emails=110))
+        assert limits.trainees_collected == 40 and not limits.crawl_limit_reached
+        await limits.report_counts("sr_b", SiteCounts(people=40, trainees=12, emails=5))
+        assert limits.stop_reason is StopReason.MAX_TRAINEES
+        assert limits.records_collected == 260
+
+    async def test_email_limit_trips(self):
+        limits = RunLimits(max_emails=100)
+        await limits.report_counts("sr_a", SiteCounts(people=300, trainees=10, emails=100))
+        assert limits.stop_reason is StopReason.MAX_EMAILS and limits.stopped_at_limit
+
+    async def test_cancelling_after_a_count_limit_is_a_cancel(self):
+        limits = RunLimits(max_records=1)
+        await limits.add_records(1)
+        limits.cancel()
+        assert limits.should_stop and limits.stop_reason is StopReason.CANCELLED
 
     async def test_spend_limit_trips(self):
         limits = RunLimits(max_spend_usd=0.50)

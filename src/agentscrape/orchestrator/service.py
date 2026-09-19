@@ -305,6 +305,8 @@ async def launch_run(run_id: str, *, use_browser: bool = True) -> RunOrchestrato
 
     limits = RunLimits(
         max_records=config.get("max_records"),
+        max_trainees=config.get("max_trainees"),
+        max_emails=config.get("max_emails"),
         max_spend_usd=config.get("max_spend_usd"),
     )
     orchestrator = RunOrchestrator(

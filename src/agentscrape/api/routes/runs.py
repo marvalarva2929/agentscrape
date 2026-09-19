@@ -40,6 +40,8 @@ def _run_out(run: Run, pending: int = 0) -> RunOut:
         tokens_in=run.tokens_in, tokens_out=run.tokens_out,
         spend_usd=float(run.spend_usd or 0),
         max_records=config.get("max_records"),
+        max_trainees=config.get("max_trainees"),
+        max_emails=config.get("max_emails"),
         max_spend_usd=config.get("max_spend_usd"),
         created_at=run.created_at, started_at=run.started_at,
         finished_at=run.finished_at,

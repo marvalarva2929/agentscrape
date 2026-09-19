@@ -1,6 +1,6 @@
 """Hybrid strategy, stage 3b: map the site from plain HTML before the model reads anything.
 
-    discover -> html_map -> plan -> extract (loop) ...
+    discover -> plan -> html_map -> extract (loop) ...
 
 Navigation is the cheap part of a crawl and does not need a model: following
 links, ranking them by the keyword heuristic, and noticing which pages carry
@@ -22,6 +22,12 @@ person" instead passed 99% — the HTML extractor finds a name or two in almost
 every footer, byline and contact block.
 Pages past the cap are not dropped: they stay on the work list at their
 heuristic priority and are gated by the same signal when fetched.
+
+The planner has already run, so the map walks program pages first: the
+programs' landing pages and everything linked under them, before the rest of
+the site. Among pages with a signal, those that look like rosters rank above
+those that merely list many names; a patient doctor-finder lists more people
+than any residency roster.
 """
 
 from __future__ import annotations
@@ -42,7 +48,7 @@ from ...llm.triage import heuristic_priority
 from ...urls import canonicalize, host_of, in_scope, registrable_domain
 from ..deps import PipelineDeps
 from ..state import SiteState
-from .extract import _title_of, link_key, merge_frontier
+from .extract import _title_of, attribute_programs, link_key, merge_frontier, pending_names
 
 log = logging.getLogger("agentscrape.pipeline.html_map")
 
@@ -83,7 +89,9 @@ class PeopleSignal:
 
     @property
     def priority(self) -> float:
-        strength = self.people + self.emails / 2 + max(self.score, 0.0) / 2
+        # Roster-likeness (the URL and title score) leads; head count adds
+        # only a little, and stops adding after a handful of names.
+        strength = max(self.score, 0.0) + min(self.people, 8) / 2 + min(self.emails, 8) / 4
         return min(SIGNAL_TOP, SIGNAL_BASE + strength)
 
 
@@ -98,6 +106,8 @@ def people_signal(html: str, url: str, title: str) -> PeopleSignal:
 async def html_map(state: SiteState, deps: PipelineDeps) -> SiteState:
     allowed = set(state.get("allowed_domains") or [registrable_domain(state["root_domain"])])
     candidates = state.get("candidates", [])
+    programs = state.get("programs", [])
+    pending = pending_names(programs)
     deadline = time.monotonic() + settings.html_map_timeout_seconds
     cache_budget = settings.html_map_cache_mb * 1_000_000
     cached_bytes = 0
@@ -112,12 +122,20 @@ async def html_map(state: SiteState, deps: PipelineDeps) -> SiteState:
         key = link_key(entry["url"])
         if key in queued:
             return
+        attribute_programs([entry], programs)
         queued[key] = entry
-        rank = 1_000.0 if entry.get("is_known_path") else score
+        # Known paths first, then pages of programs still missing a roster,
+        # then the rest by heuristic score.
+        if entry.get("is_known_path"):
+            rank = 1_000.0
+        elif entry.get("program") in pending:
+            rank = 500.0 + float(entry.get("priority", 0.0)) + score
+        else:
+            rank = score
         heapq.heappush(queue, (-rank, order, key))
         order += 1
 
-    for candidate in candidates:
+    for candidate in candidates[state.get("cursor", 0):]:
         push(dict(candidate), float(candidate.get("score", 0.0)))
 
     await deps.note(state, f"Mapping {state['root_domain']} from plain HTML before the agent reads anything")
@@ -163,7 +181,12 @@ async def html_map(state: SiteState, deps: PipelineDeps) -> SiteState:
     for key, entry in queued.items():
         signal = mapped.get(key)
         base = {k: v for k, v in entry.items() if k != "link_text"}
-        if signal is None:
+        chosen = float(entry.get("priority", 0.0)) >= SIGNAL_TOP
+        if chosen:
+            # A page the planner or gap filling picked on purpose is read
+            # whatever its HTML shows, mapped or not.
+            work.append({**base, "mapped": signal is not None, "signal": True})
+        elif signal is None:
             priority = min(float(entry.get("priority") or heuristic_priority(entry.get("score", 0.0))), UNMAPPED_CAP)
             if entry.get("is_known_path"):
                 priority = max(priority, SIGNAL_TOP)
@@ -189,7 +212,7 @@ async def html_map(state: SiteState, deps: PipelineDeps) -> SiteState:
     triaged.update(queued)
     return {
         **state,
-        "candidates": merge_frontier([], 0, work),
+        "candidates": merge_frontier([], 0, work, pending if programs else None),
         "candidates_considered": max(state.get("candidates_considered", 0), len(queued)),
         "triaged": sorted(triaged),
         "cursor": 0,

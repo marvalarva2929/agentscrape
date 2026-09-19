@@ -258,6 +258,12 @@ The `/api/v1` contract is implemented as specified. Four things you need:
    DIRECTORY_SEARCH_UNAVAILABLE`, whose `details.sites` says why per school.
    Values filled from the directory carry `extraction_method: "directory"`.
 
+8. **Run limits.** `config.max_records`, `max_trainees`, `max_emails` and
+   `max_spend_usd` (all optional). Heartbeats carry `records_collected`,
+   `trainees_collected`, `emails_collected` and `spend_usd`; a run that hit one
+   ends `stopped_at_limit` with `stop_reason` `max_records`, `max_trainees`,
+   `max_emails` or `max_spend`.
+
 ---
 
 ## How a site is processed
@@ -394,12 +400,22 @@ claim is row state rather than memory.
   refused with `RESOURCE_LIMIT_EXCEEDED` when the requested concurrency will not
   fit in available RAM, rather than letting the box thrash.
 
-Hard stops (max records, max spend) are live counters checked before claiming
-and after each step. When one trips, the run stops claiming, in-flight sites
-finish their current step, the queue drains, and the run is marked
-`stopped_at_limit` — not completed, not failed. Partial results are valid
-results. Spend is metered from each model response as it happens, never computed
-at the end.
+Limits are live counters, all optional, set per run in `config`:
+`max_records` (people), `max_trainees` (residents and fellows), `max_emails`
+(people with an address) and `max_spend_usd`. Counts are unique people seen in
+the run, reported after every batch of pages, so a limit trips mid-school. A
+count limit ends the crawl — no new school is claimed and the current one stops
+reading pages — but a requested directory search still looks up the people
+already found. The spend limit stops everything. Either way the run is marked
+`stopped_at_limit` (with `stop_reason` saying which) — not completed, not
+failed. Partial results are valid results. Spend is metered from each model
+response as it happens, never computed at the end.
+
+**Program list first.** The planner's residency and fellowship programs set the
+order of work: pages of programs still missing a roster come before every other
+page, whatever else the page lists. When none are queued, the model is asked
+where those rosters are before the crawl moves on to staff directories,
+departments and the rest of the site.
 
 ---
 

@@ -28,6 +28,11 @@ class PipelineDeps:
     meter: UsageMeter | None = None
     # Returns True when the run has hit a hard stop and work should wind down.
     should_stop: object = None  # callable() -> bool
+    # Returns True once the run has collected as many people as it asked for:
+    # stop crawling (a requested directory search still runs).
+    crawl_limit_reached: object = None  # callable() -> bool
+    # Receives this school's running totals after every batch, for the limits.
+    on_counts: object = None  # async callable(SiteCounts) -> None
     # Hybrid strategy: bodies the HTML pass already fetched, by candidate URL,
     # so the model phase reads them without fetching again. Not checkpointed.
     page_cache: dict = field(default_factory=dict)
@@ -44,6 +49,13 @@ class PipelineDeps:
 
     def stop_requested(self) -> bool:
         return bool(self.should_stop and self.should_stop())
+
+    def crawl_limit(self) -> bool:
+        return bool(self.crawl_limit_reached and self.crawl_limit_reached())
+
+    async def report_counts(self, counts) -> None:
+        if self.on_counts is not None:
+            await self.on_counts(counts)  # type: ignore[operator]
 
     async def note(self, state: dict, message: str, **extra) -> None:
         """A human-readable line for the live activity feed."""

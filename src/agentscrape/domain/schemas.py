@@ -150,7 +150,13 @@ class RunConfigIn(BaseModel):
     force_rescan_sites: list[str] = Field(
         default_factory=list, description="Site ids or domains to force individually"
     )
+    # Stop crawling once this many people, residents and fellows, or people
+    # with an email have been collected in this run (a requested directory
+    # search still runs on them). Blank means no limit.
     max_records: int | None = Field(default=None, ge=1)
+    max_trainees: int | None = Field(default=None, ge=1)
+    max_emails: int | None = Field(default=None, ge=1)
+    # Stop everything once estimated model spend reaches this.
     max_spend_usd: float | None = Field(default=None, gt=0)
     label: str | None = None
     # "crawl" finds people on the institution's pages; "directory" looks the
@@ -196,6 +202,8 @@ class RunOut(ApiModel):
     tokens_out: int
     spend_usd: float
     max_records: int | None = None
+    max_trainees: int | None = None
+    max_emails: int | None = None
     max_spend_usd: float | None = None
     created_at: datetime
     started_at: datetime | None

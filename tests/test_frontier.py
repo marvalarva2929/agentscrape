@@ -99,3 +99,51 @@ async def test_a_failed_triage_call_keeps_everything_by_heuristic() -> None:
     decisions = await triage_links([{"url": CA3}, {"url": "https://x.edu/a"}], source="test")
     assert all(not d.skipped and not d.by_model for d in decisions)
     assert decisions[0].priority == heuristic_priority(decisions[0].heuristic)
+
+
+class TestProgramFirst:
+    """The program list is the goal: its pages come before any other page,
+    however many people the other page lists or however it was ranked."""
+
+    PROGRAMS = [
+        {"name": "Internal Medicine Residency", "kind": "residency", "status": "pending",
+         "landing_url": "https://med.example.edu/im/residency"},
+        {"name": "Cardiology Fellowship", "kind": "fellowship", "status": "roster_found",
+         "landing_url": "https://med.example.edu/cards/fellowship"},
+    ]
+
+    def test_pages_of_uncovered_programs_come_first(self):
+        from agentscrape.pipeline.nodes.extract import (
+            attribute_programs,
+            merge_frontier,
+            pending_names,
+        )
+
+        additions = attribute_programs([
+            {"url": "https://med.example.edu/business-office/staff", "priority": 88.0},
+            {"url": "https://med.example.edu/im/residency/current-residents", "priority": 60.0},
+            {"url": "https://med.example.edu/cards/fellowship/fellows", "priority": 80.0},
+            {"url": "https://med.example.edu/im/residency/old-news", "priority": 2.0},
+        ], self.PROGRAMS)
+
+        ordered = merge_frontier([], 0, additions, pending_names(self.PROGRAMS))
+
+        assert [c["url"].rsplit("/", 1)[-1] for c in ordered] == [
+            "current-residents",  # a program still missing its roster
+            "staff",              # then everything else, by priority
+            "fellows",            # a covered program is no longer special
+            "old-news",           # below the read floor, whatever it belongs to
+        ]
+
+    def test_a_covered_program_gives_up_its_place(self):
+        from agentscrape.pipeline.nodes.extract import merge_frontier, pending_names
+
+        tail = [
+            {"url": "https://med.example.edu/im/residency/alumni", "priority": 40.0,
+             "program": "Internal Medicine Residency"},
+            {"url": "https://med.example.edu/directory", "priority": 70.0},
+        ]
+        pending = pending_names(self.PROGRAMS)
+        assert merge_frontier(tail, 0, [], pending)[0]["url"].endswith("/alumni")
+        covered = [{**p, "status": "roster_found"} for p in self.PROGRAMS]
+        assert merge_frontier(tail, 0, [], pending_names(covered))[0]["url"].endswith("/directory")

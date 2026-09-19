@@ -29,7 +29,7 @@ from ...llm.planner import (
 from ...urls import canonicalize, host_of, registrable_domain
 from ..deps import PipelineDeps
 from ..state import SiteState
-from .extract import link_key, merge_frontier
+from .extract import attribute_programs, link_key, merge_frontier, pending_names
 
 log = logging.getLogger("agentscrape.pipeline.plan")
 
@@ -109,7 +109,14 @@ async def plan_programs(state: SiteState, deps: PipelineDeps) -> SiteState:
         for p in programs
         if p.get("landing_url")
     ]
-    candidates = merge_frontier(state.get("candidates", []), state.get("cursor", 0), additions)
+    cursor = state.get("cursor", 0)
+    candidates = list(state.get("candidates", []))
+    # Tie every queued page to a program where one fits, so program pages go
+    # to the front of the work list (see extract.program_first).
+    candidates[cursor:] = attribute_programs([dict(c) for c in candidates[cursor:]], programs)
+    candidates = merge_frontier(
+        candidates, cursor, additions, pending_names(programs) if programs else None
+    )
     triaged = set(state.get("triaged", []))
     triaged.update(link_key(a["url"]) for a in additions)
     if programs:
@@ -182,7 +189,9 @@ async def gap_fill(state: SiteState, deps: PipelineDeps) -> SiteState:
     return {
         **state,
         "programs": programs,
-        "candidates": merge_frontier(candidates, cursor, additions),
+        "candidates": merge_frontier(
+            candidates, cursor, additions, pending_names(programs) if programs else None
+        ),
         "triaged": sorted(triaged),
         "gap_rounds": rounds,
         # Fresh leads deserve a fresh run before the barren stop applies.

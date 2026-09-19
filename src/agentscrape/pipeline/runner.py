@@ -82,6 +82,8 @@ async def run_site(
     browser_context=None,
     emitter: EventEmitter | None = None,
     should_stop=None,
+    crawl_limit_reached=None,
+    on_counts=None,
     on_usage=None,
     fetcher: Fetcher | None = None,
     crawl_strategy: str | None = None,
@@ -152,6 +154,8 @@ async def run_site(
             emitter=emitter,
             meter=meter,
             should_stop=should_stop,
+            crawl_limit_reached=crawl_limit_reached,
+            on_counts=on_counts,
         )
         graph = build_site_graph(deps)
 

@@ -526,6 +526,26 @@ async def mark_missing_records(
     return len(to_mark)
 
 
+async def run_counts(
+    session: AsyncSession, site_id: str, run_id: str | None
+) -> tuple[int, int, int]:
+    """(people, residents and fellows, people with an email) this run has
+    seen at a site: unique records, not sightings."""
+    if run_id is None:
+        return 0, 0, 0
+    trainees = (str(PersonCategory.RESIDENT), str(PersonCategory.FELLOW))
+    row = (
+        await session.execute(
+            select(
+                func.count(Record.id),
+                func.count(Record.id).filter(Record.category.in_(trainees)),
+                func.count(Record.id).filter(Record.email.isnot(None)),
+            ).where(Record.site_id == site_id, Record.last_run_id == run_id)
+        )
+    ).one()
+    return int(row[0]), int(row[1]), int(row[2])
+
+
 async def stored_identity_keys(session: AsyncSession, site_id: str) -> set[str]:
     """Identity keys of a site's live records — the skip check's comparison set."""
     rows = await session.execute(

@@ -263,6 +263,28 @@ class TestHardStops:
         assert all(r.current_version_id for r in records)
 
 
+    async def test_trainee_limit_stops_the_crawl_mid_school(self, session):
+        """Counts are reported after every batch, so a limit trips while the
+        school is still being crawled, and the next school is never claimed."""
+        from agentscrape.db.models import SiteRun
+
+        with serve("rf-a.localhost") as site_a, serve("rf-b.localhost") as site_b:
+            limits = RunLimits(max_trainees=1)
+            run_id = await _run_once(
+                [site_a.base, site_b.base], concurrency=1, limits=limits,
+                step_budget=1, session=session,
+            )
+
+        run = await session.get(Run, run_id)
+        await session.refresh(run)
+        assert run.status == RunStatus.STOPPED_AT_LIMIT
+        assert run.stop_reason == "max_trainees"
+        statuses = sorted(
+            (await session.execute(select(SiteRun.status).where(SiteRun.run_id == run_id))).scalars()
+        )
+        assert "pending" in statuses  # the second school was never started
+
+
 class TestDuplicateInputs:
     async def test_the_same_institution_twice_is_collapsed(self, session):
         """A CSV listing a site with and without www must not fail the run."""

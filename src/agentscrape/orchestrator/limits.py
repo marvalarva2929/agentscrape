@@ -1,13 +1,20 @@
 """Hard stops and the memory ceiling.
 
 The client pays compute directly, so a run must be boundable before it starts.
-Both limits are optional and per run:
-  * maximum records collected
-  * maximum estimated spend
+Every limit is optional and per run:
+  * people collected, residents and fellows collected, people with an email
+  * estimated model spend
 
-When either trips the run stops cleanly: no new sites are claimed, in-flight
-sites finish their current step, the queue drains, and the run is marked
-`stopped_at_limit` rather than completed or failed. Partial results are valid.
+The three count limits end the *crawl*: no new school is claimed and a school
+in progress stops reading pages, but a directory search the run asked for
+still looks up the people already found (it is bounded by the spend limit and
+its own lookup cap). The spend limit, a cancel and the run timeout stop
+everything. Either way the run is marked `stopped_at_limit` rather than
+completed or failed, and partial results are valid.
+
+Counts are unique people seen during this run, reported by each school after
+every batch of pages, so a limit trips while a school is still being crawled
+rather than when it finishes.
 """
 
 from __future__ import annotations
@@ -21,6 +28,16 @@ from ..db.enums import StopReason
 
 log = logging.getLogger("agentscrape.limits")
 
+COUNT_LIMITS = (StopReason.MAX_RECORDS, StopReason.MAX_TRAINEES, StopReason.MAX_EMAILS)
+HARD_STOPS = (StopReason.MAX_SPEND, StopReason.CANCELLED, StopReason.RUN_TIMEOUT)
+
+
+@dataclass(frozen=True)
+class SiteCounts:
+    people: int = 0
+    trainees: int = 0
+    emails: int = 0
+
 
 @dataclass
 class RunLimits:
@@ -28,22 +45,49 @@ class RunLimits:
 
     max_records: int | None = None
     max_spend_usd: float | None = None
+    max_trainees: int | None = None
+    max_emails: int | None = None
 
-    records_collected: int = 0
     spend_usd: float = 0.0
     tokens_in: int = 0
     tokens_out: int = 0
 
     stop_reason: StopReason | None = None
     cancelled: bool = False
+    # The latest counts each school reported, by site run.
+    _sites: dict[str, SiteCounts] = field(default_factory=dict, repr=False)
+    # Counts from schools that finished without reporting (e.g. skipped).
+    _extra_people: int = 0
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
 
+    @property
+    def records_collected(self) -> int:
+        return sum(c.people for c in self._sites.values()) + self._extra_people
+
+    @property
+    def trainees_collected(self) -> int:
+        return sum(c.trainees for c in self._sites.values())
+
+    @property
+    def emails_collected(self) -> int:
+        return sum(c.emails for c in self._sites.values())
+
+    async def report_counts(self, site_run_id: str, counts: SiteCounts) -> None:
+        """A school's running totals for this run (replaces its last report)."""
+        async with self._lock:
+            self._sites[site_run_id] = counts
+            self._check()
+
     async def add_records(self, count: int) -> None:
+        """People from a school that never reported counts of its own."""
         if count <= 0:
             return
         async with self._lock:
-            self.records_collected += count
+            self._extra_people += count
             self._check()
+
+    def has_reported(self, site_run_id: str) -> bool:
+        return site_run_id in self._sites
 
     async def add_usage(self, input_tokens: int, output_tokens: int, cost: float) -> None:
         async with self._lock:
@@ -55,39 +99,49 @@ class RunLimits:
     def _check(self) -> None:
         if self.stop_reason is not None:
             return
-        if self.max_records is not None and self.records_collected >= self.max_records:
-            self.stop_reason = StopReason.MAX_RECORDS
-            log.info(
-                "run hit its record limit (%d/%d); winding down",
-                self.records_collected, self.max_records,
-            )
-        elif self.max_spend_usd is not None and self.spend_usd >= self.max_spend_usd:
-            self.stop_reason = StopReason.MAX_SPEND
-            log.info(
-                "run hit its spend limit ($%.4f/$%.2f); winding down",
-                self.spend_usd, self.max_spend_usd,
-            )
+        checks = (
+            (StopReason.MAX_SPEND, self.max_spend_usd, self.spend_usd, "spend"),
+            (StopReason.MAX_RECORDS, self.max_records, self.records_collected, "people"),
+            (StopReason.MAX_TRAINEES, self.max_trainees, self.trainees_collected,
+             "residents and fellows"),
+            (StopReason.MAX_EMAILS, self.max_emails, self.emails_collected, "email"),
+        )
+        for reason, limit, value, what in checks:
+            if limit is not None and value >= limit:
+                self.stop_reason = reason
+                log.info("run hit its %s limit (%s/%s); winding down", what, value, limit)
+                return
 
     def cancel(self) -> None:
         self.cancelled = True
-        if self.stop_reason is None:
+        if self.stop_reason is None or self.stop_reason in COUNT_LIMITS:
             self.stop_reason = StopReason.CANCELLED
 
     @property
     def should_stop(self) -> bool:
-        return self.cancelled or self.stop_reason is not None
+        """Stop everything now: spend limit, cancel or run timeout."""
+        return self.cancelled or self.stop_reason in HARD_STOPS
+
+    @property
+    def crawl_limit_reached(self) -> bool:
+        """Enough people collected: stop crawling (a directory search may still run)."""
+        return self.stop_reason in COUNT_LIMITS
 
     @property
     def stopped_at_limit(self) -> bool:
-        return self.stop_reason in (StopReason.MAX_RECORDS, StopReason.MAX_SPEND)
+        return self.stop_reason in (*COUNT_LIMITS, StopReason.MAX_SPEND)
 
     def snapshot(self) -> dict[str, object]:
         return {
             "records_collected": self.records_collected,
+            "trainees_collected": self.trainees_collected,
+            "emails_collected": self.emails_collected,
             "spend_usd": round(self.spend_usd, 6),
             "tokens_in": self.tokens_in,
             "tokens_out": self.tokens_out,
             "max_records": self.max_records,
+            "max_trainees": self.max_trainees,
+            "max_emails": self.max_emails,
             "max_spend_usd": self.max_spend_usd,
             "stop_reason": str(self.stop_reason) if self.stop_reason else None,
         }

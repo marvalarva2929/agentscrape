@@ -28,7 +28,12 @@ from datetime import UTC, datetime
 
 from ...config import settings
 from ...db.enums import ExtractionMethod, FetchMode, PersonCategory
-from ...db.repositories.records import ExtractionContext, lock_site, reconcile_people
+from ...db.repositories.records import (
+    ExtractionContext,
+    lock_site,
+    reconcile_people,
+    run_counts,
+)
 from ...db.repositories.sites import claim_url, record_path_outcome, update_visit
 from ...discovery.sitemap import LinkContext, extract_link_contexts
 from ...extraction.html_people import extract_people, page_looks_thin
@@ -39,6 +44,7 @@ from ...llm.planner import FOUND, PENDING, match_program
 from ...llm.reader import PageReading, combine_with_regex, fold, merge_people, read_page
 from ...llm.triage import triage_links
 from ...orchestrator.events import EventType
+from ...orchestrator.limits import SiteCounts
 from ...storage.artifacts import (
     png_dimensions,
     relative_path,
@@ -312,6 +318,12 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
     async with deps.sessionmaker() as session:
         await save_checkpoint(session, updated)
         await session.commit()
+        # Running totals for the run's people / residents & fellows / email
+        # limits, so they trip mid-crawl rather than when the school finishes.
+        people, trainees, emails = await run_counts(
+            session, state["site_id"], state.get("run_id")
+        )
+    await deps.report_counts(SiteCounts(people, trainees, emails))
 
     return updated
 
@@ -591,25 +603,27 @@ async def _grow_frontier(
             continue
         triaged.add(key)
         fresh.append({**link, "url": canonical})
+    pending = pending_names(programs)
     if not fresh:
-        return candidates, triaged
+        # Programs covered by this batch move their remaining pages back.
+        return merge_frontier(candidates, cursor, [], pending if programs else None), triaged
 
-    pending = pending_program_names(programs)
+    missing = pending_program_names(programs)
     context = (
-        "Programs still missing a roster: " + "; ".join(pending[:80]) if pending else ""
+        "Programs still missing a roster: " + "; ".join(missing[:80]) if missing else ""
     )
     decisions = await triage_links(
         fresh, source=f"pages on {state['root_domain']}", context=context, meter=deps.meter,
     )
-    additions = [
+    additions = attribute_programs([
         {
             "url": d.url, "score": d.heuristic, "priority": d.priority,
             "program": d.program, "is_known_path": False,
         }
         for d in decisions
         if not d.skipped and not _is_asset(d.heuristic)
-    ]
-    return merge_frontier(candidates, cursor, additions), triaged
+    ], programs)
+    return merge_frontier(candidates, cursor, additions, pending if programs else None), triaged
 
 
 def _is_asset(heuristic: float) -> bool:
@@ -617,13 +631,69 @@ def _is_asset(heuristic: float) -> bool:
     return heuristic <= -100
 
 
-def merge_frontier(candidates: list[dict], cursor: int, additions: list[dict]) -> list[dict]:
-    """Fold new candidates into the unvisited tail and re-sort it by priority.
+# Below this a page is not worth reading at all (graph.PRIORITY_FLOOR); such
+# pages sort last whatever program they belong to.
+_READ_FLOOR = 5.0
 
-    Only the tail is touched, so the caller's cursor stays valid. Everything
-    already visited keeps its place.
+
+def attribute_programs(entries: list[dict], programs: list[dict]) -> list[dict]:
+    """Tie each page to one of the planner's programs where it can be: under a
+    program's landing page, or named for it by the model's triage. The page's
+    `program` becomes that program's name, which is what `program_first`
+    ranks on. Pages that match nothing are left as they are."""
+    if not programs:
+        return entries
+    for entry in entries:
+        program = match_program(programs, entry.get("program"), entry.get("url"))
+        if program is not None:
+            entry["program"] = program["name"]
+    return entries
+
+
+def pending_names(programs: list[dict]) -> set[str]:
+    return {p["name"] for p in programs if p.get("status") == PENDING}
+
+
+def program_first(pending: set[str]):
+    """Sort key: pages of programs still missing a roster first, then
+    everything else, then pages below the read floor; by priority within.
+
+    The goal of a crawl is the program list. Staff directories, department
+    news and the university's business pages can hold people too, but they
+    wait until every program the planner found has a roster or has been
+    searched for, however many names they show."""
+    def key(candidate: dict) -> tuple:
+        priority = float(candidate.get("priority", 0.0))
+        if priority < _READ_FLOOR:
+            tier = 2
+        elif candidate.get("program") in pending:
+            tier = 0
+        else:
+            tier = 1
+        return (tier, -priority, -float(candidate.get("score", 0.0)))
+
+    return key
+
+
+def next_is_program_page(state: SiteState) -> bool:
+    candidates = state.get("candidates", [])
+    cursor = state.get("cursor", 0)
+    return cursor < len(candidates) and (
+        candidates[cursor].get("program") in pending_names(state.get("programs", []))
+    )
+
+
+def merge_frontier(
+    candidates: list[dict], cursor: int, additions: list[dict],
+    pending: set[str] | None = None,
+) -> list[dict]:
+    """Fold new candidates into the unvisited tail and re-sort it.
+
+    The tail is ordered by `program_first` when the programs still pending are
+    given, by priority otherwise. Only the tail is touched, so the caller's
+    cursor stays valid. Everything already visited keeps its place.
     """
-    if not additions:
+    if not additions and pending is None:
         return candidates
     head, tail = candidates[:cursor], candidates[cursor:]
     by_key = {link_key(c["url"]): c for c in tail}
@@ -640,16 +710,18 @@ def merge_frontier(candidates: list[dict], cursor: int, additions: list[dict]) -
             }
     merged = sorted(
         by_key.values(),
-        key=lambda c: (-float(c.get("priority", 0.0)), -float(c.get("score", 0.0))),
+        key=program_first(pending) if pending is not None
+        else (lambda c: (-float(c.get("priority", 0.0)), -float(c.get("score", 0.0)))),
     )
     room = max(settings.max_candidates - len(head), 0)
     if len(merged) > room:
         log.info("frontier at capacity; dropping %d lowest-priority links", len(merged) - room)
         merged = merged[:room]
-    log.info(
-        "frontier: %d links added, %d unvisited (top priority %.0f)",
-        len(additions), len(merged), merged[0].get("priority", 0) if merged else 0,
-    )
+    if additions:
+        log.info(
+            "frontier: %d links added, %d unvisited (top priority %.0f)",
+            len(additions), len(merged), merged[0].get("priority", 0) if merged else 0,
+        )
     return [*head, *merged]
 
 
