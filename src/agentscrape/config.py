@@ -102,10 +102,13 @@ class Settings(BaseSettings):
     search_api_key: str = ""
 
     # --- crawl strategy -------------------------------------------------
-    # hybrid: a plain-HTML pass maps the site with no model calls, and the
-    # model reads only the pages that show signs of people. agent: the model
-    # triages every link and reads every page it visits.
-    crawl_strategy: str = "hybrid"
+    # agent: the model ranks every discovered link and reads every page it
+    # visits. hybrid: a plain-HTML pass maps the site with no model calls, and
+    # the model reads only pages that show signs of people. Measured on
+    # UChicago over 30 minutes (2026-09-19): agent 73.4% of the client sheet
+    # for $0.98, hybrid 18.2% for $0.73 - ranking every link with the model is
+    # what finds the rosters, and it is a small share of the cost.
+    crawl_strategy: str = "agent"
     # Pages the HTML pass fetches before handing over to the model, and how
     # long it may take. Unmapped pages are still reachable afterwards.
     # The map runs program pages first and only orders the work list; pages

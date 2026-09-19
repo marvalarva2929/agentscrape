@@ -114,14 +114,18 @@ every site stops with `LLM_UNAVAILABLE`. `agentscrape export-school <domain>
 Two strategies, set by `CRAWL_STRATEGY` or per run (`config.crawl_strategy`,
 `--strategy` on the CLI):
 
-- **`hybrid`** (default): a plain-HTML pass maps up to `HTML_MAP_MAX_PAGES`
+- **`agent`** (default): the model ranks every discovered link and reads
+  every page it visits. On UChicago over 30 minutes it found 73.4% of the
+  client sheet for $0.98.
+- **`hybrid`**: a plain-HTML pass maps up to `HTML_MAP_MAX_PAGES`
   pages with no model calls — following links, ranking them by the keyword
   heuristic, and noting which pages show people (three or more names, two or
   more addresses, a JavaScript shell, or a roster-like URL). The model then
   reads only those pages, and link triage runs on the cheaper
   `LLM_CHEAP_MODEL`. A page with one or two names (a footer, a byline, a
-  contact block) is not read.
-- **`agent`**: the model triages every link and reads every page it visits.
+  contact block) is not read. It is cheaper per minute ($0.73 in the same
+  test) but far lower in recall (18.2%): the keyword ranking misses rosters
+  the model's ranking finds. Use it only where cost matters more than recall.
 
 Both need a working OpenAI-compatible endpoint (`LLM_BASE_URL`, `LLM_API_KEY` in
 `.env`); check it first with `agentscrape llm-check`.
