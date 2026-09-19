@@ -23,8 +23,10 @@ SAMPLE = [
 def test_the_sample_sheet_is_read_by_header_meaning() -> None:
     rows = parse_school_table(SAMPLE)
 
-    assert [r.name for r in rows] == ["University of Arizona", "Baylor College of Medicine"]
-    arizona, bcm = rows
+    assert [r.name for r in rows] == [
+        "University of Arizona", "Baylor College of Medicine", "No Directory U",
+    ]
+    arizona, bcm, no_directory = rows
     assert arizona.directory_url.startswith("https://directory.arizona.edu")
     # The hub is on the same institution, so crawling starts there.
     assert "medicine.arizona.edu" in arizona.entry_url
@@ -33,6 +35,7 @@ def test_the_sample_sheet_is_read_by_header_meaning() -> None:
     # domain stays in scope beside it.
     assert "bcmhospital.org/gme" in bcm.entry_url
     assert bcm.affiliated_domains == ["bcm.edu"]
+    assert no_directory.directory_url is None
 
 
 def test_a_minimal_three_column_sheet_works() -> None:
@@ -44,8 +47,8 @@ def test_a_minimal_three_column_sheet_works() -> None:
 
 
 def test_a_sheet_missing_a_required_column_is_refused() -> None:
-    with pytest.raises(ValueError, match="directory link"):
-        parse_school_table([["Institution", "Website"], ["X", "https://x.edu"]])
+    rows = parse_school_table([["Institution", "Website"], ["X", "https://x.edu"]])
+    assert rows[0].directory_url is None
 
 
 @pytest.mark.asyncio

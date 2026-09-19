@@ -39,7 +39,7 @@ class SchoolRow:
     row: int
     name: str
     website: str
-    directory_url: str
+    directory_url: str | None
     # The residency/fellowship hub: a better place to start crawling than the
     # home page, and the sheet's own choice of entry point.
     hub_url: str | None = None
@@ -113,19 +113,26 @@ def parse_school_table(table: list[list[str]]) -> list[SchoolRow]:
     headers, body = table[0], table[1:]
 
     used: set[int] = set()
-    directory = _column(headers, body, ("directory",), url=True, exclude=used)
+    # A directory column can legitimately contain values such as "DIRECTORY NOT
+    # AVAILABLE". Recognise the column by its header, then treat non-URLs as a
+    # missing link for that individual school rather than rejecting the sheet.
+    directory = _column(headers, body, ("directory",), url=False, exclude=used)
     if directory is not None:
         used.add(directory)
     hub = _column(headers, body, ("hub", "residency", "fellowship", "gme"), url=True, exclude=used)
     if hub is not None:
         used.add(hub)
     website = _column(headers, body, ("website", "url", "site", "homepage"), url=True, exclude=used)
+    # Some source sheets provide only a "Crawler Hub". It is a valid crawl
+    # entry, so use it as the website when no separate institutional URL exists.
+    if website is None and hub is not None:
+        website = hub
     if website is not None:
         used.add(website)
     name = _column(headers, body, ("institution", "school", "name"), url=False, exclude=used)
 
     missing = [label for label, index in (
-        ("institution name", name), ("website", website), ("directory link", directory),
+        ("institution name", name), ("website", website),
     ) if index is None]
     if missing:
         raise ValueError(f"no column for {', '.join(missing)} in headers {headers}")
@@ -138,9 +145,9 @@ def parse_school_table(table: list[list[str]]) -> list[SchoolRow]:
         school = cell(row, name)
         site = as_url(cell(row, website))
         people = as_url(cell(row, directory))
-        if not (school and site and people):
+        if not (school and site):
             log.warning(
-                "school sheet row %d skipped: needs a name, website and directory link "
+                "school sheet row %d skipped: needs a name and website "
                 "(got %r, %r, %r)", number, school, cell(row, website), cell(row, directory),
             )
             continue
