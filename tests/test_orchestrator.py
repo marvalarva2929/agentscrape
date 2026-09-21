@@ -53,7 +53,7 @@ class TestQueue:
         run_id = await _seed_run(session, 2)
         claim = await claim_next_site(session, run_id, "agent-0")
         assert claim is not None
-        site_run_id, _, url, _, _ = claim
+        site_run_id, _, url, _ = claim
         assert url.startswith("https://hospital")
 
         site_run = await session.get(SiteRun, site_run_id)
@@ -233,7 +233,7 @@ class TestCancelReturnsPromptly:
         from agentscrape.orchestrator.pool import RunOrchestrator
 
         return RunOrchestrator(
-            run_id, concurrency=1, skip_threshold=0.9, step_budget=10,
+            run_id, concurrency=1, step_budget=10,
             limits=RunLimits(), use_browser=False,
         )
 

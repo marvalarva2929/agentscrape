@@ -1,4 +1,4 @@
-"""Stage 6: mark departures, persist the fingerprint, close out the SiteRun."""
+"""Stage 6: mark departures, stamp the school as scraped, close out the SiteRun."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from ...db.enums import SiteRunStatus
 from ...db.models import Record, SiteRun
 from ...db.repositories.programs import refresh_program_counts
 from ...db.repositories.records import lock_site, mark_missing_records
-from ...db.repositories.sites import save_fingerprint, set_dominant_specialty, visited_hashes
+from ...db.repositories.sites import mark_scraped, set_dominant_specialty, visited_hashes
 from ...llm.planner import FOUND
 from ...orchestrator.events import EventType
 from ...storage.artifacts import replace_school_screenshots
@@ -29,7 +29,7 @@ async def finalize(state: SiteState, deps: PipelineDeps) -> SiteState:
     missing = 0
     # A directory-only run visits no pages and captures no screenshots: there
     # is nothing to mark missing and no screenshot set to replace.
-    crawled = "crawl" in (state.get("modes") or ["crawl"]) and state.get("status") != "skipped"
+    crawled = "crawl" in (state.get("modes") or ["crawl"])
 
     if state.get("status") != "rejected":
         async with deps.sessionmaker() as session:
@@ -42,15 +42,13 @@ async def finalize(state: SiteState, deps: PipelineDeps) -> SiteState:
                     seen_record_ids=set(state.get("seen_record_ids", [])),
                     visited_url_hashes=visited,
                 )
-                if state.get("fingerprint"):
-                    await save_fingerprint(session, site_id, state["fingerprint"])
+                if state.get("steps_taken"):
+                    await mark_scraped(session, site_id)
                 await _update_dominant_specialty(session, site_id)
                 await refresh_program_counts(session, site_id)
             await session.commit()
 
-        # A school keeps only its most recent run's screenshots. Skipped runs
-        # capture nothing, so replacing there would delete the previous set and
-        # leave the school with no screenshots at all.
+        # A school keeps only its most recent run's screenshots.
         if crawled:
             await replace_school_screenshots(site_id, site_run_id)
 
@@ -68,8 +66,6 @@ async def finalize(state: SiteState, deps: PipelineDeps) -> SiteState:
             .where(SiteRun.id == site_run_id)
             .values(
                 status=status,
-                skip_reason=state.get("skip_reason"),
-                similarity_score=state.get("similarity_score"),
                 steps_taken=state.get("steps_taken", 0),
                 records_found=(
                     state.get("records_new", 0)
@@ -97,7 +93,6 @@ async def finalize(state: SiteState, deps: PipelineDeps) -> SiteState:
 
     event = {
         SiteRunStatus.COMPLETED: EventType.SITE_COMPLETED,
-        SiteRunStatus.SKIPPED: EventType.SITE_SKIPPED,
         SiteRunStatus.REJECTED: EventType.SITE_REJECTED,
         SiteRunStatus.FAILED: EventType.SITE_FAILED,
     }.get(status, EventType.SITE_COMPLETED)
@@ -113,7 +108,7 @@ async def finalize(state: SiteState, deps: PipelineDeps) -> SiteState:
         records_unchanged=state.get("records_unchanged", 0),
         records_missing=missing,
         steps_taken=state.get("steps_taken", 0),
-        reason=state.get("error_message") or state.get("skip_reason"),
+        reason=state.get("error_message"),
     )
 
     log.info(
@@ -172,8 +167,6 @@ def _final_status(state: SiteState) -> SiteRunStatus:
     status = state.get("status")
     if status == "rejected":
         return SiteRunStatus.REJECTED
-    if status == "skipped":
-        return SiteRunStatus.SKIPPED
     if status == "failed":
         return SiteRunStatus.FAILED
     if status == "cancelled":

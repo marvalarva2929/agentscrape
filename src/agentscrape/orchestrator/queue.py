@@ -25,8 +25,8 @@ STALE_CLAIM_MINUTES = 30
 
 async def claim_next_site(
     session: AsyncSession, run_id: str, agent_id: str
-) -> tuple[str, str, str, bool, int] | None:
-    """Claim one pending site. Returns (site_run_id, site_id, url, force, budget)."""
+) -> tuple[str, str, str, int] | None:
+    """Claim one pending site. Returns (site_run_id, site_id, url, budget)."""
     row = (
         await session.execute(
             select(SiteRun, Site.canonical_url)
@@ -53,10 +53,7 @@ async def claim_next_site(
         )
     )
     await session.commit()
-    return (
-        site_run.id, site_run.site_id, canonical_url,
-        site_run.force_rescan, site_run.step_budget,
-    )
+    return site_run.id, site_run.site_id, canonical_url, site_run.step_budget
 
 
 async def reclaim_stale(session: AsyncSession, run_id: str) -> int:

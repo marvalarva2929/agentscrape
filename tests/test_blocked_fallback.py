@@ -83,7 +83,7 @@ async def _crawl(session, entry: str, *, use_browser: bool) -> str:
         RunCreate(sites=[entry], config=RunConfigIn(concurrency=1, step_budget=10, modes=["crawl"])),
     )
     await RunOrchestrator(
-        run.id, concurrency=1, skip_threshold=0.9, step_budget=10, limits=RunLimits(),
+        run.id, concurrency=1, step_budget=10, limits=RunLimits(),
         use_browser=use_browser, crawl_strategy="agent", modes=["crawl"],
     ).start()
     return run.id

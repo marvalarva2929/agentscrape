@@ -6,8 +6,7 @@
 Runs after the crawl, or alone on a school that already has people. Who is
 looked up: named people not marked missing who lack an address or both a PGY
 and a class year — residents and fellows first. On a combined run only the
-people this crawl saw are looked up (everyone, if the crawl was skipped as
-unchanged), so someone who has left is not refreshed
+people this crawl saw are looked up, so someone who has left is not refreshed
 by the directory just before the crawl would have marked them missing.
 
 Only blank fields are filled (see `fill_record_blanks`); what a roster page
@@ -62,8 +61,7 @@ async def _targets(deps: PipelineDeps, state: SiteState, limit: int) -> list[Rec
         )
         .order_by(_ORDER, Record.full_name)
     )
-    # A skipped crawl (site unchanged) saw nobody, so everyone stored is current.
-    if "crawl" in (state.get("modes") or []) and state.get("status") != "skipped":
+    if "crawl" in (state.get("modes") or []):
         statement = statement.where(Record.id.in_(state.get("seen_record_ids") or [""]))
     async with deps.sessionmaker() as session:
         rows = (await session.execute(statement)).scalars().all()

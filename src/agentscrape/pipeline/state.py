@@ -25,8 +25,6 @@ class SiteState(TypedDict, total=False):
     agent_id: str
 
     # --- configuration for this site ---
-    force_rescan: bool
-    skip_threshold: float
     step_budget: int
     # "hybrid" or "agent"; see settings.crawl_strategy.
     crawl_strategy: str
@@ -37,8 +35,6 @@ class SiteState(TypedDict, total=False):
     status: str
     terminated: bool
     resumed: bool
-    skip_reason: str | None
-    similarity_score: float | None
     error_code: str | None
     error_message: str | None
 
@@ -79,7 +75,6 @@ class SiteState(TypedDict, total=False):
     records_unchanged: int
     records_missing: int
     seen_record_ids: list[str]
-    fingerprint: dict[str, str]
     dominant_specialty: str | None
     tokens_in: int
     tokens_out: int
@@ -95,8 +90,6 @@ def initial_state(
     allowed_domains: list[str] | None = None,
     run_id: str | None = None,
     agent_id: str = "agent-0",
-    force_rescan: bool = False,
-    skip_threshold: float = 0.90,
     step_budget: int = 40,
     crawl_strategy: str | None = None,
     modes: list[str] | None = None,
@@ -111,16 +104,12 @@ def initial_state(
             {registrable_domain(root_domain), *(allowed_domains or [])}
         ),
         agent_id=agent_id,
-        force_rescan=force_rescan,
-        skip_threshold=skip_threshold,
         step_budget=step_budget,
         crawl_strategy=crawl_strategy or settings.crawl_strategy,
         modes=list(modes or ["crawl"]),
         status="running",
         terminated=False,
         resumed=False,
-        skip_reason=None,
-        similarity_score=None,
         error_code=None,
         error_message=None,
         candidates=[],
@@ -143,7 +132,6 @@ def initial_state(
         records_unchanged=0,
         records_missing=0,
         seen_record_ids=[],
-        fingerprint={},
         dominant_specialty=None,
         tokens_in=0,
         tokens_out=0,

@@ -142,14 +142,9 @@ class RecordStats(BaseModel):
 
 class RunConfigIn(BaseModel):
     concurrency: int = Field(default=4, ge=1, le=8)
-    skip_threshold: float = Field(default=0.90, ge=0.0, le=1.0)
     # Pages per site. Defaults to DEFAULT_STEP_BUDGET, so a deployment sets it
     # once (small for a live demo, thousands for a real crawl).
     step_budget: int = Field(default_factory=lambda: settings.default_step_budget, ge=1, le=50_000)
-    force_rescan: bool = False
-    force_rescan_sites: list[str] = Field(
-        default_factory=list, description="Site ids or domains to force individually"
-    )
     # Stop crawling once this many people, residents and fellows, or people
     # with an email have been collected in this run (a requested directory
     # search still runs on them). Blank means no limit.
@@ -305,7 +300,6 @@ class CsvRowPreview(BaseModel):
     last_scraped_at: datetime | None = None
     known_path_count: int = 0
     previous_record_count: int = 0
-    predicted_skip: bool = False
     validation_status: str | None = None
     validation_reason: str | None = None
 
@@ -315,7 +309,6 @@ class ValidatePreview(BaseModel):
     valid_rows: int
     invalid_rows: int
     known_sites: int
-    predicted_skips: int
     rejected_sites: int
     rows: list[CsvRowPreview]
 

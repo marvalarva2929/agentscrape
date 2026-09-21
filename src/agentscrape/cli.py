@@ -30,7 +30,6 @@ def site(
     dry_run: bool = typer.Option(
         False, "--dry-run", help="Discover and rank candidates, then stop"
     ),
-    force: bool = typer.Option(False, "--force", help="Ignore the skip check"),
     no_browser: bool = typer.Option(
         False, "--no-browser", help="HTML fetching only; never escalate to Chromium"
     ),
@@ -40,7 +39,6 @@ def site(
         help="Another registrable domain this institution publishes on, e.g. "
              "--also uchicagomedicine.org (repeatable)",
     ),
-    threshold: float = typer.Option(None, "--threshold", help="Skip similarity threshold"),
     strategy: str = typer.Option(
         None, "--strategy",
         help="hybrid (HTML pass first, model only where people show) or agent "
@@ -59,16 +57,16 @@ def site(
         raise typer.BadParameter("--mode must be crawl or directory")
     asyncio.run(
         _run_site(
-            url, dry_run=dry_run, force=force, no_browser=no_browser,
-            budget=budget, threshold=threshold, also=list(also or []),
+            url, dry_run=dry_run, no_browser=no_browser,
+            budget=budget, also=list(also or []),
             strategy=strategy, modes=modes,
         )
     )
 
 
 async def _run_site(
-    url: str, *, dry_run: bool, force: bool, no_browser: bool,
-    budget: int | None, threshold: float | None, also: list[str] | None = None,
+    url: str, *, dry_run: bool, no_browser: bool,
+    budget: int | None, also: list[str] | None = None,
     strategy: str | None = None, modes: list[str] | None = None,
 ) -> None:
     from .browser.renderer import BrowserPool
@@ -92,7 +90,7 @@ async def _run_site(
         run_id = run.id
 
     site_id, site_run_id, root_url = await ensure_site_run(
-        run_id=run_id, site_url=url, force_rescan=force, step_budget=budget
+        run_id=run_id, site_url=url, step_budget=budget
     )
     console.print(f"[bold]site[/bold] {root_url}  [dim]run={run_id} site_run={site_run_id}[/dim]")
 
@@ -111,8 +109,8 @@ async def _run_site(
     try:
         state = await run_site(
             site_id=site_id, site_run_id=site_run_id, root_url=root_url,
-            run_id=run_id, force_rescan=force, step_budget=budget,
-            skip_threshold=threshold, allowed_domains=also, browser_context=context,
+            run_id=run_id, step_budget=budget,
+            allowed_domains=also, browser_context=context,
             crawl_strategy=strategy, modes=modes,
         )
     finally:
@@ -173,7 +171,7 @@ def _print_outcome(state) -> None:
     table.add_column("field", style="bold")
     table.add_column("value")
     for key in (
-        "status", "skip_reason", "similarity_score", "steps_taken",
+        "status", "steps_taken",
         "candidates_considered", "known_path_hits", "records_new",
         "records_changed", "records_unchanged", "records_missing",
         "error_code", "error_message",

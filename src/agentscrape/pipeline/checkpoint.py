@@ -33,7 +33,7 @@ CHECKPOINT_VERSION = 2
 CHECKPOINTED_FIELDS = (
     "candidates", "cursor", "steps_taken", "candidates_considered",
     "known_path_hits", "records_new", "records_changed", "records_unchanged",
-    "seen_record_ids", "fingerprint", "dominant_specialty", "similarity_score",
+    "seen_record_ids", "dominant_specialty",
     "barren_streak", "triaged", "processed_hashes", "programs", "gap_rounds",
     "html_map_stats", "crawl_done", "directory_done", "directory_stats",
 )

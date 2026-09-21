@@ -171,7 +171,7 @@ class TestHeartbeat:
         run_id = await _seed_run_with_sites(session, queued=True, label="beat", domains=["a.edu"])
         limits = RunLimits(spend_usd=0.4)
         orchestrator = RunOrchestrator(
-            run_id, concurrency=1, skip_threshold=0.9, step_budget=5, limits=limits,
+            run_id, concurrency=1, step_budget=5, limits=limits,
             use_browser=False,
         )
         await limits.add_usage(10, 5, 0.1)
@@ -192,7 +192,7 @@ class TestHeartbeat:
     async def test_one_failed_beat_does_not_end_the_loop(self, session, monkeypatch):
         run_id = await _seed_run(session, queued=True, label="beat")
         orchestrator = RunOrchestrator(
-            run_id, concurrency=1, skip_threshold=0.9, step_budget=5, limits=RunLimits(),
+            run_id, concurrency=1, step_budget=5, limits=RunLimits(),
             use_browser=False,
         )
         monkeypatch.setattr(pool, "HEARTBEAT_SECONDS", 0.01)
@@ -237,7 +237,7 @@ class TestFailedRuns:
         )
         await session.commit()
         orchestrator = RunOrchestrator(
-            run_id, concurrency=1, skip_threshold=0.9, step_budget=5, limits=RunLimits(),
+            run_id, concurrency=1, step_budget=5, limits=RunLimits(),
             use_browser=False,
         )
 

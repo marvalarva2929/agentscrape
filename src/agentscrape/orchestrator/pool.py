@@ -41,7 +41,6 @@ class RunOrchestrator:
         run_id: str,
         *,
         concurrency: int,
-        skip_threshold: float,
         step_budget: int,
         limits: RunLimits,
         use_browser: bool = True,
@@ -52,7 +51,6 @@ class RunOrchestrator:
         self.crawl_strategy = crawl_strategy
         self.modes = modes
         self.concurrency = max(1, min(concurrency, settings.max_concurrency))
-        self.skip_threshold = skip_threshold
         self.step_budget = step_budget
         self.limits = limits
         self.use_browser = use_browser
@@ -166,7 +164,7 @@ class RunOrchestrator:
                 if claim is None:
                     break
 
-                site_run_id, site_id, url, force_rescan, budget = claim
+                site_run_id, site_id, url, budget = claim
                 self._active_sites[agent_id] = site_run_id
 
                 meter_hook = self._usage_hook()
@@ -177,8 +175,6 @@ class RunOrchestrator:
                         root_url=url,
                         run_id=self.run_id,
                         agent_id=agent_id,
-                        force_rescan=force_rescan,
-                        skip_threshold=self.skip_threshold,
                         step_budget=budget or self.step_budget,
                         browser_context=context,
                         emitter=self.emitter,

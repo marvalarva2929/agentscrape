@@ -344,7 +344,7 @@ The `/api/v1` contract is implemented as specified. Four things you need:
 ## How a site is processed
 
 ```
-validate → skip check → link discovery → [HTML map] → rank → extract (loop)
+validate → link discovery → [HTML map] → rank → extract (loop)
          → reconcile → [directory search] → finalize
 ```
 
@@ -358,13 +358,6 @@ content decides the rest; the model is consulted only when both are
 inconclusive. A rejection surfaces as `K12_INSTITUTION_REJECTED` on the
 SiteRun before extraction compute is spent. (Schools are a separate project;
 this backend is for post-secondary institutions only.)
-
-**Skip check.** Two cheap tiers. First, re-fetch the known-good paths and
-compare content hashes — all unchanged means skip without parsing anything.
-Otherwise parse addresses out of those pages and take the Jaccard similarity
-against the site's stored identity keys; at or above the run's threshold
-(default 0.90) the roster is assumed unchanged. Both the score and the reason
-are always recorded, and `force_rescan` overrides at run and site level.
 
 **Discovery.** No browser. sitemap.xml (following indexes), robots.txt
 `Sitemap:` hints, the entry page's own links, and then **a sitemap walk of every
@@ -445,8 +438,7 @@ page a value was found. Boxes are measured from the real DOM with
 A school keeps only its **most recent run's** screenshots: when a school is
 crawled again, the previous images are deleted and replaced. **Provenance
 survives** — URL, title, timestamp, method and field locations stay, and
-`screenshot_available` flips to false for the superseded versions. Skipped runs
-capture nothing and therefore replace nothing.
+`screenshot_available` flips to false for the superseded versions.
 
 ---
 
@@ -520,10 +512,8 @@ departments and the rest of the site.
 
 ## Known limitations
 
-- The skip check probes with plain HTTP, so on JavaScript-rendered rosters it
-  cannot see the people and relies on tier one (content hashes) alone. If such a
-  site's HTML shell changes, it will be rescanned unnecessarily. This fails
-  toward doing more work, never toward returning stale data.
+- Every crawl is a full scan: a school whose pages have not changed is read
+  again and costs the same as the first time.
 - Class-of back-fill from PGY assumes a standard programme length; off-cycle
   trainees (research years, dual programmes) will be derived incorrectly.
   Derived values are tagged `year_source: "derived"` so they can be told apart

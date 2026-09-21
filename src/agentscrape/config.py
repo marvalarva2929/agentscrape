@@ -146,7 +146,6 @@ class Settings(BaseSettings):
     # startup; three schools at once spent $1.30 for 22 residents where one
     # alone spent $0.89 for 883. Per run, `config.queued` overrides this.
     queue_runs: bool = False
-    default_skip_threshold: float = 0.90
     # A teaching hospital publishes one roster per programme, and a medical
     # school runs 40-60 programmes across as many departmental hosts. At 40 the
     # budget was spent inside the first four departments, which is what capped a

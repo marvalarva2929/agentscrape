@@ -190,7 +190,6 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
     # that growth made the checkpoint 1.8MB and the write cost quadratic in the
     # length of the crawl. `finalize` only ever reads it as a set.
     seen_ids = dict.fromkeys(state.get("seen_record_ids", []))
-    fingerprint = dict(state.get("fingerprint", {}))
     programs = [dict(p) for p in state.get("programs", [])]
     steps_used = 0
     new_links: dict[str, dict] = {}
@@ -240,13 +239,6 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
             unchanged += reconciled.unchanged
             seen_ids.update(dict.fromkeys(reconciled.record_ids))
             records_here = reconciled.total_seen
-
-            # Fingerprint only the pages that produced records: those are the
-            # ones the next run's skip probe re-fetches. The hash is of the
-            # plain HTTP body even when records came from a render, because the
-            # probe is plain HTTP too.
-            if result.ok and result.is_html:
-                fingerprint[canonicalize(url) or url] = result.content_hash
 
             if candidate.get("is_known_path") and records_here:
                 known_hits += 1
@@ -340,7 +332,6 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
         "known_path_hits": known_hits,
         "barren_streak": barren_streak,
         "http_refusals": refusals,
-        "fingerprint": fingerprint,
         "programs": programs,
         "triaged": sorted(triaged),
         "processed_hashes": sorted(processed_hashes),

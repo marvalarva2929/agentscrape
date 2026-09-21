@@ -186,13 +186,9 @@ async def delete_known_path(session: AsyncSession, site_id: str, path_id: str) -
     return bool(result.rowcount)
 
 
-async def save_fingerprint(
-    session: AsyncSession, site_id: str, fingerprint: dict[str, str]
-) -> None:
+async def mark_scraped(session: AsyncSession, site_id: str) -> None:
     await session.execute(
-        update(Site)
-        .where(Site.id == site_id)
-        .values(last_fingerprint=fingerprint, last_scraped_at=datetime.now(UTC))
+        update(Site).where(Site.id == site_id).values(last_scraped_at=datetime.now(UTC))
     )
 
 

@@ -1,6 +1,6 @@
 """The per-site pipeline as a LangGraph graph.
 
-    entry -> validate -> skip_check -> discover -> plan -> [html_map]
+    entry -> validate -> discover -> plan -> [html_map]
           -> extract (loop) -> gap_fill -> extract (loop) ... -> finalize
 
 `plan` runs first so everything after it works program-first: the HTML map
@@ -35,7 +35,6 @@ from .nodes.extract import extract_batch, next_is_program_page
 from .nodes.finalize import finalize
 from .nodes.html_map import html_map
 from .nodes.plan import MAX_GAP_ROUNDS, gap_fill, pending_programs, plan_programs
-from .nodes.skip_check import skip_check
 from .nodes.validate import validate_institution
 from .state import SiteState
 
@@ -62,11 +61,8 @@ def build_site_graph(deps: PipelineDeps):
     async def _validate(state: SiteState) -> SiteState:
         return await validate_institution(state, deps)
 
-    async def _skip(state: SiteState) -> SiteState:
-        await deps.emit_stage(state, RunStage.DISCOVERING)
-        return await skip_check(state, deps)
-
     async def _discover(state: SiteState) -> SiteState:
+        await deps.emit_stage(state, RunStage.DISCOVERING)
         return await discover_links(state, deps)
 
     async def _html_map(state: SiteState) -> SiteState:
@@ -94,7 +90,7 @@ def build_site_graph(deps: PipelineDeps):
         return "directory" in (state.get("modes") or ["crawl"])
 
     def _crawl_over(state: SiteState) -> str:
-        """Where a site goes once its crawl is finished or was skipped: the
+        """Where a site goes once its crawl is finished: the
         directory search when this run asked for one, else finalize. A site
         stopped for a reason (rejected, failed, a hard stop) goes straight
         to finalize."""
@@ -111,15 +107,11 @@ def build_site_graph(deps: PipelineDeps):
         if "crawl" not in (state.get("modes") or ["crawl"]) or state.get("crawl_done"):
             return "directory"
         # A resumed site already has its ranked candidate list, so it skips
-        # validation, the skip check and discovery and goes back to work.
+        # validation and discovery and goes back to work.
         return "extract" if state.get("resumed") else "validate"
 
     def _after_validate(state: SiteState) -> str:
-        return "finalize" if state.get("terminated") else "skip_check"
-
-    def _after_skip(state: SiteState) -> str:
-        # Skipped as unchanged: the stored people can still be looked up.
-        return _crawl_over(state) if state.get("terminated") else "discover"
+        return "finalize" if state.get("terminated") else "discover"
 
     def _after_discover(state: SiteState) -> str:
         if not state.get("candidates"):
@@ -189,7 +181,6 @@ def build_site_graph(deps: PipelineDeps):
     graph = StateGraph(SiteState)
     graph.add_node("entry", _entry)
     graph.add_node("validate", _validate)
-    graph.add_node("skip_check", _skip)
     graph.add_node("discover", _discover)
     graph.add_node("html_map", _html_map)
     graph.add_node("plan", _plan)
@@ -200,8 +191,7 @@ def build_site_graph(deps: PipelineDeps):
 
     graph.set_entry_point("entry")
     graph.add_conditional_edges("entry", _after_entry, ["validate", "extract", "directory"])
-    graph.add_conditional_edges("validate", _after_validate, ["skip_check", "finalize"])
-    graph.add_conditional_edges("skip_check", _after_skip, ["discover", "directory", "finalize"])
+    graph.add_conditional_edges("validate", _after_validate, ["discover", "finalize"])
     graph.add_conditional_edges("discover", _after_discover, ["plan", "directory", "finalize"])
     graph.add_conditional_edges("plan", _after_plan, ["html_map", "extract"])
     graph.add_edge("html_map", "extract")

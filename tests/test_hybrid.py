@@ -34,7 +34,7 @@ async def _crawl(session, monkeypatch, strategy: str) -> tuple[CountingOfflinePr
     counting = CountingOfflineProvider()
     monkeypatch.setattr(provider_module, "_provider", counting)
     # A host per strategy: sites are keyed by hostname, and a second crawl of
-    # the same one would be skipped as unchanged.
+    # the same one would find the first strategy's people already stored.
     with serve(hostname=f"{strategy}.localhost") as site:
         await _run_once([site.base], session=session, crawl_strategy=strategy)
     site_row = await session.scalar(select(Site).where(Site.root_domain == f"{strategy}.localhost"))

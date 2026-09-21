@@ -285,7 +285,7 @@ async def move_run(
 async def retry_site(
     run_id: str, site_id: str, _: AuthedUser, session: DbSession
 ) -> SiteRunOut:
-    """Retry one failed or skipped site. Always forces a rescan."""
+    """Retry one failed site."""
     run = await _get_run(session, run_id)
     try:
         site_run = await service.retry_site(session, run_id, site_id)

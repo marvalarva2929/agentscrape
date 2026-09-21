@@ -35,7 +35,7 @@ print('' if cfg.get('needs_browser') else '--no-browser')")
   psql -q "$DB" -c "delete from sites where root_domain='$host';" >/dev/null
   echo "[$slug] $entry $also ${browser:-(browser)} -> $LOGS/$slug.log"
   # shellcheck disable=SC2086
-  .venv/bin/agentscrape site "$entry" $also $browser $budget --force > "$LOGS/$slug.log" 2>&1 &
+  .venv/bin/agentscrape site "$entry" $also $browser $budget > "$LOGS/$slug.log" 2>&1 &
   pids+=($!)
 done
 

@@ -338,7 +338,7 @@ class TestCounters:
 
         limits = RunLimits(spend_usd=0.5, tokens_in=10, tokens_out=5)
         orchestrator = RunOrchestrator(
-            run_id, concurrency=1, skip_threshold=0.9, step_budget=5, limits=limits,
+            run_id, concurrency=1, step_budget=5, limits=limits,
             use_browser=False,
         )
         site_run_id = (await session.execute(select(SiteRun.id))).scalar_one()
@@ -368,7 +368,7 @@ class TestCounters:
         )
         await session.commit()
         orchestrator = RunOrchestrator(
-            run_id, concurrency=1, skip_threshold=0.9, step_budget=5, limits=RunLimits(),
+            run_id, concurrency=1, step_budget=5, limits=RunLimits(),
             use_browser=False,
         )
 

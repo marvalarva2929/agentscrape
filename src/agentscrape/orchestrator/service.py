@@ -19,7 +19,6 @@ from ..db.enums import (
     ValidationStatus,
 )
 from ..db.models import KnownPath, Record, Run, Site, SiteRun
-from ..db.repositories.records import stored_identity_keys
 from ..db.repositories.sites import upsert_site
 from ..db.session import get_sessionmaker
 from ..domain.schemas import CsvRowPreview, RunCreate, ValidatePreview
@@ -94,7 +93,7 @@ def normalize_site_input(raw: str) -> str | None:
 
 
 async def preview_csv(
-    session: AsyncSession, entries: list[tuple[int, str]], *, skip_threshold: float
+    session: AsyncSession, entries: list[tuple[int, str]]
 ) -> ValidatePreview:
     """Per-row preview so the client can review before committing compute."""
     rows: list[CsvRowPreview] = []
@@ -140,17 +139,12 @@ async def preview_csv(
                 select(func.count(Record.id)).where(Record.site_id == site.id)
             ) or 0
         )
-        identities = await stored_identity_keys(session, site.id)
-        # A site can only be skipped if it has both stored records and a probe
-        # path to check them against.
-        predicted_skip = bool(identities) and path_count > 0
 
         rows.append(
             CsvRowPreview(
                 row=row_number, input=raw, url=url, valid=True, site_id=site.id,
                 known_site=True, last_scraped_at=site.last_scraped_at,
                 known_path_count=path_count, previous_record_count=record_count,
-                predicted_skip=predicted_skip,
                 validation_status=site.validation_status,
                 validation_reason=site.validation_reason,
             )
@@ -161,7 +155,6 @@ async def preview_csv(
         valid_rows=sum(1 for r in rows if r.valid),
         invalid_rows=sum(1 for r in rows if not r.valid),
         known_sites=sum(1 for r in rows if r.known_site),
-        predicted_skips=sum(1 for r in rows if r.predicted_skip),
         rejected_sites=sum(
             1 for r in rows if r.validation_status == str(ValidationStatus.K12_REJECTED)
         ),
@@ -240,7 +233,6 @@ async def create_run(session: AsyncSession, body: RunCreate) -> Run:
     session.add(run)
     await session.flush()
 
-    force_set = {s.strip().lower() for s in config.force_rescan_sites}
     created = 0
     duplicates = 0
     # A run has one SiteRun per site. Several inputs can resolve to the same
@@ -262,17 +254,11 @@ async def create_run(session: AsyncSession, body: RunCreate) -> Run:
         seen_site_ids.add(site.id)
         school_names.append(site.name or site.hospital_name or site.root_domain)
 
-        forced = (
-            config.force_rescan
-            or site.id.lower() in force_set
-            or site.root_domain.lower() in force_set
-        )
         session.add(
             SiteRun(
                 run_id=run.id,
                 site_id=site.id,
                 status=SiteRunStatus.PENDING,
-                force_rescan=forced,
                 step_budget=config.step_budget,
                 # Crawl order: schools made together share one created_at.
                 position=created,
@@ -370,7 +356,6 @@ async def launch_run(run_id: str, *, use_browser: bool = True) -> RunOrchestrato
     orchestrator = RunOrchestrator(
         run_id,
         concurrency=concurrency,
-        skip_threshold=float(config.get("skip_threshold", settings.default_skip_threshold)),
         step_budget=int(config.get("step_budget", settings.default_step_budget)),
         limits=limits,
         use_browser=use_browser,
@@ -445,7 +430,7 @@ async def cancel_run(session: AsyncSession, run_id: str) -> Run:
 
 
 async def retry_site(session: AsyncSession, run_id: str, site_id: str) -> SiteRun:
-    """Return one failed or skipped site to the queue with a forced rescan."""
+    """Return one failed site to the queue to be crawled again."""
     site_run = await session.scalar(
         select(SiteRun).where(SiteRun.run_id == run_id, SiteRun.site_id == site_id)
     )
@@ -455,11 +440,8 @@ async def retry_site(session: AsyncSession, run_id: str, site_id: str) -> SiteRu
         raise ValueError(f"site is {site_run.status}; only finished sites can be retried")
 
     site_run.status = SiteRunStatus.PENDING
-    site_run.force_rescan = True          # a retry always means "look again"
     site_run.error_code = None
     site_run.error_message = None
-    site_run.skip_reason = None
-    site_run.similarity_score = None
     site_run.steps_taken = 0
     site_run.finished_at = None
     site_run.agent_id = None

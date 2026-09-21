@@ -1,8 +1,8 @@
 """Full-pipeline runs against a local fixture institution.
 
 Covers what unit tests cannot: discovery feeding ranking feeding extraction
-feeding reconciliation, then a second run exercising known paths and the skip
-check, and a run that stops at a hard limit.
+feeding reconciliation, then a second run exercising known paths and a full
+rescan, and a run that stops at a hard limit.
 """
 
 from __future__ import annotations
@@ -48,7 +48,6 @@ async def _run_once(
         sites=list(site_urls),
         config=RunConfigIn(
             concurrency=concurrency, step_budget=step_budget,
-            skip_threshold=0.90,
             max_records=getattr(limits, "max_records", None) if limits else None,
             crawl_strategy=crawl_strategy,
             modes=modes or ["crawl"],
@@ -58,7 +57,6 @@ async def _run_once(
     orchestrator = RunOrchestrator(
         run.id,
         concurrency=concurrency,
-        skip_threshold=0.90,
         step_budget=step_budget,
         limits=limits or RunLimits(),
         use_browser=False,  # the fixture site is static; no escalation needed
@@ -122,7 +120,7 @@ class TestSingleSiteEndToEnd:
 
 
 class TestSecondRun:
-    async def test_unchanged_site_is_skipped(self, session):
+    async def test_unchanged_site_is_scanned_again(self, session):
         with serve() as site:
             await _run_once([site.base], session=session)
             run_id = await _run_once([site.base], session=session)
@@ -130,10 +128,8 @@ class TestSecondRun:
         site_run = (
             await session.execute(select(SiteRun).where(SiteRun.run_id == run_id))
         ).scalar_one()
-        assert site_run.status == SiteRunStatus.SKIPPED
-        assert site_run.skip_reason is not None
-        # A skipped site does no extraction work at all.
-        assert site_run.steps_taken == 0
+        assert site_run.status == SiteRunStatus.COMPLETED
+        assert site_run.steps_taken > 0
 
     async def test_changed_roster_is_rescanned_and_versioned(self, session):
         with serve() as site:
@@ -177,27 +173,6 @@ class TestSecondRun:
             )
         ).scalars().first()
         assert latest.changed_fields["pgy_at_capture"] == {"from": 1, "to": 2}
-
-    async def test_force_rescan_overrides_the_skip(self, session):
-        with serve() as site:
-            await _run_once([site.base], session=session)
-
-            body = RunCreate(
-                sites=[site.base],
-                config=RunConfigIn(concurrency=1, step_budget=20, force_rescan=True),
-            )
-            run = await create_run(session, body)
-            orchestrator = RunOrchestrator(
-                run.id, concurrency=1, skip_threshold=0.90, step_budget=20,
-                limits=RunLimits(), use_browser=False,
-            )
-            await orchestrator.start()
-
-        site_run = (
-            await session.execute(select(SiteRun).where(SiteRun.run_id == run.id))
-        ).scalar_one()
-        assert site_run.status == SiteRunStatus.COMPLETED
-        assert site_run.steps_taken > 0
 
 
 class TestConcurrency:
@@ -318,7 +293,7 @@ class TestResume:
             run = await create_run(session, body)
             limits = RunLimits()
             orchestrator = RunOrchestrator(
-                run.id, concurrency=1, skip_threshold=0.90, step_budget=2,
+                run.id, concurrency=1, step_budget=2,
                 limits=limits, use_browser=False,
             )
             await orchestrator.start()
@@ -344,8 +319,8 @@ class TestResume:
                 ],
                 "cursor": 0, "steps_taken": 0, "candidates_considered": 5,
                 "known_path_hits": 0, "records_new": 0, "records_changed": 0,
-                "records_unchanged": 0, "seen_record_ids": [], "fingerprint": {},
-                "dominant_specialty": None, "similarity_score": None,
+                "records_unchanged": 0, "seen_record_ids": [],
+                "dominant_specialty": None,
             }
             site_run.status = SiteRunStatus.PENDING
             site_run.checkpoint_state = checkpoint
@@ -362,7 +337,7 @@ class TestResume:
             discover_module.discover_links = fail_if_called
             try:
                 resumed = RunOrchestrator(
-                    run.id, concurrency=1, skip_threshold=0.90, step_budget=20,
+                    run.id, concurrency=1, step_budget=20,
                     limits=RunLimits(), use_browser=False,
                 )
                 await resumed.start()
@@ -387,7 +362,7 @@ class TestResume:
             )
             run = await create_run(session, body)
             orchestrator = RunOrchestrator(
-                run.id, concurrency=1, skip_threshold=0.90, step_budget=2,
+                run.id, concurrency=1, step_budget=2,
                 limits=RunLimits(), use_browser=False,
             )
             await orchestrator.start()

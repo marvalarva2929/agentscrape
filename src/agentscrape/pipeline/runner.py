@@ -40,8 +40,7 @@ def _recursion_limit(step_budget: int) -> int:
 
 
 async def ensure_site_run(
-    *, run_id: str, site_url: str, force_rescan: bool = False,
-    step_budget: int | None = None,
+    *, run_id: str, site_url: str, step_budget: int | None = None,
 ) -> tuple[str, str, str]:
     """Create (or reuse) the Site and its SiteRun row. Returns ids and the root url."""
     sessionmaker = get_sessionmaker()
@@ -60,7 +59,6 @@ async def ensure_site_run(
             run_id=run_id,
             site_id=site.id,
             status=SiteRunStatus.PENDING,
-            force_rescan=force_rescan,
             step_budget=step_budget or settings.default_step_budget,
         )
         session.add(site_run)
@@ -75,8 +73,6 @@ async def run_site(
     root_url: str,
     run_id: str | None = None,
     agent_id: str = "agent-0",
-    force_rescan: bool = False,
-    skip_threshold: float | None = None,
     step_budget: int | None = None,
     allowed_domains: list[str] | None = None,
     browser_context=None,
@@ -93,9 +89,6 @@ async def run_site(
     emitter = emitter or NullEmitter()
     sessionmaker = get_sessionmaker()
     budget = step_budget or settings.default_step_budget
-    threshold = (
-        skip_threshold if skip_threshold is not None else settings.default_skip_threshold
-    )
     canonical = canonicalize(root_url) or root_url
     domain = host_of(canonical)
 
@@ -131,8 +124,6 @@ async def run_site(
         allowed_domains=allowed_domains,
         run_id=run_id,
         agent_id=agent_id,
-        force_rescan=force_rescan,
-        skip_threshold=threshold,
         step_budget=budget,
         crawl_strategy=crawl_strategy,
         modes=modes,
