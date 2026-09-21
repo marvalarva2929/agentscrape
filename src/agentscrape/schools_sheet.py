@@ -104,6 +104,20 @@ def _column(headers: list[str], rows: list[list[str]], words: tuple[str, ...], *
     return None
 
 
+def _header_row(table: list[list[str]]) -> int:
+    """Where the column headers are. Sheets exported from Google Sheets often
+    carry a title and a subtitle above them, so the first row is not always the
+    header: it is the first row with an institution-name cell and, in another
+    cell, a website-like one. A title is one cell and never qualifies."""
+    for index, row in enumerate(table):
+        keys = [_key(cell) for cell in row]
+        names = {i for i, k in enumerate(keys) if any(w in k for w in ("institution", "school", "name"))}
+        sites = {i for i, k in enumerate(keys) if any(w in k for w in ("website", "url", "site", "homepage", "hub"))}
+        if names and sites and (names | sites) != names and any(i not in names for i in sites):
+            return index
+    return 0
+
+
 def parse_school_table(table: list[list[str]]) -> list[SchoolRow]:
     """Rows of a sheet (header first) to schools. Rows missing a required
     value are logged and skipped."""
@@ -111,7 +125,8 @@ def parse_school_table(table: list[list[str]]) -> list[SchoolRow]:
     table = [row for row in table if any(row)]
     if not table:
         return []
-    headers, body = table[0], table[1:]
+    start = _header_row(table)
+    headers, body = table[start], table[start + 1:]
 
     used: set[int] = set()
     # A directory column can legitimately contain values such as "DIRECTORY NOT
@@ -217,12 +232,13 @@ def merge_school_rows(rows: list[tuple[str, SchoolRow]]) -> list[SchoolRow]:
                 "%s row %d (%s) is the same institution as %r (website %s); merged into it",
                 source, row.row, row.name, current.name, key,
             )
-        entry = row.hub_url if row.hub_url and (
-            not current.hub_url or _depth(row.hub_url) > _depth(current.hub_url)
-        ) else current.hub_url
+        # Compare the entries each row would actually crawl from: a sheet with
+        # no hub column names its website as the entry, and a later sheet's
+        # shallower hub must not replace it.
+        entry = row.entry_url if _depth(row.entry_url) > _depth(current.entry_url) else current.entry_url
         merged[key] = replace(
             current,
-            hub_url=entry,
+            hub_url=entry if entry != current.website else current.hub_url,
             directory_url=current.directory_url or row.directory_url,
         )
     return list(merged.values())

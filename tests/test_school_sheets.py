@@ -109,3 +109,31 @@ async def test_several_sheets_merge_instead_of_failing(session, tmp_path) -> Non
 
     again = await load_school_sheets(session, tmp_path)
     assert (again.created, again.updated) == (0, 0)
+
+
+def test_a_sheet_with_a_title_above_its_headers_is_read() -> None:
+    """The client's sheet opens with a title line, a subtitle and a blank row."""
+    rows = parse_school_table([
+        ["Medical Institution Resident/Fellow & Directory Links", "", ""],
+        ["Institution-level crawler entry points for the original 23 institutions", "", ""],
+        ["", "", ""],
+        ["#", "Institution", "Official Website", "School / People Directory", "Directory Type"],
+        ["1", "Tower Health", "https://towerhealth.org/", "https://towerhealth.org/providers", "Provider directory"],
+        ["2", "Geisinger", "https://www.geisinger.org/", "DIRECTORY NOT AVAILABLE", "Provider directory"],
+        ["Source: an internal summary, rows 5-160", "", "", "", ""],
+    ])
+
+    assert [r.name for r in rows] == ["Tower Health", "Geisinger"]
+    assert rows[0].directory_url == "https://towerhealth.org/providers"
+    assert rows[1].directory_url is None  # "not available" is not a link
+
+
+def test_a_later_sheets_shallower_hub_does_not_replace_a_deeper_entry() -> None:
+    from agentscrape.schools_sheet import SchoolRow, merge_school_rows
+
+    deep = SchoolRow(2, "UAMS", "https://medicine.uams.edu/gme/", None)  # no hub column: website is the entry
+    shallow = SchoolRow(3, "UAMS", "https://medicine.uams.edu/", None, "https://medicine.uams.edu/")
+
+    for order in ([("a.csv", deep), ("b.csv", shallow)], [("b.csv", shallow), ("a.csv", deep)]):
+        (merged,) = merge_school_rows(order)
+        assert merged.entry_url == "https://medicine.uams.edu/gme/"

@@ -35,16 +35,6 @@ async def lifespan(app: FastAPI):
     settings.ensure_dirs()
     log.info("agentscrape api starting (model=%s)", settings.llm_model)
 
-    # The deployed workbook is the single active-school catalog.  This runs
-    # after the deployment's Alembic step and is idempotent: matched Site rows
-    # retain their IDs, so people, crawl history, and programs remain linked.
-    from ..db.session import get_sessionmaker
-    from ..school_catalog import import_catalog
-
-    async with get_sessionmaker()() as session:
-        catalog_result = await import_catalog(session)
-    log.info("school catalog synchronized: %s", catalog_result)
-
     # Retention is swept on startup rather than by cron: the box is stopped when
     # idle, so a schedule would silently never fire.
     import asyncio
@@ -68,15 +58,18 @@ async def lifespan(app: FastAPI):
             await seed_if_empty()
         except Exception:
             log.exception("seeding the empty database failed; the school list will be empty")
-    # After the demo seed, which only runs on an empty database.
+    # After the demo seed, which only runs on an empty database. The fixed list
+    # of schools is the only thing loaded at startup; a problem with it is
+    # logged and never stops the API, since the schools already stored still work.
     from ..db.session import session_scope
-    from ..schools_sheet import load_school_sheets
+    from ..school_catalog import import_catalog
 
     try:
         async with session_scope() as session:
-            await load_school_sheets(session)
+            result = await import_catalog(session)
+        log.info("school catalog synchronized: %s", result)
     except Exception:
-        log.exception("loading the school sheets failed; new schools will not be listed")
+        log.exception("importing the school catalog failed; the school list is unchanged")
     if settings.resume_runs_on_startup:
         from ..orchestrator.service import resume_interrupted_runs
 

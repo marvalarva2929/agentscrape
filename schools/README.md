@@ -1,5 +1,13 @@
 # School sheets
 
+> **The school list the app serves is `data/schools-23.csv`**, the client's 23
+> assigned institutions. It is imported on startup (`agentscrape
+> import-school-catalog`) and is the only thing that decides which schools are
+> active. The sheets in this folder are reference material and are **not** loaded
+> at startup; `agentscrape load-schools` still reads them on demand, but a school
+> added that way stays inactive until it is added to the catalog.
+
+
 Drop the spreadsheet of schools here — CSV (exported from Google Sheets) or
 `.xlsx`, one row per institution. The API loads every sheet in this folder on
 startup, and `uv run agentscrape load-schools` loads them on demand. New

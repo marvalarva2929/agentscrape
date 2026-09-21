@@ -316,7 +316,7 @@ def load_schools_command(
 def import_school_catalog(
     dry_run: bool = typer.Option(False, "--dry-run", help="Validate and report without writing"),
 ) -> None:
-    """Synchronize the shipped 23-school Excel catalog without deleting history."""
+    """Make the 23 schools in data/schools-23.csv the active list; nothing is deleted."""
     from .db.session import dispose_engine, get_sessionmaker
     from .school_catalog import import_catalog
 
