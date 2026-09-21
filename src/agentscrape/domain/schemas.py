@@ -261,6 +261,7 @@ class SchoolOut(ApiModel):
     location: str | None = None
     root_domain: str
     canonical_url: str
+    directory_url: str | None = None
     program_count: int = 0
     people_count: int = 0
     last_updated: datetime | None = None

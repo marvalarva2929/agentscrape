@@ -38,6 +38,7 @@ def _school_out(site: Site, programs: int, people: int) -> SchoolOut:
         location=site.location,
         root_domain=site.root_domain,
         canonical_url=site.canonical_url,
+        directory_url=site.directory_url,
         program_count=programs,
         people_count=people,
         last_updated=site.last_scraped_at,
@@ -86,6 +87,7 @@ async def list_schools(
         )
         .outerjoin(program_counts, program_counts.c.site_id == Site.id)
         .outerjoin(people_counts, people_counts.c.site_id == Site.id)
+        .where(Site.is_active.is_(True))
     )
     if q:
         statement = statement.where(
@@ -121,7 +123,7 @@ async def school_detail(
     school_id: str, _: AuthedUser, session: DbSession
 ) -> SchoolDetail:
     site = await session.get(Site, school_id)
-    if site is None:
+    if site is None or not site.is_active:
         raise NotFoundError(f"No school with id {school_id!r}.")
 
     people = int(
