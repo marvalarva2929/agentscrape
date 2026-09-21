@@ -21,6 +21,7 @@ from ..db.enums import TERMINAL_RUN_STATUSES
 from ..db.models import Run
 from ..db.session import get_sessionmaker
 from ..orchestrator.events import Event, EventType, get_event_bus
+from ..orchestrator.pool import get_active
 
 log = logging.getLogger("agentscrape.sse")
 
@@ -31,6 +32,19 @@ IDLE_PING_SECONDS = 15.0
 def format_event(event: Event) -> str:
     payload = json.dumps(event.to_json(), default=str)
     return f"event: {event.type}\ndata: {payload}\n\n"
+
+
+def _live_spend(run: Run) -> float:
+    """Spend so far, from the running orchestrator when there is one.
+
+    The run row only takes spend when a site finishes, so mid-crawl it still
+    reads zero. A client that connects then would be told the crawl has cost
+    nothing until the next heartbeat corrected it.
+    """
+    orchestrator = get_active(run.id)
+    if orchestrator is not None:
+        return round(orchestrator.limits.spend_usd, 6)
+    return float(run.spend_usd or 0)
 
 
 async def event_stream(run_id: str) -> AsyncIterator[str]:
@@ -56,7 +70,7 @@ async def event_stream(run_id: str) -> AsyncIterator[str]:
                             "sites_failed": run.sites_failed,
                             "sites_rejected": run.sites_rejected,
                             "records_found": run.records_found,
-                            "spend_usd": float(run.spend_usd or 0),
+                            "spend_usd": _live_spend(run),
                             "snapshot": True,
                         },
                     )
