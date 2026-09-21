@@ -90,6 +90,7 @@ async def list_schools(
         )
         .outerjoin(program_counts, program_counts.c.site_id == Site.id)
         .outerjoin(people_counts, people_counts.c.site_id == Site.id)
+        .where(Site.is_active.is_(True))
     )
     if q:
         statement = statement.where(
@@ -132,7 +133,7 @@ async def school_detail(
     school_id: str, _: AuthedUser, session: DbSession
 ) -> SchoolDetail:
     site = await session.get(Site, school_id)
-    if site is None:
+    if site is None or not site.is_active:
         raise NotFoundError(f"No school with id {school_id!r}.")
 
     people = int(

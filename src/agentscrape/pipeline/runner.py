@@ -120,6 +120,7 @@ async def run_site(
     await emitter.emit(
         EventType.SITE_STARTED,
         site_id=site_id, site_run_id=site_run_id, domain=domain, agent_id=agent_id,
+        action="Starting crawl", url=canonical,
     )
 
     state = initial_state(

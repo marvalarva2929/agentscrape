@@ -101,6 +101,9 @@ class Site(TimestampMixin, Base):
     # Other registrable domains the institution publishes on (its website's,
     # when the sheet's residency hub lives on another one). In crawl scope.
     affiliated_domains: Mapped[list[str] | None] = mapped_column(JSONType)
+    # The client's fixed school list: only active schools are offered for a
+    # crawl. Inactive rows keep their people and history.
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     records: Mapped[list[Record]] = relationship(back_populates="site")
     known_paths: Mapped[list[KnownPath]] = relationship(back_populates="site")

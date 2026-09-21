@@ -35,6 +35,16 @@ async def lifespan(app: FastAPI):
     settings.ensure_dirs()
     log.info("agentscrape api starting (model=%s)", settings.llm_model)
 
+    # The deployed workbook is the single active-school catalog.  This runs
+    # after the deployment's Alembic step and is idempotent: matched Site rows
+    # retain their IDs, so people, crawl history, and programs remain linked.
+    from ..db.session import get_sessionmaker
+    from ..school_catalog import import_catalog
+
+    async with get_sessionmaker()() as session:
+        catalog_result = await import_catalog(session)
+    log.info("school catalog synchronized: %s", catalog_result)
+
     # Retention is swept on startup rather than by cron: the box is stopped when
     # idle, so a schedule would silently never fire.
     import asyncio
