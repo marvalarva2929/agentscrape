@@ -18,14 +18,17 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..db.enums import RunStatus
-from ..db.models import Run
+from ..db.enums import RunStatus, SiteRunStatus
+from ..db.models import Run, Site, SiteRun
 from ..db.session import get_sessionmaker
+from ..domain.schemas import QueueEntryOut, QueueOut, QueueSiteOut
 from .pool import active_run_ids
+from .queue import STALE_CLAIM_MINUTES
 
 log = logging.getLogger("agentscrape.scheduler")
 
@@ -103,6 +106,121 @@ async def start_next_if_idle() -> str | None:
         return run_id
 
 
+async def _sites_by_run(
+    session: AsyncSession, run_ids: list[str]
+) -> dict[str, list[QueueSiteOut]]:
+    """Every school in the given runs, in a stable display order.
+
+    `created_at` defaults to `now()`, which in Postgres is the transaction
+    start, so every school created with its run shares one timestamp; `id`
+    breaks the tie so repeated calls agree. Workers claim by `created_at`
+    alone, so this is a stable order to read, not a promise of crawl order.
+    """
+    if not run_ids:
+        return {}
+    rows = (
+        await session.execute(
+            select(SiteRun, Site.root_domain, Site.hospital_name)
+            .join(Site, Site.id == SiteRun.site_id)
+            .where(SiteRun.run_id.in_(run_ids))
+            .order_by(SiteRun.run_id, SiteRun.created_at, SiteRun.id)
+        )
+    ).all()
+
+    out: dict[str, list[QueueSiteOut]] = {run_id: [] for run_id in run_ids}
+    for site_run, domain, hospital in rows:
+        out[site_run.run_id].append(
+            QueueSiteOut(
+                site_id=site_run.site_id,
+                domain=domain,
+                hospital=hospital,
+                status=site_run.status,
+                records_found=site_run.records_found or 0,
+                steps_taken=site_run.steps_taken or 0,
+                step_budget=site_run.step_budget or 0,
+            )
+        )
+    return out
+
+
+async def queue_view(session: AsyncSession) -> QueueOut:
+    """What holds the model budget now, and what is waiting for it, in order.
+
+    Stalled runs — claiming to run with no recent heartbeat, or created and
+    never launched — are reported rather than hidden, because one of those is
+    exactly what someone looking at a stuck queue needs to see.
+    """
+    runs = list(
+        (
+            await session.execute(
+                select(Run)
+                .where(Run.status.in_(_LIVE_STATUSES))
+                .order_by(Run.created_at)
+            )
+        ).scalars()
+    )
+    if not runs:
+        return QueueOut()
+
+    run_ids = [run.id for run in runs]
+    sites = await _sites_by_run(session, run_ids)
+    # Classified from the database, not from the in-process registry, so the
+    # view is the same whether it is read inside the API or from the CLI in a
+    # separate process, where nothing would ever look like it was running.
+    heartbeats = dict(
+        (
+            await session.execute(
+                select(SiteRun.run_id, func.max(SiteRun.heartbeat_at))
+                .where(SiteRun.run_id.in_(run_ids))
+                .group_by(SiteRun.run_id)
+            )
+        ).all()
+    )
+    fresh_after = datetime.now(UTC) - timedelta(minutes=STALE_CLAIM_MINUTES)
+    active = set(active_run_ids())
+
+    def in_flight(run: Run) -> bool:
+        """Beating recently, or claimed by an orchestrator in this process."""
+        if run.id in active:
+            return True
+        beat = heartbeats.get(run.id)
+        return beat is not None and beat >= fresh_after
+
+    def entry(run: Run, position: int | None) -> QueueEntryOut:
+        own = sites.get(run.id, [])
+        return QueueEntryOut(
+            run_id=run.id,
+            label=run.label,
+            status=run.status,
+            queued=is_queued(run.config),
+            running=in_flight(run),
+            position=position,
+            sites_total=run.sites_total or 0,
+            sites_completed=run.sites_completed or 0,
+            sites_pending=sum(1 for s in own if s.status == SiteRunStatus.PENDING),
+            records_found=run.records_found or 0,
+            spend_usd=float(run.spend_usd or 0),
+            created_at=run.created_at,
+            started_at=run.started_at,
+            sites=own,
+        )
+
+    view = QueueOut()
+    position = 0
+    for run in runs:
+        if run.status == RunStatus.RUNNING or run.id in active:
+            (view.running if in_flight(run) else view.stalled).append(
+                entry(run, None)
+            )
+        elif is_queued(run.config):
+            position += 1
+            view.waiting.append(entry(run, position))
+        else:
+            # Created but never launched, and not queued either.
+            view.stalled.append(entry(run, None))
+    return view
+
+
 async def on_run_finished(run_id: str) -> None:
     """Hand the model budget to whichever run is next in line."""
     try:
@@ -116,5 +234,6 @@ __all__ = [
     "is_queued",
     "on_run_finished",
     "queue_position",
+    "queue_view",
     "start_next_if_idle",
 ]

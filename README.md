@@ -190,6 +190,29 @@ Queueing does not slow the work down: three schools through the queue get the
 whole model budget each in turn, where three at once get a third of it each and
 pay three startups out of it.
 
+To see the queue — what holds the model budget, what is waiting and in what
+order, and how far each school has got:
+
+```bash
+uv run agentscrape queue --sites      # or GET /runs/queue
+```
+
+```
+┏━━━┳━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━┳━━━━━━━┓
+┃ # ┃ run         ┃ state   ┃ schools ┃ people ┃ spend ┃
+┡━━━╇━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━╇━━━━━━━┩
+│ - │ uchicago    │ running │     1/1 │    883 │ $0.89 │
+│ 1 │ virginia    │ waiting │     0/1 │      0 │ $0.00 │
+│ 2 │ arizona+unm │ waiting │     0/2 │      0 │ $0.00 │
+└───┴─────────────┴─────────┴─────────┴────────┴───────┘
+```
+
+Both read the queue from the database rather than from the API's memory, so
+the CLI reports a running run as running. A run is `running` while its workers
+are still beating, `waiting` with its position in line, or `stalled` — claiming
+to run with no heartbeat for `STALE_CLAIM_MINUTES`, which is what a queue
+stuck behind a killed process looks like.
+
 ### Checking a school against the client's sheet
 
 The client's working spreadsheet is the ground truth for a school. After a run,

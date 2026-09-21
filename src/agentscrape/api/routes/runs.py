@@ -13,6 +13,7 @@ from ...db.enums import TERMINAL_RUN_STATUSES, RunStatus, SiteRunStatus
 from ...db.models import Run, Site, SiteRun
 from ...domain.schemas import (
     Page,
+    QueueOut,
     RunCreate,
     RunOut,
     SiteRunOut,
@@ -130,6 +131,16 @@ async def _get_run(session, run_id: str) -> Run:
     if run is None:
         raise NotFoundError(f"No run with id {run_id!r}.")
     return run
+
+
+@router.get("/queue", response_model=QueueOut)
+async def run_queue(_: AuthedUser, session: DbSession) -> QueueOut:
+    """The whole queue: what holds the model budget now, what is waiting and in
+    what order, and how far each school in each run has got.
+
+    Declared before `/{run_id}` so the literal path wins the match.
+    """
+    return await scheduler.queue_view(session)
 
 
 @router.get("/{run_id}", response_model=RunOut)

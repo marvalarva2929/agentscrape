@@ -390,6 +390,73 @@ def _solid_png(width: int, height: int, rgb: tuple[int, int, int]) -> bytes:
 
 
 @app.command()
+def queue(
+    sites: bool = typer.Option(
+        False, "--sites", help="List every school inside each run"
+    ),
+) -> None:
+    """Show the run queue: what holds the model budget, and what is next.
+
+    Reads the database, so it reports the queue of the API process on this
+    machine. A run only shows as running while that process has it in flight.
+    """
+    from .db.session import dispose_engine, get_sessionmaker
+    from .orchestrator.scheduler import queue_view
+
+    async def _go() -> None:
+        async with get_sessionmaker()() as session:
+            view = await queue_view(session)
+        await dispose_engine()
+
+        if not (view.running or view.waiting or view.stalled):
+            console.print("[dim]Nothing running and nothing queued.[/dim]")
+            return
+
+        table = Table(title="run queue")
+        table.add_column("#", style="bold", justify="right")
+        table.add_column("run")
+        table.add_column("state")
+        table.add_column("schools", justify="right")
+        table.add_column("people", justify="right")
+        table.add_column("spend", justify="right")
+
+        groups = (
+            ("[green]running[/green]", view.running),
+            ("[yellow]waiting[/yellow]", view.waiting),
+            ("[red]stalled[/red]", view.stalled),
+        )
+        for state, entries in groups:
+            for entry in entries:
+                table.add_row(
+                    str(entry.position) if entry.position else "-",
+                    entry.label or entry.run_id[:18],
+                    state,
+                    f"{entry.sites_completed}/{entry.sites_total}",
+                    f"{entry.records_found:,}",
+                    f"${entry.spend_usd:.2f}",
+                )
+        console.print(table)
+
+        if sites:
+            for state, entries in groups:
+                for entry in entries:
+                    console.print(f"\n{entry.label or entry.run_id} ({state}):")
+                    for site in entry.sites:
+                        console.print(
+                            f"  {site.domain or site.site_id:38} {site.status:10}"
+                            f" pages={site.steps_taken:<6} people={site.records_found:,}"
+                        )
+
+        if view.waiting and not view.running:
+            console.print(
+                "\n[dim]Nothing is running, so the next queued run starts when the "
+                "API process is up.[/dim]"
+            )
+
+    asyncio.run(_go())
+
+
+@app.command()
 def config() -> None:
     """Print effective configuration."""
     table = Table(title="settings")

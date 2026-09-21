@@ -218,6 +218,49 @@ class RunOut(ApiModel):
     queue_position: int | None = None
 
 
+class QueueSiteOut(ApiModel):
+    """One school's progress inside a queued or running run."""
+
+    site_id: str
+    domain: str | None = None
+    hospital: str | None = None
+    status: str
+    records_found: int = 0
+    steps_taken: int = 0
+    step_budget: int = 0
+
+
+class QueueEntryOut(ApiModel):
+    """One run's place in the queue, with the schools it will crawl."""
+
+    run_id: str
+    label: str | None = None
+    status: str
+    queued: bool = False
+    # True while this run holds the model budget. `position` is 1 for the run
+    # that goes next and None for one already running.
+    running: bool = False
+    position: int | None = None
+    sites_total: int = 0
+    sites_completed: int = 0
+    sites_pending: int = 0
+    records_found: int = 0
+    spend_usd: float = 0.0
+    created_at: datetime
+    started_at: datetime | None = None
+    sites: list[QueueSiteOut] = Field(default_factory=list)
+
+
+class QueueOut(ApiModel):
+    """Everything holding or waiting for the model budget, in order."""
+
+    running: list[QueueEntryOut] = Field(default_factory=list)
+    waiting: list[QueueEntryOut] = Field(default_factory=list)
+    # Claiming to run with no recent heartbeat, or created and never launched.
+    # The scheduler picks queued ones up again the next time it is idle.
+    stalled: list[QueueEntryOut] = Field(default_factory=list)
+
+
 class SiteRunOut(ApiModel):
     id: str
     run_id: str
