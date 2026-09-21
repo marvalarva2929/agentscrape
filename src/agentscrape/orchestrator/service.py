@@ -282,17 +282,35 @@ async def resume_interrupted_runs() -> list[str]:
     The server is stopped on demand, so an in-flight run is normal, not an
     error; its orchestrator returns running schools to the queue and each one
     continues from its checkpoint.
+
+    Queued runs are not relaunched here, or a restart would start the whole
+    queue at once and undo the very serialisation they asked for. They are
+    handed back to the scheduler, which starts one.
     """
+    from .scheduler import is_queued, start_next_if_idle
+
     async with get_sessionmaker()() as session:
-        run_ids = list((await session.execute(
-            select(Run.id)
+        rows = (await session.execute(
+            select(Run.id, Run.config)
             .where(Run.status.in_([RunStatus.RUNNING, RunStatus.PENDING]))
             .order_by(Run.created_at)
-        )).scalars())
-    for run_id in run_ids:
+        )).all()
+
+    resumed: list[str] = []
+    queued_waiting = False
+    for run_id, config in rows:
+        if is_queued(config):
+            queued_waiting = True
+            continue
         log.info("resuming interrupted run %s", run_id)
         await launch_run(run_id)
-    return run_ids
+        resumed.append(run_id)
+
+    if queued_waiting:
+        started = await start_next_if_idle()
+        if started is not None:
+            resumed.append(started)
+    return resumed
 
 
 async def launch_run(run_id: str, *, use_browser: bool = True) -> RunOrchestrator:
@@ -332,6 +350,11 @@ async def launch_run(run_id: str, *, use_browser: bool = True) -> RunOrchestrato
             await _mark_failed(run_id, f"{type(exc).__name__}: {exc}"[:500])
         finally:
             unregister(run_id)
+            # Only now is the model budget free, so this is where the next
+            # queued run may start.
+            from .scheduler import on_run_finished
+
+            await on_run_finished(run_id)
 
     task = asyncio.create_task(_run())
     _BACKGROUND_TASKS.add(task)

@@ -169,6 +169,10 @@ class RunConfigIn(BaseModel):
     # hybrid (HTML pass first) or agent (model everywhere). Blank means the
     # CRAWL_STRATEGY setting.
     crawl_strategy: Literal["hybrid", "agent"] | None = None
+    # Wait for the runs already going to finish, then start automatically,
+    # instead of competing with them for the one process-wide model budget.
+    # Blank means the QUEUE_RUNS setting.
+    queued: bool = Field(default_factory=lambda: settings.queue_runs)
 
     @field_validator("modes")
     @classmethod
@@ -208,6 +212,10 @@ class RunOut(ApiModel):
     created_at: datetime
     started_at: datetime | None
     finished_at: datetime | None
+    # Waiting for its turn rather than running. `queue_position` is 1 for the
+    # run that goes next, and None once it is no longer waiting.
+    queued: bool = False
+    queue_position: int | None = None
 
 
 class SiteRunOut(ApiModel):

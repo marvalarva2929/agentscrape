@@ -17,7 +17,7 @@ from ...domain.schemas import (
     RunOut,
     SiteRunOut,
 )
-from ...orchestrator import service
+from ...orchestrator import scheduler, service
 from ...orchestrator.limits import MemoryCeilingExceeded
 from ..deps import AuthedUser, DbSession
 from ..errors import AppError, ErrorCode, NotFoundError, ResourceLimitError
@@ -27,7 +27,7 @@ from ..sse import event_stream
 router = APIRouter(prefix="/runs", tags=["runs"])
 
 
-def _run_out(run: Run, pending: int = 0) -> RunOut:
+def _run_out(run: Run, pending: int = 0, queue_position: int | None = None) -> RunOut:
     config = dict(run.config or {})
     return RunOut(
         id=run.id, status=run.status, label=run.label, config=config,
@@ -45,6 +45,7 @@ def _run_out(run: Run, pending: int = 0) -> RunOut:
         max_spend_usd=config.get("max_spend_usd"),
         created_at=run.created_at, started_at=run.started_at,
         finished_at=run.finished_at,
+        queued=scheduler.is_queued(config), queue_position=queue_position,
     )
 
 
@@ -68,9 +69,16 @@ async def create_run(body: RunCreate, _: AuthedUser, session: DbSession) -> RunO
             code=ErrorCode.INVALID_CSV,
         )
 
-    await service.launch_run(run.id)
+    if body.config.queued:
+        # Starts now only if the process is idle; otherwise it waits, and the
+        # run that finishes last will start it.
+        await scheduler.start_next_if_idle()
+    else:
+        await service.launch_run(run.id)
+
     await session.refresh(run)
-    return _run_out(run, pending=run.sites_total)
+    position = await scheduler.queue_position(session, run.id)
+    return _run_out(run, pending=run.sites_total, queue_position=position)
 
 
 @router.get("", response_model=Page[RunOut])
@@ -134,7 +142,8 @@ async def run_detail(run_id: str, _: AuthedUser, session: DbSession) -> RunOut:
             )
         ) or 0
     )
-    return _run_out(run, pending=pending)
+    position = await scheduler.queue_position(session, run_id)
+    return _run_out(run, pending=pending, queue_position=position)
 
 
 @router.get("/{run_id}/sites", response_model=Page[SiteRunOut])
@@ -238,7 +247,10 @@ async def retry_site(
             run.status = RunStatus.PENDING
             run.finished_at = None
             await session.commit()
-        await service.launch_run(run_id)
+        if scheduler.is_queued(run.config):
+            await scheduler.start_next_if_idle()
+        else:
+            await service.launch_run(run_id)
 
     site = await session.get(Site, site_id)
     return SiteRunOut.model_validate(site_run).model_copy(

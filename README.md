@@ -161,6 +161,35 @@ logs its status, prompt size, `max_tokens`, model and elapsed time. Keep
 `LLM_CONCURRENCY` modest (default 8): queued calls at the provider are what time
 out.
 
+### Running schools one at a time
+
+`LLM_CONCURRENCY` is one budget for the whole process, so runs started side by
+side split the model throughput between them — and each one still pays its own
+discovery and link-ranking startup in full before it reads a roster. Measured
+on this code: `gme.uchicago.edu` alone for 30 minutes found 883 residents and
+fellows for $0.89, while three schools started together for the same 30 minutes
+spent $1.30 between them and surfaced 22. The money went into three startups
+instead of one harvest.
+
+Queue the runs instead. A queued run waits for the process to go idle and
+starts on its own the moment the run before it finishes:
+
+```bash
+curl -X POST "$API/runs" -H "Authorization: Bearer $TOKEN" \
+  -d '{"sites": ["gme.uchicago.edu"], "config": {"queued": true}}'
+```
+
+`GET /runs/{id}` then reports `queued` and `queue_position` (1 goes next) until
+it starts. Set `QUEUE_RUNS=true` to make it the default for every run, which is
+the right setting on one machine with one model endpoint; `config.queued`
+overrides it per run. The queue orders the runs sharing this process's model
+gate, so it is held in the process, like the worker pool — a restart resumes
+the queue and starts one run, not all of them.
+
+Queueing does not slow the work down: three schools through the queue get the
+whole model budget each in turn, where three at once get a third of it each and
+pay three startups out of it.
+
 ### Checking a school against the client's sheet
 
 The client's working spreadsheet is the ground truth for a school. After a run,

@@ -140,6 +140,12 @@ class Settings(BaseSettings):
     # --- run defaults ---------------------------------------------------
     default_concurrency: int = 4
     max_concurrency: int = 8
+    # Queue new runs instead of starting them beside the ones already going.
+    # `llm_concurrency` is one process-wide gate, so runs in parallel split the
+    # model throughput while each still pays its own discovery and link-ranking
+    # startup; three schools at once spent $1.30 for 22 residents where one
+    # alone spent $0.89 for 883. Per run, `config.queued` overrides this.
+    queue_runs: bool = False
     default_skip_threshold: float = 0.90
     # A teaching hospital publishes one roster per programme, and a medical
     # school runs 40-60 programmes across as many departmental hosts. At 40 the
