@@ -364,14 +364,31 @@ class TestRunsAndAdmin:
                 break
         assert len(seen) == len(set(seen)) == 5
 
-    async def test_cancelling_a_finished_run_is_a_clean_conflict(self, client, seeded):
+    async def test_cancelling_a_finished_run_succeeds_unchanged(self, client, seeded):
+        """Stopping something already stopped is what the caller asked for.
+
+        It used to be a 409, which surfaced as "the crawl could not be stopped"
+        whenever a run finished between the stop button being drawn and pressed.
+        """
         login = await client.post(f"{API}/auth/login", json={"password": "change-me-admin"})
         admin_auth = {"Authorization": f"Bearer {login.json()['token']}"}
+        before = seeded["run"].status
+
         response = await client.post(
             f"{API}/runs/{seeded['run'].id}/cancel", headers=admin_auth
         )
-        assert response.status_code == 409
-        assert response.json()["error"]["code"] == "RUN_NOT_CANCELLABLE"
+
+        assert response.status_code == 200
+        assert response.json()["status"] == before  # not rewritten to cancelled
+
+    async def test_cancelling_is_repeatable(self, client, seeded):
+        login = await client.post(f"{API}/auth/login", json={"password": "change-me-admin"})
+        admin_auth = {"Authorization": f"Bearer {login.json()['token']}"}
+        for _ in range(3):
+            response = await client.post(
+                f"{API}/runs/{seeded['run'].id}/cancel", headers=admin_auth
+            )
+            assert response.status_code == 200
 
 
 class TestRemovedCsvValidate:

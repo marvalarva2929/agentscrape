@@ -224,12 +224,11 @@ async def run_events(run_id: str, _: AuthedUser, session: DbSession) -> Streamin
 async def cancel_run(run_id: str, _: AuthedUser, session: DbSession) -> RunOut:
     run = await _get_run(session, run_id)
     if run.status in TERMINAL_RUN_STATUSES:
-        raise AppError(
-            f"Run is already {run.status} and cannot be cancelled.",
-            code=ErrorCode.RUN_NOT_CANCELLABLE,
-            status_code=409,
-            details={"status": run.status},
-        )
+        # Stopping something already stopped is what the caller wanted, so it
+        # succeeds rather than raising. Refusing it meant a run that finished
+        # between drawing the stop button and pressing it reported that the
+        # crawl could not be stopped, which reads as a failure to stop it.
+        return _run_out(run)
     await service.cancel_run(session, run_id)
     await session.refresh(run)
     return _run_out(run)

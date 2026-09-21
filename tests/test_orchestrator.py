@@ -218,3 +218,63 @@ class TestMemoryCeiling:
         with pytest.raises(MemoryCeilingExceeded) as exc:
             check_memory_ceiling(8)
         assert "concurrency" in str(exc.value).lower()
+
+
+class TestCancelReturnsPromptly:
+    """Pressing stop must not wait for whatever a worker is inside.
+
+    A worker in a model call can hold for `llm_timeout_seconds`. When `cancel`
+    awaited the workers, the HTTP request waited with it and the browser gave
+    up first, telling the user the crawl could not be stopped when it had been.
+    """
+
+    def _orchestrator(self, run_id: str = "run-cancel"):
+        from agentscrape.orchestrator.limits import RunLimits
+        from agentscrape.orchestrator.pool import RunOrchestrator
+
+        return RunOrchestrator(
+            run_id, concurrency=1, skip_threshold=0.9, step_budget=10,
+            limits=RunLimits(), use_browser=False,
+        )
+
+    async def test_cancel_does_not_wait_for_a_stuck_worker(self):
+        orchestrator = self._orchestrator()
+        started = asyncio.Event()
+
+        async def stuck() -> None:
+            started.set()
+            await asyncio.sleep(3600)  # as a model call in flight would
+
+        orchestrator._workers = [asyncio.create_task(stuck())]
+        await started.wait()
+
+        await asyncio.wait_for(orchestrator.cancel(), timeout=1.0)
+
+        assert orchestrator.limits.should_stop
+        assert orchestrator.limits.stop_reason is StopReason.CANCELLED
+        # The worker is still torn down, just not on the caller's clock.
+        await asyncio.wait_for(orchestrator._stopping, timeout=5.0)
+        assert orchestrator._workers[0].cancelled()
+
+    async def test_cancelling_twice_is_harmless(self):
+        orchestrator = self._orchestrator()
+
+        async def stuck() -> None:
+            await asyncio.sleep(3600)
+
+        orchestrator._workers = [asyncio.create_task(stuck())]
+        await orchestrator.cancel()
+        first = orchestrator._stopping
+        await orchestrator.cancel()
+
+        assert orchestrator._stopping is first  # not a second teardown
+        await asyncio.wait_for(orchestrator._stopping, timeout=5.0)
+
+    async def test_a_cancelled_run_is_recorded_as_cancelled(self):
+        """`limits.cancel()`, not the teardown, is what decides the status."""
+        orchestrator = self._orchestrator()
+        orchestrator._workers = []
+        await orchestrator.cancel()
+
+        assert orchestrator.limits.cancelled
+        assert not orchestrator.limits.stopped_at_limit

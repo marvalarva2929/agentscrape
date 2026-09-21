@@ -62,6 +62,8 @@ class RunOrchestrator:
         self._workers: list[asyncio.Task] = []
         self._heartbeat_task: asyncio.Task | None = None
         self._active_sites: dict[str, str] = {}
+        # Held so the background shutdown started by `cancel` is not collected.
+        self._stopping: asyncio.Task | None = None
 
     # -- lifecycle ---------------------------------------------------------
 
@@ -124,9 +126,19 @@ class RunOrchestrator:
         await self._finish()
 
     async def cancel(self) -> None:
-        """Stop taking new work now; in-flight sites finish their current step."""
+        """Stop taking new work now; in-flight sites finish their current step.
+
+        Returns as soon as the intent is recorded. Unwinding the workers means
+        waiting for whatever each in-flight site is inside — a model call can
+        hold for `llm_timeout_seconds` — so a caller that waited for it would
+        block far longer than a browser is willing to wait, and the person who
+        pressed stop would be told the crawl could not be stopped when it had
+        been. `limits.cancel()` is what actually stops the run: workers claim
+        no further school, and `_finish` records it as cancelled.
+        """
         self.limits.cancel()
-        await self._stop_workers()
+        if self._stopping is None or self._stopping.done():
+            self._stopping = asyncio.create_task(self._stop_workers())
 
     async def _stop_workers(self) -> None:
         for task in self._workers:
