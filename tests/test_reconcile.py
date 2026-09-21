@@ -93,6 +93,66 @@ class TestFirstRun:
         assert result.skipped == 1 and result.new == 0
 
 
+class TestSecondPageOfTheSameRun:
+    """The status answers "what did this crawl find?". One person listed on a
+    roster and again on their profile page is one person the client has not seen
+    before, however many pages of the crawl name them."""
+
+    async def test_identical_sighting_leaves_the_record_new(self, session):
+        site = await _make_site(session)
+        await lock_site(session, site.id)
+        await reconcile_people(session, [_person()], _context(site))
+        await session.commit()
+
+        result = await reconcile_people(
+            session, [_person()], _context(site, source_url=f"{ROSTER_URL}/jane-doe")
+        )
+        await session.commit()
+
+        record = (await session.execute(select(Record))).scalar_one()
+        assert record.status == RecordStatus.NEW
+        assert (result.new, result.changed, result.unchanged) == (0, 0, 1)
+
+    async def test_enrichment_leaves_the_record_new(self, session):
+        site = await _make_site(session)
+        await lock_site(session, site.id)
+        await reconcile_people(session, [_person(name="Jane Doe")], _context(site))
+        await session.commit()
+
+        result = await reconcile_people(
+            session,
+            [_person(name="Jane A. Doe")],
+            _context(site, source_url=f"{ROSTER_URL}/jane-doe"),
+        )
+        await session.commit()
+
+        record = (await session.execute(select(Record))).scalar_one()
+        assert record.full_name == "Jane A. Doe"
+        assert record.version_count == 2
+        # New to the client either way, and already counted once as new.
+        assert record.status == RecordStatus.NEW
+        assert (result.new, result.changed) == (0, 0)
+
+    async def test_a_change_found_earlier_in_the_run_survives_a_later_sighting(self, session):
+        site = await _make_site(session)
+        await lock_site(session, site.id)
+        await reconcile_people(session, [_person(name="Jane Doe")], _context(site))
+        await session.commit()
+
+        second = _context(site, run_id="run_2")
+        await reconcile_people(session, [_person(name="Jane Smith")], second)
+        await session.commit()
+        await reconcile_people(
+            session,
+            [_person(name="Jane Smith")],
+            _context(site, run_id="run_2", source_url=f"{ROSTER_URL}/jane-smith"),
+        )
+        await session.commit()
+
+        record = (await session.execute(select(Record))).scalar_one()
+        assert record.status == RecordStatus.CHANGED
+
+
 class TestSecondRun:
     async def test_identical_data_writes_no_new_version(self, session):
         site = await _make_site(session)

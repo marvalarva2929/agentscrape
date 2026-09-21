@@ -201,7 +201,10 @@ async def reconcile_people(
             result.new += 1
         else:
             changed = await _update_record(session, record, fields, person, context)
-            if changed:
+            # A person this run created and then learned more about on a later
+            # page is already counted as new; counting the enrichment as a
+            # change too would bill one person to both totals.
+            if changed and record.status != RecordStatus.NEW:
                 result.changed += 1
             else:
                 result.unchanged += 1
@@ -313,12 +316,17 @@ async def _update_record(
     # outranks a generic directory or alumni page that files them otherwise:
     # the trainee label is the product, and whichever page is read last used to
     # decide it. Across runs the category may still change (graduation).
+    # Whether this run has already recorded a sighting of this person. Read it
+    # before `last_run_id` is reassigned below.
+    seen_earlier_in_run = (
+        record.last_run_id is not None and record.last_run_id == context.run_id
+    )
+
     trainees = (str(PersonCategory.RESIDENT), str(PersonCategory.FELLOW))
     if (
         record.category in trainees
         and fields.get("category") not in trainees
-        and record.last_run_id is not None
-        and record.last_run_id == context.run_id
+        and seen_earlier_in_run
     ):
         fields = {**fields, "category": record.category}
 
@@ -331,8 +339,12 @@ async def _update_record(
         record.confidence = float(fields["confidence"])
 
     if not changes:
-        # Identical: no new version, and a previously-missing record is alive again.
-        if record.status == RecordStatus.MISSING or record.status in (RecordStatus.NEW, RecordStatus.CHANGED):
+        # Identical: no new version, and a previously-missing record is alive
+        # again. The status answers "what did this run find?", so it is only
+        # settled on the run's first sighting: a person listed on a roster and
+        # again on their profile page used to be demoted from new to active by
+        # the second page of the same crawl.
+        if not seen_earlier_in_run:
             record.status = RecordStatus.ACTIVE
         return False
 
@@ -342,7 +354,11 @@ async def _update_record(
             continue
         setattr(record, key, value)
 
-    record.status = RecordStatus.CHANGED
+    # Someone this run met for the first time stays new however many pages they
+    # turn up on. "Changed" describes a difference from an earlier crawl, not
+    # the order in which two pages of this one were read.
+    if not (seen_earlier_in_run and record.status == RecordStatus.NEW):
+        record.status = RecordStatus.CHANGED
     record.last_changed_at = context.captured_at
     record.version_count += 1
 
