@@ -131,10 +131,10 @@ async def run_submission(
             ),
         ),
     )
-    await service.dispatch_next()
-
     submission.status = SubmissionStatus.PENDING
     submission.run_id = run.id
     submission.reviewed_at = datetime.now(UTC)
     await session.commit()
+    await service.dispatch_next()
+    await session.refresh(submission)
     return _out(submission)
