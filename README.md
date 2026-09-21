@@ -171,20 +171,29 @@ fellows for $0.89, while three schools started together for the same 30 minutes
 spent $1.30 between them and surfaced 22. The money went into three startups
 instead of one harvest.
 
-Queue the runs instead. A queued run waits for the process to go idle and
-starts on its own the moment the run before it finishes:
+Every run made through the API is queued, so this cannot happen. A run waits
+for the one running run to finish and starts on its own the moment it does:
 
 ```bash
 curl -X POST "$API/runs" -H "Authorization: Bearer $TOKEN" \
-  -d '{"sites": ["gme.uchicago.edu"], "config": {"queued": true}}'
+  -d '{"sites": ["gme.uchicago.edu"]}'
 ```
 
-`GET /runs/{id}` then reports `queued` and `queue_position` (1 goes next) until
-it starts. Set `QUEUE_RUNS=true` to make it the default for every run, which is
-the right setting on one machine with one model endpoint; `config.queued`
-overrides it per run. The queue orders the runs sharing this process's model
-gate, so it is held in the process, like the worker pool — a restart resumes
-the queue and starts one run, not all of them.
+`GET /runs/{id}` reports `queue_position` (1 goes next) until it starts, and
+`POST /runs/{id}/move` (`{"direction": "up" | "down" | "top"}`) reorders a
+waiting run; `POST /runs/{id}/cancel` takes one out. A queued run crawls one
+school at a time, in the order listed. `config.queued` is accepted and ignored.
+
+"One at a time" is decided in the database, not in the API's memory, so it holds
+across restarts and processes: a claim takes an advisory lock, and a partial
+unique index on `runs` makes a second `running` queued run impossible to insert.
+A run whose process died is left `running` with a heartbeat that stops; after
+`RUN_STALE_SECONDS` (120) it goes back to the front of the line, and a supervisor
+in the API checks every 15 seconds, so a restart cannot leave the queue stuck. A
+run that cannot be launched returns to waiting instead of holding its place.
+
+Spend, tokens and people are saved to the run every two seconds while it works,
+and a resumed run starts its meter from what it had already spent.
 
 Queueing does not slow the work down: three schools through the queue get the
 whole model budget each in turn, where three at once get a third of it each and
@@ -210,8 +219,8 @@ uv run agentscrape queue --sites      # or GET /runs/queue
 Both read the queue from the database rather than from the API's memory, so
 the CLI reports a running run as running. A run is `running` while its workers
 are still beating, `waiting` with its position in line, or `stalled` — claiming
-to run with no heartbeat for `STALE_CLAIM_MINUTES`, which is what a queue
-stuck behind a killed process looks like.
+to run with no heartbeat for `RUN_STALE_SECONDS`, which is what a queue stuck
+behind a killed process looks like (the supervisor puts such a run back in line).
 
 ### Checking a school against the client's sheet
 
