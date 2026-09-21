@@ -158,3 +158,41 @@ def test_a_few_chief_residents_do_not_cover_a_program() -> None:
     roster.reading = PageReading(ok=True, page_type="roster", is_current_trainee_roster=True)
     _update_programs(programs, {"url": roster.url}, roster, trainees=40)
     assert programs[0]["status"] == FOUND
+
+
+@pytest.mark.asyncio
+async def test_a_roster_published_as_pictures_is_kept_when_read_from_the_screenshot() -> None:
+    """The names are on the page, in the image, and nowhere in its text."""
+    provider = ReaderProvider({
+        "page_type": "roster", "is_current_trainee_roster": True, "expected_people_count": 2,
+        "people": [
+            {"full_name": "Marisol Vega, MD", "category": "resident", "pgy": "1"},
+            {"full_name": "Tobias Lindqvist, MD", "category": "resident", "pgy": "1"},
+        ],
+    })
+    text = "Meet our residents. Our first-year class is shown below."
+    with_image = await read_page(
+        url="https://x.org/r", title="Residents", text=text, screenshot=b"png", provider=provider
+    )
+    assert {p.full_name for p in with_image.people} == {"Marisol Vega", "Tobias Lindqvist"}
+
+    # The same names with no image to have read them from are still refused.
+    without_image = await read_page(
+        url="https://x.org/r", title="Residents", text=text, provider=provider
+    )
+    assert without_image.people == []
+
+
+@pytest.mark.asyncio
+async def test_a_name_printed_with_an_initial_is_kept_when_its_surname_is_on_the_page() -> None:
+    provider = ReaderProvider({
+        "page_type": "roster", "is_current_trainee_roster": True, "expected_people_count": 1,
+        "people": [
+            {"full_name": "J. Smith", "category": "resident"},
+            {"full_name": "K. Nobody", "category": "resident"},
+        ],
+    })
+    reading = await read_page(
+        url="https://x.org/r", title="Residents", text="PGY-1\nJ. Smith, MD\nMedicine", provider=provider
+    )
+    assert [p.full_name for p in reading.people] == ["J. Smith"]

@@ -13,6 +13,7 @@ from ...db.models import Record, SiteRun
 from ...db.repositories.programs import refresh_program_counts
 from ...db.repositories.records import lock_site, mark_missing_records
 from ...db.repositories.sites import save_fingerprint, set_dominant_specialty, visited_hashes
+from ...llm.planner import FOUND
 from ...orchestrator.events import EventType
 from ...storage.artifacts import replace_school_screenshots
 from ..checkpoint import clear_checkpoint
@@ -54,6 +55,11 @@ async def finalize(state: SiteState, deps: PipelineDeps) -> SiteState:
             await replace_school_screenshots(site_id, site_run_id)
 
     status = _final_status(state)
+    found = (
+        state.get("records_new", 0) + state.get("records_changed", 0)
+        + state.get("records_unchanged", 0)
+    )
+    reason = _no_people_reason(state, status, found)
     async with deps.sessionmaker() as session:
         # The site is finished; a stale checkpoint must not resurrect it.
         await clear_checkpoint(session, site_run_id)
@@ -75,8 +81,12 @@ async def finalize(state: SiteState, deps: PipelineDeps) -> SiteState:
                 records_missing=missing,
                 known_path_hits=state.get("known_path_hits", 0),
                 candidates_considered=state.get("candidates_considered", 0),
-                error_code=state.get("error_code"),
-                error_message=state.get("error_message"),
+                # A school that finished with nobody says why, instead of reading
+                # as a clean "completed". Recorded here only: the pipeline's own
+                # `error_code` decides routing and must stay unset.
+                error_code=state.get("error_code") or (reason[0] if reason else None),
+                error_message=state.get("error_message") or (reason[1] if reason else None),
+                coverage=_coverage(state),
                 tokens_in=deps.meter.total.input_tokens,
                 tokens_out=deps.meter.total.output_tokens,
                 spend_usd=deps.meter.cost_usd,
@@ -114,6 +124,48 @@ async def finalize(state: SiteState, deps: PipelineDeps) -> SiteState:
     )
 
     return {**state, "status": str(status), "records_missing": missing, "terminated": True}
+
+
+def _coverage(state: SiteState) -> dict | None:
+    """The program plan as it ended: how many programs were found and how many
+    have a roster. Bounded, since some schools list hundreds of programs."""
+    programs = state.get("programs") or []
+    if not programs:
+        return None
+    covered = sum(1 for p in programs if p.get("status") == FOUND)
+    return {
+        "programs_total": len(programs),
+        "programs_covered": covered,
+        "pages_read": state.get("steps_taken", 0),
+        "programs": [
+            {"name": p.get("name"), "kind": p.get("kind"), "status": p.get("status"),
+             "people": p.get("people", 0)}
+            for p in programs[:300]
+        ],
+    }
+
+
+def _no_people_reason(state: SiteState, status: SiteRunStatus, found: int) -> tuple[str, str] | None:
+    """Why a school that was crawled produced no people, in words for a person."""
+    if status != SiteRunStatus.COMPLETED or found > 0:
+        return None
+    if "crawl" not in (state.get("modes") or ["crawl"]):
+        return None
+    steps = state.get("steps_taken", 0)
+    programs = state.get("programs") or []
+    if not state.get("candidates"):
+        return (
+            "NO_PAGES_TO_READ",
+            "No page that could list residents or fellows was found on this site. "
+            "Its entry page may need a login or scripts the crawler could not run, "
+            "or the school may not publish its trainees.",
+        )
+    listed = f" ({len(programs)} programs found, none with a roster)" if programs else ""
+    return (
+        "NO_PEOPLE_FOUND",
+        f"Read {steps:,} pages{listed} and found no residents or fellows. The school may not "
+        "publish current trainees, or may publish them as pictures or PDF files the crawler cannot read.",
+    )
 
 
 def _final_status(state: SiteState) -> SiteRunStatus:

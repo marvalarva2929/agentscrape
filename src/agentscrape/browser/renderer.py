@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -203,6 +204,61 @@ class RenderResult:
     requests: list[str] = field(default_factory=list)
 
 
+# Wording an access-denied or bot-protection interstitial uses instead of content.
+_CHALLENGE = re.compile(
+    r"just a moment|attention required|access denied|verify you are (a )?human|"
+    r"checking your browser|are you a robot|request blocked|unusual traffic|"
+    r"pardon our interruption|enable javascript and cookies",
+    re.IGNORECASE,
+)
+
+# Embeds that are never a roster: analytics, ads, video, maps, social widgets.
+_THIRD_PARTY_FRAMES = re.compile(
+    r"google|doubleclick|youtube|vimeo|facebook|twitter|linkedin|instagram|"
+    r"addthis|hotjar|hubspot|zoom\.us|typeform|recaptcha|cookiebot|onetrust|trustarc",
+    re.IGNORECASE,
+)
+MAX_FRAMES = 5
+MAX_FRAME_CHARS = 400_000
+
+
+def looks_like_challenge(title: str, text: str) -> str:
+    """The interstitial's wording if this is a block page rather than content.
+
+    Only a short page counts: a real page can mention "access denied" in
+    passing, but a block page has nothing else on it."""
+    if len((text or "").strip()) > 4000:
+        return ""
+    match = _CHALLENGE.search(f"{title}\n{(text or '')[:1500]}")
+    return match.group(0) if match else ""
+
+
+async def _frame_content(page: Page) -> tuple[str, str]:
+    """HTML and text of the page's own embedded frames.
+
+    Rosters are often an iframe pointing at a scheduling or people system, so
+    the page itself is empty. The frames are read as part of the page. Frames
+    from ad, analytics, video and map services never are."""
+    html_parts: list[str] = []
+    text_parts: list[str] = []
+    for frame in page.frames[1:1 + MAX_FRAMES * 3]:
+        if len(html_parts) >= MAX_FRAMES:
+            break
+        url = frame.url or ""
+        if not url.startswith(("http://", "https://")) or _THIRD_PARTY_FRAMES.search(host_of(url)):
+            continue
+        try:
+            body_text = await frame.evaluate("() => document.body ? document.body.innerText : ''")
+            if len((body_text or "").strip()) < 200:
+                continue
+            content = await frame.content()
+        except PlaywrightError:
+            continue
+        html_parts.append(f'<div data-agentscrape-frame="{url}">{content[:MAX_FRAME_CHARS]}</div>')
+        text_parts.append(body_text)
+    return "\n".join(html_parts), "\n".join(text_parts)
+
+
 class BrowserPool:
     """One isolated context per concurrent agent, reused across sites.
 
@@ -304,9 +360,30 @@ async def render_page(
             pass
         await _wait_for_content(page)
 
+        status = response.status if response else None
         title = await page.title()
         html = await page.content()
         text = await page.evaluate("() => document.body ? document.body.innerText : ''")
+
+        # A refusal is not a page. Reporting it as one let a 403 or a
+        # bot-protection interstitial be read as a school with nobody listed.
+        if status is not None and status >= 400:
+            return RenderResult(
+                url=url, final_url=page.url, title=title, html="", text="",
+                ok=False, status=status, error=f"HTTP {status}",
+            )
+        challenge = looks_like_challenge(title, text)
+        if challenge:
+            return RenderResult(
+                url=url, final_url=page.url, title=title, html="", text="",
+                ok=False, status=status,
+                error=f"blocked by an access-denied or bot-protection page ({challenge!r})",
+            )
+
+        frame_html, frame_text = await _frame_content(page)
+        if frame_html:
+            html = f"{html}\n{frame_html}"
+            text = f"{text}\n{frame_text}"
 
         locations: dict[str, dict[str, int]] = {}
         if locate:

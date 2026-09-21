@@ -94,6 +94,19 @@ class TestLateViewers:
         assert live["message"] == "page 3"
         await stream.aclose()
 
+    async def test_the_snapshot_says_where_the_stream_stands(self, session):
+        run_id = await _running_run(session)
+        emitter = EventEmitter(run_id)
+        await emitter.emit(EventType.SITE_STEP, agent_id="agent-0", message="one")
+        await emitter.emit(EventType.SITE_STEP, agent_id="agent-0", message="two")
+
+        stream = event_stream(run_id)
+        first = await _next(stream)
+        replayed = [await _next(stream), await _next(stream)]
+
+        assert first["last_seq"] == replayed[-1]["seq"] >= 2
+        await stream.aclose()
+
     async def test_a_retired_agent_leaves_the_roster(self, session):
         run_id = await _running_run(session)
         emitter = EventEmitter(run_id)

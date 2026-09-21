@@ -36,6 +36,9 @@ class PipelineDeps:
     # Hybrid strategy: bodies the HTML pass already fetched, by candidate URL,
     # so the model phase reads them without fetching again. Not checkpointed.
     page_cache: dict = field(default_factory=dict)
+    # Plain HTTP is refused by this site but a browser is let in, so its pages
+    # are read in the browser from here on. Not checkpointed: it is re-learned.
+    browser_only: bool = False
 
     def __post_init__(self) -> None:
         if self.emitter is None:

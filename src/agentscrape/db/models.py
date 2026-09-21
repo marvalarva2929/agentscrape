@@ -212,6 +212,9 @@ class SiteRun(TimestampMixin, Base):
 
     error_code: Mapped[str | None] = mapped_column(String(64))
     error_message: Mapped[str | None] = mapped_column(Text)
+    # What the school was looked at for and how far it got: the programs found,
+    # and which of them have a roster. Kept after the checkpoint is cleared.
+    coverage: Mapped[dict[str, Any] | None] = mapped_column(JSONType)
 
     tokens_in: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
     tokens_out: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)

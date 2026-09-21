@@ -1,0 +1,1301 @@
+[
+  {
+    "name": "Mass General Brigham",
+    "host": "research.massgeneralbrigham.org",
+    "verdict": "OK",
+    "notes": [
+      "2 PDF link(s) on entry"
+    ],
+    "domain_verdict": "needs page content",
+    "pages": [
+      {
+        "label": "entry",
+        "url": "https://research.massgeneralbrigham.org/en/education-and-training/graduate-medical-education",
+        "http_status": 200,
+        "http_final": "https://research.massgeneralbrigham.org/en/education-and-training/graduate-medical-education",
+        "http_error": null,
+        "http_chars": 15406,
+        "http_people": 16,
+        "browser_status": 200,
+        "browser_final": "https://research.massgeneralbrigham.org/en/education-and-training/graduate-medical-education",
+        "browser_error": null,
+        "browser_chars": 7481,
+        "browser_people": 19,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 0,
+        "pdf_links": 2,
+        "redirected_to_other_domain": false
+      },
+      {
+        "label": "homepage",
+        "url": "https://research.massgeneralbrigham.org/en/education-and-training/graduate-medical-education/training-opportunities-search",
+        "http_status": 200,
+        "http_final": "https://research.massgeneralbrigham.org/en/education-and-training/graduate-medical-education/training-opportunities-search",
+        "http_error": null,
+        "http_chars": 1909,
+        "http_people": 2,
+        "browser_status": 200,
+        "browser_final": "https://research.massgeneralbrigham.org/en/education-and-training/graduate-medical-education/training-opportunities-search",
+        "browser_error": null,
+        "browser_chars": 1904,
+        "browser_people": 5,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 0,
+        "pdf_links": 0,
+        "redirected_to_other_domain": false
+      }
+    ],
+    "outlinks": {
+      "sharepoint.com": 1,
+      "partners.org": 1
+    }
+  },
+  {
+    "name": "New York-Presbyterian Hospital",
+    "host": "www.nyp.org",
+    "verdict": "OK",
+    "notes": [
+      "2 iframe(s) on entry"
+    ],
+    "domain_verdict": "needs page content",
+    "pages": [
+      {
+        "label": "entry",
+        "url": "https://www.nyp.org/professionals/graduate-medical-education",
+        "http_status": 200,
+        "http_final": "https://www.nyp.org/professionals/graduate-medical-education",
+        "http_error": null,
+        "http_chars": 8046,
+        "http_people": 35,
+        "browser_status": 200,
+        "browser_final": "https://www.nyp.org/professionals/graduate-medical-education",
+        "browser_error": null,
+        "browser_chars": 2983,
+        "browser_people": 38,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 2,
+        "pdf_links": 0,
+        "redirected_to_other_domain": false
+      },
+      {
+        "label": "homepage",
+        "url": "https://www.nyp.org/",
+        "http_status": 200,
+        "http_final": "https://www.nyp.org/",
+        "http_error": null,
+        "http_chars": 5544,
+        "http_people": 35,
+        "browser_status": 200,
+        "browser_final": "https://www.nyp.org/",
+        "browser_error": null,
+        "browser_chars": 3851,
+        "browser_people": 35,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 0,
+        "pdf_links": 0,
+        "redirected_to_other_domain": false
+      }
+    ],
+    "outlinks": {}
+  },
+  {
+    "name": "Mayo Clinic College of Medicine and Science",
+    "host": "college.mayo.edu",
+    "verdict": "OK",
+    "notes": [
+      "1 iframe(s) on entry"
+    ],
+    "domain_verdict": "post_secondary",
+    "pages": [
+      {
+        "label": "entry",
+        "url": "https://college.mayo.edu/academics/residencies-and-fellowships",
+        "http_status": 200,
+        "http_final": "https://college.mayo.edu/academics/residencies-and-fellowships/",
+        "http_error": null,
+        "http_chars": 33615,
+        "http_people": 15,
+        "browser_status": 200,
+        "browser_final": "https://college.mayo.edu/academics/residencies-and-fellowships/",
+        "browser_error": null,
+        "browser_chars": 28965,
+        "browser_people": 15,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 1,
+        "pdf_links": 0,
+        "redirected_to_other_domain": false
+      },
+      {
+        "label": "homepage",
+        "url": "https://college.mayo.edu/",
+        "http_status": 200,
+        "http_final": "https://college.mayo.edu/",
+        "http_error": null,
+        "http_chars": 8455,
+        "http_people": 5,
+        "browser_status": 200,
+        "browser_final": "https://college.mayo.edu/",
+        "browser_error": null,
+        "browser_chars": 8595,
+        "browser_people": 7,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 1,
+        "pdf_links": 0,
+        "redirected_to_other_domain": false
+      }
+    ],
+    "outlinks": {
+      "usnews.com": 1
+    }
+  },
+  {
+    "name": "Baylor College of Medicine",
+    "host": "www.bcm.edu",
+    "verdict": "OK",
+    "notes": [
+      "4 iframe(s) on entry",
+      "1 PDF link(s) on entry"
+    ],
+    "domain_verdict": "post_secondary",
+    "pages": [
+      {
+        "label": "entry",
+        "url": "https://www.bcm.edu/education/school-of-medicine/graduate-medical-education",
+        "http_status": 200,
+        "http_final": "https://www.bcm.edu/education/school-of-medicine/graduate-medical-education",
+        "http_error": null,
+        "http_chars": 3668,
+        "http_people": 9,
+        "browser_status": 200,
+        "browser_final": "https://www.bcm.edu/education/school-of-medicine/graduate-medical-education",
+        "browser_error": null,
+        "browser_chars": 4794,
+        "browser_people": 9,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 4,
+        "pdf_links": 1,
+        "redirected_to_other_domain": false
+      },
+      {
+        "label": "homepage",
+        "url": "https://www.bcm.edu/",
+        "http_status": 200,
+        "http_final": "https://www.bcm.edu/",
+        "http_error": null,
+        "http_chars": 3393,
+        "http_people": 9,
+        "browser_status": 200,
+        "browser_final": "https://www.bcm.edu/",
+        "browser_error": null,
+        "browser_chars": 3471,
+        "browser_people": 9,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 3,
+        "pdf_links": 1,
+        "redirected_to_other_domain": false
+      }
+    ],
+    "outlinks": {
+      "givebcm.org": 1
+    }
+  },
+  {
+    "name": "Johns Hopkins University School of Medicine",
+    "host": "www.hopkinsmedicine.org",
+    "verdict": "OK",
+    "notes": [
+      "2 iframe(s) on entry",
+      "2 PDF link(s) on entry"
+    ],
+    "domain_verdict": "needs page content",
+    "pages": [
+      {
+        "label": "entry",
+        "url": "https://www.hopkinsmedicine.org/som/gme",
+        "http_status": 200,
+        "http_final": "https://www.hopkinsmedicine.org/som/gme",
+        "http_error": null,
+        "http_chars": 5655,
+        "http_people": 10,
+        "browser_status": 200,
+        "browser_final": "https://www.hopkinsmedicine.org/som/gme",
+        "browser_error": null,
+        "browser_chars": 6586,
+        "browser_people": 24,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 2,
+        "pdf_links": 2,
+        "redirected_to_other_domain": false
+      },
+      {
+        "label": "homepage",
+        "url": "https://www.hopkinsmedicine.org/som",
+        "http_status": 200,
+        "http_final": "https://www.hopkinsmedicine.org/som",
+        "http_error": null,
+        "http_chars": 4495,
+        "http_people": 9,
+        "browser_status": 403,
+        "browser_final": "https://www.hopkinsmedicine.org/som",
+        "browser_error": null,
+        "browser_chars": 696,
+        "browser_people": 2,
+        "challenge": "Attention Required",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 0,
+        "pdf_links": 0,
+        "redirected_to_other_domain": false
+      },
+      {
+        "label": "program_index",
+        "url": "https://www.hopkinsmedicine.org/som/gme/programs",
+        "http_status": 200,
+        "http_final": "https://www.hopkinsmedicine.org/som/gme/programs",
+        "http_error": null,
+        "http_chars": 845,
+        "http_people": 0,
+        "browser_status": 403,
+        "browser_final": "https://www.hopkinsmedicine.org/som/gme/programs",
+        "browser_error": null,
+        "browser_chars": 696,
+        "browser_people": 2,
+        "challenge": "Attention Required",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 0,
+        "pdf_links": 0,
+        "redirected_to_other_domain": false
+      }
+    ],
+    "outlinks": {
+      "jhmi.edu": 1
+    }
+  },
+  {
+    "name": "University of Maryland",
+    "host": "www.umms.org",
+    "verdict": "OK",
+    "notes": [
+      "3 iframe(s) on entry"
+    ],
+    "domain_verdict": "needs page content",
+    "pages": [
+      {
+        "label": "entry",
+        "url": "https://www.umms.org/ummc/pros/education-training",
+        "http_status": 200,
+        "http_final": "https://www.umms.org/ummc/pros/education-training",
+        "http_error": null,
+        "http_chars": 2666,
+        "http_people": 2,
+        "browser_status": 200,
+        "browser_final": "https://www.umms.org/ummc/pros/education-training",
+        "browser_error": null,
+        "browser_chars": 3338,
+        "browser_people": 2,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 3,
+        "pdf_links": 0,
+        "redirected_to_other_domain": false
+      },
+      {
+        "label": "homepage",
+        "url": "https://www.medschool.umaryland.edu/",
+        "http_status": 200,
+        "http_final": "https://www.medschool.umaryland.edu/",
+        "http_error": null,
+        "http_chars": 10625,
+        "http_people": 15,
+        "browser_status": 200,
+        "browser_final": "https://www.medschool.umaryland.edu/",
+        "browser_error": null,
+        "browser_chars": 9240,
+        "browser_people": 15,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 1,
+        "pdf_links": 0,
+        "redirected_to_other_domain": false
+      },
+      {
+        "label": "program_index",
+        "url": "https://www.umms.org/ummc/pros/education-training/programs",
+        "http_status": 200,
+        "http_final": "https://www.umms.org/ummc/pros/education-training/programs",
+        "http_error": null,
+        "http_chars": 4081,
+        "http_people": 0,
+        "browser_status": 200,
+        "browser_final": "https://www.umms.org/ummc/pros/education-training/programs",
+        "browser_error": null,
+        "browser_chars": 4815,
+        "browser_people": 0,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "roster page with no addresses in the DOM (may be images)",
+        "iframes": 3,
+        "pdf_links": 0,
+        "redirected_to_other_domain": false
+      }
+    ],
+    "outlinks": {
+      "umgccc.org": 1,
+      "instagram.com": 1,
+      "facebook.com": 1
+    }
+  },
+  {
+    "name": "University of Chicago Medical Center",
+    "host": "gme.uchicago.edu",
+    "verdict": "THIN",
+    "notes": [
+      "little text (258 chars rendered)",
+      "homepage is readable, so a crawl can fall back to it"
+    ],
+    "domain_verdict": "post_secondary",
+    "pages": [
+      {
+        "label": "entry",
+        "url": "https://gme.uchicago.edu/programs",
+        "http_status": 200,
+        "http_final": "https://gme.uchicago.edu/programs/",
+        "http_error": null,
+        "http_chars": 11,
+        "http_people": 0,
+        "browser_status": 200,
+        "browser_final": "https://gme.uchicago.edu/programs/",
+        "browser_error": null,
+        "browser_chars": 258,
+        "browser_people": 0,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "page body has almost no text (likely client-rendered)",
+        "iframes": 0,
+        "pdf_links": 0,
+        "redirected_to_other_domain": false
+      },
+      {
+        "label": "homepage",
+        "url": "https://www.uchicagomedicine.org/health-care-professionals/education-events/graduate-medical-education",
+        "http_status": 200,
+        "http_final": "https://www.uchicagomedicine.org/health-care-professionals/education-events/graduate-medical-education",
+        "http_error": null,
+        "http_chars": 12413,
+        "http_people": 1,
+        "browser_status": 200,
+        "browser_final": "https://www.uchicagomedicine.org/health-care-professionals/education-events/graduate-medical-education",
+        "browser_error": null,
+        "browser_chars": 3439,
+        "browser_people": 7,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 4,
+        "pdf_links": 0,
+        "redirected_to_other_domain": false
+      },
+      {
+        "label": "program_index",
+        "url": "https://gme.uchicago.edu/programs/prospective-residents-and-fellows",
+        "http_status": 200,
+        "http_final": "https://gme.uchicago.edu/programs/prospective-residents-and-fellows/",
+        "http_error": null,
+        "http_chars": 836,
+        "http_people": 0,
+        "browser_status": 200,
+        "browser_final": "https://gme.uchicago.edu/programs/prospective-residents-and-fellows/",
+        "browser_error": null,
+        "browser_chars": 1110,
+        "browser_people": 0,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "roster page with no addresses in the DOM (may be images)",
+        "iframes": 0,
+        "pdf_links": 0,
+        "redirected_to_other_domain": false
+      }
+    ],
+    "outlinks": {}
+  },
+  {
+    "name": "Baylor Scott & White (Dallas/DFW/Temple/RR)",
+    "host": "www.bswhealth.com",
+    "verdict": "OK",
+    "notes": [
+      "5 iframe(s) on entry"
+    ],
+    "domain_verdict": "needs page content",
+    "pages": [
+      {
+        "label": "entry",
+        "url": "https://www.bswhealth.com/medical-professionals/education/graduate-medical-education",
+        "http_status": 200,
+        "http_final": "https://www.bswhealth.com/medical-professionals/education/graduate-medical-education",
+        "http_error": null,
+        "http_chars": 19772,
+        "http_people": 12,
+        "browser_status": 200,
+        "browser_final": "https://www.bswhealth.com/medical-professionals/education/graduate-medical-education",
+        "browser_error": null,
+        "browser_chars": 6629,
+        "browser_people": 12,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 5,
+        "pdf_links": 0,
+        "redirected_to_other_domain": false
+      },
+      {
+        "label": "homepage",
+        "url": "https://www.bswhealth.com/",
+        "http_status": 200,
+        "http_final": "https://www.bswhealth.com/",
+        "http_error": null,
+        "http_chars": 16400,
+        "http_people": 5,
+        "browser_status": 200,
+        "browser_final": "https://www.bswhealth.com/",
+        "browser_error": null,
+        "browser_chars": 4718,
+        "browser_people": 5,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 2,
+        "pdf_links": 0,
+        "redirected_to_other_domain": false
+      }
+    ],
+    "outlinks": {}
+  },
+  {
+    "name": "Texas Tech University Health Sciences Center",
+    "host": "www.ttuhsc.edu",
+    "verdict": "UNREACHABLE",
+    "notes": [
+      "HTTP 404",
+      "2 iframe(s) on entry",
+      "homepage is readable, so a crawl can fall back to it"
+    ],
+    "domain_verdict": "post_secondary",
+    "pages": [
+      {
+        "label": "entry",
+        "url": "https://www.ttuhsc.edu/medicine/graduate-medical-education",
+        "http_status": 404,
+        "http_final": "https://www.ttuhsc.edu/medicine/graduate-medical-education",
+        "http_error": "HTTP 404",
+        "http_chars": 0,
+        "http_people": 0,
+        "browser_status": 404,
+        "browser_final": "https://www.ttuhsc.edu/medicine/graduate-medical-education",
+        "browser_error": null,
+        "browser_chars": 3668,
+        "browser_people": 0,
+        "challenge": "",
+        "js_only": true,
+        "thin_reason": "",
+        "iframes": 2,
+        "pdf_links": 0,
+        "redirected_to_other_domain": false
+      },
+      {
+        "label": "homepage",
+        "url": "https://www.ttuhsc.edu/",
+        "http_status": 200,
+        "http_final": "https://www.ttuhsc.edu/",
+        "http_error": null,
+        "http_chars": 16011,
+        "http_people": 11,
+        "browser_status": 200,
+        "browser_final": "https://www.ttuhsc.edu/",
+        "browser_error": null,
+        "browser_chars": 6191,
+        "browser_people": 11,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 14,
+        "pdf_links": 0,
+        "redirected_to_other_domain": false
+      },
+      {
+        "label": "program_index",
+        "url": "https://blog.ttuhsc.edu/medicine/graduate-medical-education/programs.aspx",
+        "http_status": 200,
+        "http_final": "https://blog.ttuhsc.edu/medicine/graduate-medical-education/programs.aspx",
+        "http_error": null,
+        "http_chars": 2460,
+        "http_people": 2,
+        "browser_status": 200,
+        "browser_final": "https://blog.ttuhsc.edu/medicine/graduate-medical-education/programs.aspx",
+        "browser_error": null,
+        "browser_chars": 2095,
+        "browser_people": 3,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 3,
+        "pdf_links": 1,
+        "redirected_to_other_domain": false
+      }
+    ],
+    "outlinks": {}
+  },
+  {
+    "name": "Strong Memorial Hospital / University of Rochester (URMC)",
+    "host": "www.urmc.rochester.edu",
+    "verdict": "OK",
+    "notes": [
+      "4 iframe(s) on entry"
+    ],
+    "domain_verdict": "post_secondary",
+    "pages": [
+      {
+        "label": "entry",
+        "url": "https://www.urmc.rochester.edu/education/graduate-medical-education",
+        "http_status": 200,
+        "http_final": "https://www.urmc.rochester.edu/education/graduate-medical-education",
+        "http_error": null,
+        "http_chars": 2661,
+        "http_people": 2,
+        "browser_status": 200,
+        "browser_final": "https://www.urmc.rochester.edu/education/graduate-medical-education",
+        "browser_error": null,
+        "browser_chars": 3506,
+        "browser_people": 10,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 4,
+        "pdf_links": 0,
+        "redirected_to_other_domain": false
+      },
+      {
+        "label": "homepage",
+        "url": "https://www.urmc.rochester.edu/",
+        "http_status": 200,
+        "http_final": "https://www.urmc.rochester.edu/",
+        "http_error": null,
+        "http_chars": 3660,
+        "http_people": 10,
+        "browser_status": 200,
+        "browser_final": "https://www.urmc.rochester.edu/",
+        "browser_error": null,
+        "browser_chars": 3646,
+        "browser_people": 17,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 4,
+        "pdf_links": 0,
+        "redirected_to_other_domain": false
+      }
+    ],
+    "outlinks": {
+      "acgme.org": 1,
+      "macyfoundation.org": 1
+    }
+  },
+  {
+    "name": "University of Arkansas for Medical Sciences (UAMS)",
+    "host": "medicine.uams.edu",
+    "verdict": "OK",
+    "notes": [
+      "1 iframe(s) on entry"
+    ],
+    "domain_verdict": "post_secondary",
+    "pages": [
+      {
+        "label": "entry",
+        "url": "https://medicine.uams.edu/gme",
+        "http_status": 200,
+        "http_final": "https://medicine.uams.edu/gme/",
+        "http_error": null,
+        "http_chars": 2041,
+        "http_people": 4,
+        "browser_status": 200,
+        "browser_final": "https://medicine.uams.edu/gme/",
+        "browser_error": null,
+        "browser_chars": 1786,
+        "browser_people": 4,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 1,
+        "pdf_links": 0,
+        "redirected_to_other_domain": false
+      }
+    ],
+    "outlinks": {}
+  },
+  {
+    "name": "Rush University Medical Center",
+    "host": "www.rushu.rush.edu",
+    "verdict": "OK",
+    "notes": [
+      "4 iframe(s) on entry"
+    ],
+    "domain_verdict": "post_secondary",
+    "pages": [
+      {
+        "label": "entry",
+        "url": "https://www.rushu.rush.edu/education-training/graduate-medical-education",
+        "http_status": 200,
+        "http_final": "https://www.rushu.rush.edu/education-training/graduate-medical-education",
+        "http_error": null,
+        "http_chars": 6993,
+        "http_people": 15,
+        "browser_status": 200,
+        "browser_final": "https://www.rushu.rush.edu/education-training/graduate-medical-education",
+        "browser_error": null,
+        "browser_chars": 6794,
+        "browser_people": 22,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 4,
+        "pdf_links": 0,
+        "redirected_to_other_domain": false
+      }
+    ],
+    "outlinks": {
+      "acgme.org": 1,
+      "illinois.gov": 1
+    }
+  },
+  {
+    "name": "University of Virginia Medical Center",
+    "host": "med.virginia.edu",
+    "verdict": "OK",
+    "notes": [
+      "3 iframe(s) on entry"
+    ],
+    "domain_verdict": "post_secondary",
+    "pages": [
+      {
+        "label": "entry",
+        "url": "https://med.virginia.edu/gme",
+        "http_status": 200,
+        "http_final": "https://med.virginia.edu/gme/",
+        "http_error": null,
+        "http_chars": 3196,
+        "http_people": 4,
+        "browser_status": 200,
+        "browser_final": "https://med.virginia.edu/gme/",
+        "browser_error": null,
+        "browser_chars": 2234,
+        "browser_people": 4,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 3,
+        "pdf_links": 0,
+        "redirected_to_other_domain": false
+      },
+      {
+        "label": "homepage",
+        "url": "https://uvahealth.com/",
+        "http_status": 200,
+        "http_final": "https://www.uvahealth.com/",
+        "http_error": null,
+        "http_chars": 1284,
+        "http_people": 12,
+        "browser_status": 200,
+        "browser_final": "https://www.uvahealth.com/",
+        "browser_error": null,
+        "browser_chars": 1947,
+        "browser_people": 12,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 3,
+        "pdf_links": 0,
+        "redirected_to_other_domain": false
+      }
+    ],
+    "outlinks": {}
+  },
+  {
+    "name": "University of Wisconsin Hospitals and Clinics",
+    "host": "www.med.wisc.edu",
+    "verdict": "OK",
+    "notes": [
+      "4 iframe(s) on entry"
+    ],
+    "domain_verdict": "post_secondary",
+    "pages": [
+      {
+        "label": "entry",
+        "url": "https://www.med.wisc.edu/education/graduate-medical-education",
+        "http_status": 200,
+        "http_final": "https://www.med.wisc.edu/education/graduate-medical-education/",
+        "http_error": null,
+        "http_chars": 3964,
+        "http_people": 4,
+        "browser_status": 200,
+        "browser_final": "https://www.med.wisc.edu/education/graduate-medical-education/",
+        "browser_error": null,
+        "browser_chars": 4393,
+        "browser_people": 4,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 4,
+        "pdf_links": 0,
+        "redirected_to_other_domain": false
+      },
+      {
+        "label": "program_index",
+        "url": "https://www.med.wisc.edu/education/graduate-medical-education/acgme-accredited-training-programs",
+        "http_status": 200,
+        "http_final": "https://www.med.wisc.edu/education/graduate-medical-education/acgme-accredited-training-programs/",
+        "http_error": null,
+        "http_chars": 3238,
+        "http_people": 0,
+        "browser_status": 200,
+        "browser_final": "https://www.med.wisc.edu/education/graduate-medical-education/acgme-accredited-training-programs/",
+        "browser_error": null,
+        "browser_chars": 3985,
+        "browser_people": 0,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "roster keywords present but no people parsed from HTML",
+        "iframes": 2,
+        "pdf_links": 0,
+        "redirected_to_other_domain": false
+      }
+    ],
+    "outlinks": {
+      "uwhealth.org": 1
+    }
+  },
+  {
+    "name": "University of Arizona College of Medicine\u2013Tucson",
+    "host": "medicine.arizona.edu",
+    "verdict": "OK",
+    "notes": [
+      "2 iframe(s) on entry",
+      "4 PDF link(s) on entry"
+    ],
+    "domain_verdict": "post_secondary",
+    "pages": [
+      {
+        "label": "entry",
+        "url": "https://medicine.arizona.edu/education/residencies-fellowships",
+        "http_status": 200,
+        "http_final": "https://medicine.arizona.edu/education/residencies-fellowships",
+        "http_error": null,
+        "http_chars": 5022,
+        "http_people": 6,
+        "browser_status": 200,
+        "browser_final": "https://medicine.arizona.edu/education/residencies-fellowships",
+        "browser_error": null,
+        "browser_chars": 4415,
+        "browser_people": 9,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 2,
+        "pdf_links": 4,
+        "redirected_to_other_domain": false
+      },
+      {
+        "label": "homepage",
+        "url": "https://medicine.arizona.edu/",
+        "http_status": 200,
+        "http_final": "https://medicine.arizona.edu/",
+        "http_error": null,
+        "http_chars": 4431,
+        "http_people": 11,
+        "browser_status": 200,
+        "browser_final": "https://medicine.arizona.edu/",
+        "browser_error": null,
+        "browser_chars": 4349,
+        "browser_people": 11,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 2,
+        "pdf_links": 0,
+        "redirected_to_other_domain": false
+      },
+      {
+        "label": "program_index",
+        "url": "https://phoenixmed.arizona.edu/gme",
+        "http_status": 200,
+        "http_final": "https://phoenixmed.arizona.edu/gme",
+        "http_error": null,
+        "http_chars": 5811,
+        "http_people": 12,
+        "browser_status": 200,
+        "browser_final": "https://phoenixmed.arizona.edu/gme",
+        "browser_error": null,
+        "browser_chars": 5080,
+        "browser_people": 12,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 3,
+        "pdf_links": 3,
+        "redirected_to_other_domain": false
+      }
+    ],
+    "outlinks": {}
+  },
+  {
+    "name": "University of New Mexico School of Medicine",
+    "host": "hsc.unm.edu",
+    "verdict": "OK",
+    "notes": [
+      "2 iframe(s) on entry"
+    ],
+    "domain_verdict": "post_secondary",
+    "pages": [
+      {
+        "label": "entry",
+        "url": "https://hsc.unm.edu/medicine/education/gme",
+        "http_status": 200,
+        "http_final": "https://hsc.unm.edu/medicine/education/gme/",
+        "http_error": null,
+        "http_chars": 762,
+        "http_people": 2,
+        "browser_status": 200,
+        "browser_final": "https://hsc.unm.edu/medicine/education/gme/",
+        "browser_error": null,
+        "browser_chars": 1579,
+        "browser_people": 3,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 2,
+        "pdf_links": 0,
+        "redirected_to_other_domain": false
+      },
+      {
+        "label": "homepage",
+        "url": "https://hsc.unm.edu/medicine",
+        "http_status": 200,
+        "http_final": "https://hsc.unm.edu/medicine/",
+        "http_error": null,
+        "http_chars": 5335,
+        "http_people": 12,
+        "browser_status": 200,
+        "browser_final": "https://hsc.unm.edu/medicine/",
+        "browser_error": null,
+        "browser_chars": 5290,
+        "browser_people": 13,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 3,
+        "pdf_links": 0,
+        "redirected_to_other_domain": false
+      },
+      {
+        "label": "program_index",
+        "url": "https://hsc.unm.edu/medicine/education/gme/prospective-resident-fellows/current-training-programs.html",
+        "http_status": 200,
+        "http_final": "https://hsc.unm.edu/medicine/education/gme/prospective-resident-fellows/current-training-programs.html",
+        "http_error": null,
+        "http_chars": 3629,
+        "http_people": 12,
+        "browser_status": 200,
+        "browser_final": "https://hsc.unm.edu/medicine/education/gme/prospective-resident-fellows/current-training-programs.html",
+        "browser_error": null,
+        "browser_chars": 2068,
+        "browser_people": 13,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 2,
+        "pdf_links": 0,
+        "redirected_to_other_domain": false
+      }
+    ],
+    "outlinks": {
+      "smartsheet.com": 1
+    }
+  },
+  {
+    "name": "Geisinger Health System",
+    "host": "www.geisinger.edu",
+    "verdict": "OK",
+    "notes": [
+      "entry redirects to perfdrive.com",
+      "2 iframe(s) on entry",
+      "9 PDF link(s) on entry"
+    ],
+    "domain_verdict": "post_secondary",
+    "pages": [
+      {
+        "label": "entry",
+        "url": "https://www.geisinger.edu/gchs/education/residencies-fellowships",
+        "http_status": 200,
+        "http_final": "https://www.geisinger.edu/gchs/education/residencies-fellowships",
+        "http_error": null,
+        "http_chars": 14459,
+        "http_people": 11,
+        "browser_status": 200,
+        "browser_final": "https://validate.perfdrive.com/?ssa=fa014024-f94c-4687-8529-7035fdc9d7ec&ssb=29637299449&ssc=https%3A%2F%2Fwww.geisinger.edu%2Fgchs%2Feducation%2Fresidencies-fellowships&ssi=9198f90d-d5ku-4aa4-9962-c40bba65c5e3&ssk=botmanager_support@radware.com&ssm=64096759394406708107152266014994&ssn=e654d88bdf3f29652b5cbd798ecd024f5bc33dae0bf8-323b-43d3-a29ada&sso=a2d3b308-6474577067aa8cb38f3bb9a5433aae2a45061c968c444095&ssp=80622904111790085797179003824066863&ssq=89775672363293210516123632590002325051473&ssr=MTUzLjMzLjEwLjUx&sst=agentscrape/0.1%20(+contact:%20ops@example.com)&ssu=&ssv=&ssw=&ssx=eyJyZCI6ImdlaXNpbmdlci5vcmciLCJfX3V6bWYiOiI3ZjkwMDAzZGFlMGJmOC0zMjNiLTQzZDMtYTMwOC02NDc0NTc3MDY3YWExLTE3OTAwMjM2MzIxNDQwLTAwNTE5ODllYWE3N2E1OTJmZGQxMCIsInV6bXgiOiI3ZmMwMDBjZWRiMWQ2Zi0wMjlhLTRlYTYtYjE2OS00YzQzOWQxMmI0YTYxLTE3OTAwMjM2MzIxNDQwLTAwNmQzMjUwMDFkMTk3Y2FjNjQxMCJ9",
+        "browser_error": null,
+        "browser_chars": 714,
+        "browser_people": 0,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "roster page with no addresses in the DOM (may be images)",
+        "iframes": 2,
+        "pdf_links": 9,
+        "redirected_to_other_domain": true
+      },
+      {
+        "label": "homepage",
+        "url": "https://www.geisinger.org/",
+        "http_status": 200,
+        "http_final": "https://validate.perfdrive.com/?ssa=02f7871c-f4b0-45b6-9da9-a01a0c81a3e5&ssb=16089279143&ssc=https%3A%2F%2Fwww.geisinger.org%2F&ssi=c7420b5a-d5ku-457e-8740-194880caad41&ssk=botmanager_support@radware.com&ssm=24778641208917047109955962259800&ssn=f4b99f8f4526dc3cabd9fb290fe5a1814375d6d7e8a8-4679-4ac5-882fea&sso=144dce54-3e0b3a463f76888987fe6046296b6fd1b492e786666bea99&ssp=79629131671790007957179007581018939&ssq=61663392363946611973023639763045853684418&ssr=MTUzLjMzLjEwLjUx&sst=agentscrape/0.1%20(+contact:%20ops@example.com)&ssu=&ssv=&ssw=&ssx=eyJyZCI6ImdlaXNpbmdlci5vcmciLCJfX3V6bWYiOiI3ZjkwMDBkNmQ3ZThhOC00Njc5LTRhYzUtOGU1NC0zZTBiM2E0NjNmNzYxLTE3OTAwMjM2Mzk2NTgwLTAwNTM0ZTA4MDEzZjcxOGY0YjAxMCIsInV6bXgiOiI3ZmMwMDA5ZDk3NzgwMS02NTI2LTQxNmMtYjQ4My1iMWQxMjEzODQ5NGExLTE3OTAwMjM2Mzk2NTgwLTAwNmJhZWJhZDUzM2E5MzA1YTExMCJ9",
+        "http_error": null,
+        "http_chars": 694,
+        "http_people": 0,
+        "browser_status": 200,
+        "browser_final": "https://validate.perfdrive.com/?ssa=156d03af-e61d-4ef0-8c10-3b76cebb6ae2&ssb=45894250357&ssc=https%3A%2F%2Fwww.geisinger.org%2F&ssi=184bc3e2-d5ku-4570-a1cc-87229966b421&ssk=botmanager_support@radware.com&ssm=39346802006802394109045088268017&ssn=535a1db33171e325925f4a28a9ece74e6de0fe6b991c-15f6-41ab-9b7ebd&sso=340f44fb-ded4a3f753ec8165161844e6b88b8f1915630b2e5d23005f&ssp=50768936021790010410179002770819818&ssq=69445532364080680245123640116586206396697&ssr=MTUzLjMzLjEwLjUx&sst=agentscrape/0.1%20(+contact:%20ops@example.com)&ssu=&ssv=&ssw=&ssx=eyJyZCI6ImdlaXNpbmdlci5vcmciLCJfX3V6bWYiOiI3ZjkwMDBmZTZiOTkxYy0xNWY2LTQxYWItOTRmYi1kZWQ0YTNmNzUzZWMxLTE3OTAwMjM2NDAwOTYwLTAwNTA1MzE1Mzk2MjQwNDJlY2ExMCIsInV6bXgiOiI3ZmMwMDBkOGFkNTYxMy05MDQ3LTRhNjYtYjYyMi1lNjg4NWVkYmE3N2IxLTE3OTAwMjM2NDAwOTYwLTAwNjQwYzQ2MTVmYTI0NDA0MjkxMCJ9",
+        "browser_error": null,
+        "browser_chars": 676,
+        "browser_people": 0,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 2,
+        "pdf_links": 0,
+        "redirected_to_other_domain": true
+      }
+    ],
+    "outlinks": {}
+  },
+  {
+    "name": "Dartmouth-Hitchcock",
+    "host": "gme.dartmouth-hitchcock.org",
+    "verdict": "OK",
+    "notes": [
+      "1 iframe(s) on entry",
+      "1 PDF link(s) on entry"
+    ],
+    "domain_verdict": "needs page content",
+    "pages": [
+      {
+        "label": "entry",
+        "url": "https://gme.dartmouth-hitchcock.org/",
+        "http_status": 200,
+        "http_final": "https://gme.dartmouth-hitchcock.org/",
+        "http_error": null,
+        "http_chars": 3202,
+        "http_people": 2,
+        "browser_status": 200,
+        "browser_final": "https://gme.dartmouth-hitchcock.org/",
+        "browser_error": null,
+        "browser_chars": 3791,
+        "browser_people": 2,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 1,
+        "pdf_links": 1,
+        "redirected_to_other_domain": false
+      }
+    ],
+    "outlinks": {}
+  },
+  {
+    "name": "Old Dominion University / EVMS",
+    "host": "www.odu.edu",
+    "verdict": "OK",
+    "notes": [
+      "82 iframe(s) on entry"
+    ],
+    "domain_verdict": "post_secondary",
+    "pages": [
+      {
+        "label": "entry",
+        "url": "https://www.odu.edu/graduate-medical-education",
+        "http_status": 200,
+        "http_final": "https://www.odu.edu/graduate-medical-education",
+        "http_error": null,
+        "http_chars": 7013,
+        "http_people": 9,
+        "browser_status": 200,
+        "browser_final": "https://www.odu.edu/graduate-medical-education",
+        "browser_error": null,
+        "browser_chars": 5797,
+        "browser_people": 15,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 82,
+        "pdf_links": 0,
+        "redirected_to_other_domain": false
+      },
+      {
+        "label": "program_index",
+        "url": "https://www.odu.edu/graduate-medical-education/residencies",
+        "http_status": 200,
+        "http_final": "https://www.odu.edu/graduate-medical-education/residencies",
+        "http_error": null,
+        "http_chars": 4578,
+        "http_people": 6,
+        "browser_status": 200,
+        "browser_final": "https://www.odu.edu/graduate-medical-education/residencies",
+        "browser_error": null,
+        "browser_chars": 6442,
+        "browser_people": 12,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 82,
+        "pdf_links": 0,
+        "redirected_to_other_domain": false
+      }
+    ],
+    "outlinks": {}
+  },
+  {
+    "name": "Tower Health",
+    "host": "towerhealth.org",
+    "verdict": "OK",
+    "notes": [
+      "3 iframe(s) on entry"
+    ],
+    "domain_verdict": "needs page content",
+    "pages": [
+      {
+        "label": "entry",
+        "url": "https://towerhealth.org/academic-affairs/residency-and-fellowship-programs",
+        "http_status": 200,
+        "http_final": "https://towerhealth.org/academic-affairs/residency-and-fellowship-programs",
+        "http_error": null,
+        "http_chars": 7076,
+        "http_people": 15,
+        "browser_status": 200,
+        "browser_final": "https://towerhealth.org/academic-affairs/residency-and-fellowship-programs",
+        "browser_error": null,
+        "browser_chars": 7109,
+        "browser_people": 15,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 3,
+        "pdf_links": 0,
+        "redirected_to_other_domain": false
+      },
+      {
+        "label": "homepage",
+        "url": "https://towerhealth.org/",
+        "http_status": 200,
+        "http_final": "https://towerhealth.org/",
+        "http_error": null,
+        "http_chars": 1118,
+        "http_people": 3,
+        "browser_status": 200,
+        "browser_final": "https://towerhealth.org/",
+        "browser_error": null,
+        "browser_chars": 1978,
+        "browser_people": 3,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 4,
+        "pdf_links": 0,
+        "redirected_to_other_domain": false
+      }
+    ],
+    "outlinks": {
+      "metop.io": 2,
+      "microsoft.com": 1
+    }
+  },
+  {
+    "name": "Lehigh Valley Health Network",
+    "host": "www.lvhn.org",
+    "verdict": "OK",
+    "notes": [
+      "5 iframe(s) on entry",
+      "2 PDF link(s) on entry"
+    ],
+    "domain_verdict": "needs page content",
+    "pages": [
+      {
+        "label": "entry",
+        "url": "https://www.lvhn.org/education/residency-and-fellowship-opportunities",
+        "http_status": 200,
+        "http_final": "https://www.lvhn.org/education/residency-and-fellowship-opportunities",
+        "http_error": null,
+        "http_chars": 10262,
+        "http_people": 12,
+        "browser_status": 200,
+        "browser_final": "https://www.lvhn.org/education/residency-and-fellowship-opportunities",
+        "browser_error": null,
+        "browser_chars": 8012,
+        "browser_people": 21,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 5,
+        "pdf_links": 2,
+        "redirected_to_other_domain": false
+      },
+      {
+        "label": "homepage",
+        "url": "https://www.lvhn.org/",
+        "http_status": 200,
+        "http_final": "https://www.lvhn.org/",
+        "http_error": null,
+        "http_chars": 4057,
+        "http_people": 14,
+        "browser_status": 200,
+        "browser_final": "https://www.lvhn.org/",
+        "browser_error": null,
+        "browser_chars": 4420,
+        "browser_people": 20,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 3,
+        "pdf_links": 0,
+        "redirected_to_other_domain": false
+      }
+    ],
+    "outlinks": {}
+  },
+  {
+    "name": "Virginia Commonwealth University Health System",
+    "host": "medschool.vcu.edu",
+    "verdict": "OK",
+    "notes": [
+      "2 PDF link(s) on entry"
+    ],
+    "domain_verdict": "post_secondary",
+    "pages": [
+      {
+        "label": "entry",
+        "url": "https://medschool.vcu.edu/education/gme",
+        "http_status": 200,
+        "http_final": "https://medschool.vcu.edu/education/gme/",
+        "http_error": null,
+        "http_chars": 50088,
+        "http_people": 4,
+        "browser_status": 200,
+        "browser_final": "https://medschool.vcu.edu/education/gme/",
+        "browser_error": null,
+        "browser_chars": 5864,
+        "browser_people": 4,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 0,
+        "pdf_links": 2,
+        "redirected_to_other_domain": false
+      }
+    ],
+    "outlinks": {
+      "aamc.org": 1
+    }
+  },
+  {
+    "name": "University of Oklahoma College of Medicine",
+    "host": "medicine.ouhsc.edu",
+    "verdict": "OK",
+    "notes": [
+      "4 iframe(s) on entry",
+      "1 PDF link(s) on entry"
+    ],
+    "domain_verdict": "post_secondary",
+    "pages": [
+      {
+        "label": "entry",
+        "url": "https://medicine.ouhsc.edu/prospective-students/degree-programs/graduate-medical-education",
+        "http_status": 200,
+        "http_final": "https://medicine.ouhsc.edu/prospective-students/degree-programs/graduate-medical-education",
+        "http_error": null,
+        "http_chars": 4138,
+        "http_people": 17,
+        "browser_status": 200,
+        "browser_final": "https://medicine.ouhsc.edu/prospective-students/degree-programs/graduate-medical-education",
+        "browser_error": null,
+        "browser_chars": 4208,
+        "browser_people": 17,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 4,
+        "pdf_links": 1,
+        "redirected_to_other_domain": false
+      },
+      {
+        "label": "homepage",
+        "url": "https://medicine.ouhsc.edu/",
+        "http_status": 200,
+        "http_final": "https://medicine.ouhsc.edu/",
+        "http_error": null,
+        "http_chars": 11805,
+        "http_people": 22,
+        "browser_status": 200,
+        "browser_final": "https://medicine.ouhsc.edu/",
+        "browser_error": null,
+        "browser_chars": 10428,
+        "browser_people": 22,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 0,
+        "pdf_links": 1,
+        "redirected_to_other_domain": false
+      },
+      {
+        "label": "program_index",
+        "url": "https://medicine.ouhsc.edu/prospective-students/degree-programs/graduate-medical-education/residencies-fellowships",
+        "http_status": 200,
+        "http_final": "https://medicine.ouhsc.edu/prospective-students/degree-programs/graduate-medical-education/residencies-fellowships",
+        "http_error": null,
+        "http_chars": 30242,
+        "http_people": 221,
+        "browser_status": 200,
+        "browser_final": "https://medicine.ouhsc.edu/prospective-students/degree-programs/graduate-medical-education/residencies-fellowships",
+        "browser_error": null,
+        "browser_chars": 3447,
+        "browser_people": 221,
+        "challenge": "",
+        "js_only": false,
+        "thin_reason": "",
+        "iframes": 0,
+        "pdf_links": 1,
+        "redirected_to_other_domain": false
+      }
+    ],
+    "outlinks": {
+      "acgme.org": 1,
+      "ama-assn.org": 1,
+      "aamc.org": 1
+    }
+  }
+]

@@ -52,6 +52,7 @@ from ...storage.artifacts import (
     screenshot_expiry,
 )
 from ...urls import canonicalize, host_of, in_scope, registrable_domain, url_hash
+from ..browser_fetch import browser_fetch
 from ..checkpoint import save_checkpoint
 from ..deps import PipelineDeps
 from ..state import SiteState
@@ -118,14 +119,32 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
     if not claimed:
         return {**state, "cursor": cursor + len(batch)}
 
-    results = await _fetch(deps, [c["url"] for c in claimed])
+    urls = [c["url"] for c in claimed]
+    results = await _fetch(deps, urls)
+    refusals = state.get("http_refusals", 0)
+    # Plain requests are being turned away: try the same page as a person would
+    # open it. If the browser gets in, everything from here is read in it. A 429
+    # is never worked around; it is a request to slow down.
+    if (
+        deps.can_render and not deps.browser_only
+        and not any(result.status == 429 for result in results)
+        and refusals + sum(result.status == 403 for result in results) >= BLOCKED_AFTER_REFUSALS
+    ):
+        probe = next(result.url for result in results if result.status == 403)
+        if (await browser_fetch(deps, probe)).ok:
+            deps.browser_only = True
+            refusals = 0
+            await deps.note(
+                state,
+                "The site refuses plain requests but lets a browser in, so its pages are read in a browser.",
+            )
+            results = await _fetch(deps, urls)
     rate_limited = sum(result.status == 429 for result in results)
     # Refusals in a row, carried across batches. A university has protected
     # pages all over (UChicago returned 403 on 20 scattered department pages
     # in half an hour while serving hundreds of others), so a running total
     # stopped healthy crawls; a site that has blocked the crawler refuses
     # everything, one request after another.
-    refusals = state.get("http_refusals", 0)
     for result in results:
         if result.status == 403:
             refusals += 1
@@ -396,7 +415,16 @@ async def _fetch(deps: PipelineDeps, urls: list[str]):
     """Fetch results in order, reusing bodies the HTML pass already has."""
     cached = {url: deps.page_cache.pop(url) for url in urls if url in deps.page_cache}
     missing = [url for url in urls if url not in cached]
-    fetched = dict(zip(missing, await deps.fetcher.get_many(missing), strict=True)) if missing else {}
+    if deps.browser_only and missing:
+        lock = _render_lock(deps)
+
+        async def one(url: str):
+            async with lock:
+                return await browser_fetch(deps, url)
+
+        fetched = dict(zip(missing, await asyncio.gather(*(one(url) for url in missing)), strict=True))
+    else:
+        fetched = dict(zip(missing, await deps.fetcher.get_many(missing), strict=True)) if missing else {}
     return [cached.get(url) or fetched[url] for url in urls]
 
 

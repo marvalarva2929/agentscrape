@@ -25,10 +25,31 @@ from ...discovery.sitemap import (
 )
 from ...llm.triage import LinkDecision, heuristic_priority, triage_hosts, triage_links
 from ...urls import canonicalize, home_url, host_of, in_scope, registrable_domain
+from ..browser_fetch import browser_fetch
 from ..deps import PipelineDeps
 from ..state import SiteState
 
 log = logging.getLogger("agentscrape.pipeline.discover")
+
+
+async def _get_page(deps: PipelineDeps, url: str):
+    """Fetch a page over HTTP, and in the browser when HTTP is turned away.
+
+    A site that refuses scripts but opens for a browser is otherwise seen as an
+    empty site: no home page, so no links, so nothing to read. A 429 is a request
+    to slow down and is never retried here.
+    """
+    if deps.browser_only:
+        return await browser_fetch(deps, url)
+    result = await deps.fetcher.get(url, attempts=2)
+    if (not result.ok or not result.is_html) and result.status != 429 and deps.can_render:
+        via_browser = await browser_fetch(deps, url)
+        if via_browser.ok:
+            deps.browser_only = True
+            await deps.note({"root_domain": host_of(url)}, f"{url} refused plain requests but opened in a browser.")
+            return via_browser
+    return result
+
 
 # Probing every CT-log subdomain would be slower than the crawl it saves.
 MAX_SUBDOMAIN_PROBES = 300
@@ -117,7 +138,7 @@ async def discover_links(state: SiteState, deps: PipelineDeps) -> SiteState:
     # departments exist. Done before the per-host walk below so those hosts are
     # already in hand.
     home = await _bounded(
-        "homepage", deps.fetcher.get(root_url, attempts=2), None,
+        "homepage", _get_page(deps, root_url), None,
         timeout=max(remaining(), 15.0),
     )
     if home is None or not home.ok or not home.is_html:
@@ -127,7 +148,7 @@ async def discover_links(state: SiteState, deps: PipelineDeps) -> SiteState:
         fallback = home_url(root_url)
         if fallback != root_url:
             retry = await _bounded(
-                "homepage fallback", deps.fetcher.get(fallback, attempts=2), None,
+                "homepage fallback", _get_page(deps, fallback), None,
                 timeout=max(remaining(), 15.0),
             )
             if retry is not None and retry.ok and retry.is_html:

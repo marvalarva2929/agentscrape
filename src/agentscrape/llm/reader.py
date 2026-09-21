@@ -94,21 +94,30 @@ def clean_model_name(raw: str | None) -> str | None:
 
 
 def name_in_text(name: str, folded_text: str) -> bool:
-    """First and last name both appear on the page, accent- and case-folded."""
-    words = [w.strip(".,'’()\"") for w in fold(name).split()]
-    words = [w for w in words if len(w) > 1]
+    """First and last name both appear on the page, accent- and case-folded.
+
+    A name printed with an initial ("J. Smith") has only its surname to check,
+    so that is what is checked: the page cannot be asked for a first name it
+    never spelled out.
+    """
+    all_words = [w.strip(".,'’()\"") for w in fold(name).split()]
+    words = [w for w in all_words if len(w) > 1]
+    if len(words) == 1 and len(all_words) >= 2:
+        return words[0] in folded_text
     if len(words) < 2:
         return False
     return words[0] in folded_text and words[-1] in folded_text
 
 
 def coerce_person(
-    raw: Any, *, folded_text: str, program: str | None, source: str
+    raw: Any, *, folded_text: str, program: str | None, source: str, from_image: bool = False
 ) -> ExtractedPerson | None:
     if not isinstance(raw, dict):
         return None
     name = clean_model_name(raw.get("full_name"))
-    if name and not name_in_text(name, folded_text):
+    # A name read off a screenshot is on the page but not in its text: rosters
+    # published as pictures are exactly the ones the text check would empty.
+    if name and not from_image and not name_in_text(name, folded_text):
         log.info("discarding %r: name not present in page text", name)
         name = None
 
@@ -237,6 +246,8 @@ async def _read_chunk(
         if isinstance(payload, list):
             payload = {"people": payload}
         if isinstance(payload, dict):
+            if screenshot:
+                payload["_from_image"] = True
             return [payload]
         # Unparseable usually means the JSON was cut off; one retry, then give up.
         log.warning("page reading for %s returned unparseable output (attempt %d)", url, attempt + 1)
@@ -291,7 +302,10 @@ async def read_page(
         raw_people = payload.get("people") if isinstance(payload.get("people"), list) else []
         groups.append([
             p for p in (
-                coerce_person(raw, folded_text=folded, program=reading.program, source="llm")
+                coerce_person(
+                    raw, folded_text=folded, program=reading.program, source="llm",
+                    from_image=bool(payload.get("_from_image")),
+                )
                 for raw in raw_people
             ) if p
         ])

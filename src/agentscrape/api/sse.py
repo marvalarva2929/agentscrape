@@ -83,6 +83,9 @@ async def event_stream(run_id: str) -> AsyncIterator[str]:
                             **_live_figures(run),
                             "active_agents": len(agents),
                             "agents": agents,
+                            # Where the stream stands, so a client that has seen
+                            # events can tell a restarted server from a busy one.
+                            "last_seq": replayed_to,
                             "snapshot": True,
                         },
                     )

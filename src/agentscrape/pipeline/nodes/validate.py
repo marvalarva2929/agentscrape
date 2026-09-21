@@ -10,6 +10,7 @@ from ...llm.prompts import INSTITUTION_SYSTEM, institution_user_prompt
 from ...llm.provider import get_provider
 from ...urls import home_url, host_of
 from ...validation.institution import InstitutionVerdict, classify_content, classify_domain
+from ..browser_fetch import browser_fetch
 from ..deps import PipelineDeps
 from ..state import SiteState
 
@@ -69,6 +70,17 @@ async def validate_institution(state: SiteState, deps: PipelineDeps) -> SiteStat
                 retry = await deps.fetcher.get(home)
                 if retry.ok:
                     result = retry
+        if not result.ok and result.status != 429 and deps.can_render:
+            # Turned away over plain HTTP (a refusal, a reset, a certificate the
+            # script cannot check): open it the way a person would before judging
+            # the site unreachable. A 429 is a request to slow down and stays one.
+            for target in dict.fromkeys([root_url, home_url(root_url)]):
+                attempt = await browser_fetch(deps, target)
+                if attempt.ok:
+                    result = attempt
+                    deps.browser_only = True  # plain HTTP is refused here; read pages the same way
+                    await deps.note(state, f"{target} refused plain requests but opened in a browser.")
+                    break
         if not result.ok:
             result_status = result.status
             if result.status == 403:

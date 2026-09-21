@@ -286,6 +286,7 @@ class SiteRunOut(ApiModel):
     candidates_considered: int
     error_code: str | None
     error_message: str | None
+    coverage: dict[str, Any] | None = None
     spend_usd: float
     started_at: datetime | None
     finished_at: datetime | None
