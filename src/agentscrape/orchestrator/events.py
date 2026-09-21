@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections import defaultdict
+from collections import OrderedDict, defaultdict, deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -19,6 +19,16 @@ log = logging.getLogger("agentscrape.events")
 
 # Bounded so a slow or dead SSE client cannot grow memory without limit.
 SUBSCRIBER_QUEUE_SIZE = 256
+
+# What a monitor opened mid-crawl is shown: the last events of each run, and
+# who is working on what. Bounded per run and in the number of runs kept.
+HISTORY_PER_RUN = 60
+HISTORY_RUNS = 20
+# Fields that say what an agent is doing, copied onto its roster entry.
+AGENT_FIELDS = (
+    "site_id", "site_run_id", "domain", "url", "action", "message", "title",
+    "page_type", "program", "stage", "steps_taken", "step_budget", "records_found",
+)
 
 
 class RunStage(StrEnum):
@@ -52,7 +62,22 @@ class EventType(StrEnum):
     RUN_COMPLETED = "run_completed"
     RUN_STOPPED_AT_LIMIT = "run_stopped_at_limit"
     RUN_CANCELLED = "run_cancelled"
+    RUN_FAILED = "run_failed"
     HEARTBEAT = "heartbeat"
+
+
+# The stream ends on these and no earlier: a limit tripping while another school
+# is still being read is a `run_progress`, not an end.
+TERMINAL_EVENTS = frozenset(
+    {
+        EventType.RUN_COMPLETED,
+        EventType.RUN_STOPPED_AT_LIMIT,
+        EventType.RUN_CANCELLED,
+        EventType.RUN_FAILED,
+    }
+)
+# Periodic or superseded: worth streaming, not worth replaying to a late client.
+NOT_REPLAYED = frozenset({EventType.HEARTBEAT, EventType.RUN_PROGRESS})
 
 
 @dataclass
@@ -61,12 +86,16 @@ class Event:
     run_id: str
     data: dict[str, Any] = field(default_factory=dict)
     at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    # Position in the bus's order, so a client that was shown the history can
+    # skip the same events when they arrive on its live queue.
+    seq: int = 0
 
     def to_json(self) -> dict[str, Any]:
         return {
             "type": str(self.type),
             "run_id": self.run_id,
             "at": self.at.isoformat(),
+            "seq": self.seq,
             **self.data,
         }
 
@@ -76,8 +105,47 @@ class EventBus:
 
     def __init__(self) -> None:
         self._subscribers: dict[str, set[asyncio.Queue[Event]]] = defaultdict(set)
+        self._seq = 0
+        self._history: OrderedDict[str, deque[Event]] = OrderedDict()
+        self._agents: dict[str, dict[str, dict[str, Any]]] = {}
+
+    def _record(self, event: Event) -> None:
+        """Keep what a late subscriber needs: recent events and the agent roster."""
+        if event.type not in NOT_REPLAYED:
+            history = self._history.get(event.run_id)
+            if history is None:
+                history = self._history[event.run_id] = deque(maxlen=HISTORY_PER_RUN)
+                while len(self._history) > HISTORY_RUNS:
+                    dropped, _ = self._history.popitem(last=False)
+                    self._agents.pop(dropped, None)
+            history.append(event)
+
+        agent_id = event.data.get("agent_id")
+        if event.type in TERMINAL_EVENTS:
+            self._agents.pop(event.run_id, None)
+        elif agent_id:
+            agents = self._agents.setdefault(event.run_id, {})
+            if event.type == EventType.AGENT_RETIRED:
+                agents.pop(agent_id, None)
+            else:
+                info = agents.setdefault(agent_id, {"agent_id": agent_id})
+                for key in AGENT_FIELDS:
+                    if event.data.get(key) is not None:
+                        info[key] = event.data[key]
+                info["at"] = event.at.isoformat()
+
+    def snapshot(self, run_id: str) -> tuple[list[Event], list[dict[str, Any]], int]:
+        """Recent events, the agents working now, and the last sequence number."""
+        return (
+            list(self._history.get(run_id, ())),
+            [dict(info) for info in self._agents.get(run_id, {}).values()],
+            self._seq,
+        )
 
     async def publish(self, event: Event) -> None:
+        self._seq += 1
+        event.seq = self._seq
+        self._record(event)
         for queue in list(self._subscribers.get(event.run_id, ())):
             try:
                 queue.put_nowait(event)

@@ -14,7 +14,7 @@ import asyncio
 import logging
 from datetime import UTC, datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 
 from ..browser.fetcher import Fetcher
 from ..browser.renderer import BrowserPool
@@ -24,7 +24,7 @@ from ..db.models import Run, SiteRun
 from ..db.session import get_sessionmaker
 from ..llm.usage import Usage
 from ..pipeline.runner import run_site
-from .events import EventEmitter, EventType
+from .events import EventEmitter, EventType, get_event_bus
 from .limits import RunLimits, SiteCounts, check_memory_ceiling
 from .queue import claim_next_site, heartbeat, reset_running_for_resume
 
@@ -86,7 +86,11 @@ class RunOrchestrator:
             await session.execute(
                 update(Run)
                 .where(Run.id == self.run_id)
-                .values(status=RunStatus.RUNNING, started_at=datetime.now(UTC))
+                .values(
+                    status=RunStatus.RUNNING,
+                    started_at=func.coalesce(Run.started_at, datetime.now(UTC)),
+                    heartbeat_at=datetime.now(UTC),
+                )
             )
             await session.commit()
         if resumed:
@@ -189,10 +193,12 @@ class RunOrchestrator:
                 except asyncio.CancelledError:
                     await self._mark_cancelled(site_run_id)
                     raise
-                except Exception:
+                except Exception as exc:
                     # run_site already isolates failures; this is belt and braces
-                    # so a worker can never die and strand its pool slot.
+                    # so a worker can never die and strand its pool slot. The
+                    # school is failed and counted, not left `running` forever.
                     log.exception("worker %s: unhandled error on %s", agent_id, url)
+                    await self._mark_site_failed(site_run_id, exc)
                     continue
                 finally:
                     self._active_sites.pop(agent_id, None)
@@ -218,59 +224,94 @@ class RunOrchestrator:
     def _counts_hook(self, site_run_id: str):
         async def hook(counts: SiteCounts) -> None:
             await self.limits.report_counts(site_run_id, counts)
+            # So the queue and Past crawls show people while the school is still
+            # being read, not only once it finishes.
+            try:
+                async with self.sessionmaker() as session:
+                    await session.execute(
+                        update(SiteRun)
+                        .where(SiteRun.id == site_run_id)
+                        .values(records_found=counts.people)
+                    )
+                    await session.commit()
+            except Exception:
+                log.debug("could not save live counts for %s", site_run_id, exc_info=True)
 
         return hook
 
     async def _absorb(self, state, meter_hook) -> None:
         """Fold a finished site's numbers into the run's live counters."""
-        found = (
-            state.get("records_new", 0)
-            + state.get("records_changed", 0)
-            + state.get("records_unchanged", 0)
-        )
         # A school that crawled already reported its unique counts per batch;
         # one that never reached extraction (skipped) did not.
         if not self.limits.has_reported(state.get("site_run_id", "")):
             await self.limits.add_records(len(set(state.get("seen_record_ids") or [])))
 
-        status = str(state.get("status") or "")
-        if status in ("skipped", str(SiteRunStatus.SKIPPED)):
-            site_column = "sites_skipped"
-        elif status in ("failed", str(SiteRunStatus.FAILED)):
-            site_column = "sites_failed"
-        elif status in ("rejected", str(SiteRunStatus.REJECTED)):
-            site_column = "sites_rejected"
-        else:
-            site_column = "sites_completed"
-
-        # Atomic column arithmetic, not read-modify-write. Several workers finish
-        # concurrently, and reading the Run into Python to increment it loses
-        # updates: two sites completing at once would count as one.
-        increments = {
-            "records_found": Run.records_found + found,
-            "records_new": Run.records_new + state.get("records_new", 0),
-            "records_changed": Run.records_changed + state.get("records_changed", 0),
-            "records_missing": Run.records_missing + state.get("records_missing", 0),
-            site_column: getattr(Run, site_column) + 1,
-            # These come from the shared limits object, which is already the
-            # authoritative running total, so they are assignments not deltas.
-            "tokens_in": self.limits.tokens_in,
-            "tokens_out": self.limits.tokens_out,
-            "spend_usd": self.limits.spend_usd,
-        }
-        async with self.sessionmaker() as session:
-            await session.execute(
-                update(Run).where(Run.id == self.run_id).values(**increments)
-            )
-            await session.commit()
+        await self._persist_totals()
 
         if self.limits.should_stop or self.limits.crawl_limit_reached:
-            await self.emitter.emit(
-                EventType.RUN_STOPPED_AT_LIMIT
-                if self.limits.stopped_at_limit
-                else EventType.RUN_CANCELLED,
-                **self.limits.snapshot(),
+            # Winding down, not finished: other schools or a directory search
+            # may still be running. The stream ends on the terminal event that
+            # `_finish` sends, so this is only a progress update.
+            await self.emitter.emit(EventType.RUN_PROGRESS, **self.limits.snapshot())
+
+    async def _persist_totals(self, *, beat: bool = False) -> None:
+        """Write the run's counters, worked out from its schools and its meter.
+
+        Totals are recomputed from the school rows rather than incremented, so
+        retrying a school or resuming a run after a restart cannot count it
+        twice. Spend and tokens come from the meter, which was seeded from the
+        row when the run started, so they only ever grow.
+        """
+        async with self.sessionmaker() as session:
+            def _count(status):
+                return func.count(SiteRun.id).filter(SiteRun.status == status)
+
+            row = (
+                await session.execute(
+                    select(
+                        _count(SiteRunStatus.COMPLETED),
+                        _count(SiteRunStatus.SKIPPED),
+                        _count(SiteRunStatus.FAILED),
+                        _count(SiteRunStatus.REJECTED),
+                        func.coalesce(func.sum(SiteRun.records_found), 0),
+                        func.coalesce(func.sum(SiteRun.records_new), 0),
+                        func.coalesce(func.sum(SiteRun.records_changed), 0),
+                        func.coalesce(func.sum(SiteRun.records_missing), 0),
+                    ).where(SiteRun.run_id == self.run_id)
+                )
+            ).one()
+            values = {
+                "sites_completed": row[0],
+                "sites_skipped": row[1],
+                "sites_failed": row[2],
+                "sites_rejected": row[3],
+                "records_found": int(row[4]),
+                "records_new": int(row[5]),
+                "records_changed": int(row[6]),
+                "records_missing": int(row[7]),
+                "tokens_in": self.limits.tokens_in,
+                "tokens_out": self.limits.tokens_out,
+                "spend_usd": self.limits.spend_usd,
+            }
+            if beat:
+                values["heartbeat_at"] = datetime.now(UTC)
+            await session.execute(update(Run).where(Run.id == self.run_id).values(**values))
+            await session.commit()
+
+    async def _mark_site_failed(self, site_run_id: str, exc: Exception) -> None:
+        async with self.sessionmaker() as session:
+            await session.execute(
+                update(SiteRun)
+                .where(SiteRun.id == site_run_id, SiteRun.status == SiteRunStatus.RUNNING)
+                .values(
+                    status=SiteRunStatus.FAILED,
+                    error_code="worker_error",
+                    error_message=f"{type(exc).__name__}: {exc}"[:500],
+                    finished_at=datetime.now(UTC),
+                )
             )
+            await session.commit()
+        await self._persist_totals()
 
     async def _mark_cancelled(self, site_run_id: str) -> None:
         async with self.sessionmaker() as session:
@@ -287,38 +328,55 @@ class RunOrchestrator:
         """Authoritative aggregate progress every couple of seconds.
 
         Individual events are lost across reconnects, so the frontend treats
-        this as the source of truth for its counters.
+        this as the source of truth for its counters. It is also what saves the
+        run's spend and people to the database while the crawl is going, and
+        what tells the queue this run still has a process behind it, so one bad
+        iteration is logged and skipped instead of ending the loop for good.
         """
         try:
             while True:
                 await asyncio.sleep(HEARTBEAT_SECONDS)
-                async with self.sessionmaker() as session:
-                    run = await session.get(Run, self.run_id)
-                    if run is None:
-                        continue
-                    for site_run_id in list(self._active_sites.values()):
-                        await heartbeat(session, site_run_id)
-                    payload = {
-                        "sites_total": run.sites_total,
-                        "sites_completed": run.sites_completed,
-                        "sites_skipped": run.sites_skipped,
-                        "sites_failed": run.sites_failed,
-                        "sites_rejected": run.sites_rejected,
-                        "records_found": run.records_found,
-                        "records_new": run.records_new,
-                        "records_changed": run.records_changed,
-                        "records_missing": run.records_missing,
-                        "active_agents": len(self._active_sites),
-                    }
-                await self.emitter.emit(
-                    EventType.HEARTBEAT, **payload, **self.limits.snapshot()
-                )
+                try:
+                    await self._beat()
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    log.exception("run %s: heartbeat failed; will try again", self.run_id)
         except asyncio.CancelledError:
             pass
+
+    async def _beat(self) -> None:
+        async with self.sessionmaker() as session:
+            for site_run_id in list(self._active_sites.values()):
+                await heartbeat(session, site_run_id)
+        await self._persist_totals(beat=True)
+
+        async with self.sessionmaker() as session:
+            run = await session.get(Run, self.run_id)
+            if run is None:
+                return
+            payload = {
+                "sites_total": run.sites_total,
+                "sites_completed": run.sites_completed,
+                "sites_skipped": run.sites_skipped,
+                "sites_failed": run.sites_failed,
+                "sites_rejected": run.sites_rejected,
+                "records_found": run.records_found,
+                "records_new": run.records_new,
+                "records_changed": run.records_changed,
+                "records_missing": run.records_missing,
+                "active_agents": len(self._active_sites),
+            }
+        _, agents, _ = get_event_bus().snapshot(self.run_id)
+        await self.emitter.emit(
+            EventType.HEARTBEAT, **payload, **self.limits.snapshot(), agents=agents
+        )
 
     # -- completion --------------------------------------------------------
 
     async def _finish(self) -> None:
+        # Last word on the counters, from the schools as they ended.
+        await self._persist_totals()
         if self.limits.stopped_at_limit:
             status = RunStatus.STOPPED_AT_LIMIT
             event = EventType.RUN_STOPPED_AT_LIMIT

@@ -103,3 +103,59 @@ class TestMigrationsMatchModels:
 
         missing = set(Base.metadata.tables) - set(rows)
         assert not missing, f"tables missing after migration: {sorted(missing)}"
+
+
+class TestQueueMigrationBackfill:
+    """Crawls made before names were defaulted are named after their school."""
+
+    def test_unnamed_runs_get_the_school_and_a_count(self):
+        scratch = "agentscrape_migrations_backfill"
+        admin = create_engine(_admin_url(), isolation_level="AUTOCOMMIT")
+        with admin.connect() as connection:
+            connection.execute(text(f"DROP DATABASE IF EXISTS {scratch}"))
+            connection.execute(text(f"CREATE DATABASE {scratch}"))
+        url = SYNC_DATABASE_URL.rsplit("/", 1)[0] + f"/{scratch}"
+        config = Config("alembic.ini")
+        config.set_main_option("sqlalchemy.url", url.replace("+psycopg", "+asyncpg"))
+        try:
+            command.upgrade(config, "1a2b3c4d5e6f")
+            engine = create_engine(url)
+            with engine.begin() as c:
+                for sid, name in (("s1", "Tower Health"), ("s2", "Geisinger")):
+                    c.execute(text(
+                        "INSERT INTO sites (id, root_domain, canonical_url, name, validation_status, is_active)"
+                        " VALUES (:i, :d, :u, :n, 'pending', true)"
+                    ), {"i": sid, "d": f"{sid}.edu", "u": f"https://{sid}.edu/", "n": name})
+                for rid, label, total in (("r1", None, 1), ("r2", None, 2), ("r3", "Kept", 1)):
+                    c.execute(text(
+                        "INSERT INTO runs (id, status, label, config, sites_total, sites_completed,"
+                        " sites_skipped, sites_failed, sites_rejected, records_found, records_new,"
+                        " records_changed, records_missing, tokens_in, tokens_out, spend_usd)"
+                        " VALUES (:i, 'completed', :l, '{}', :t, 0,0,0,0,0,0,0,0,0,0,0)"
+                    ), {"i": rid, "l": label, "t": total})
+                for srid, rid, sid in (("sr1", "r1", "s1"), ("sr2", "r2", "s2"), ("sr3", "r2", "s1"), ("sr4", "r3", "s1")):
+                    c.execute(text(
+                        "INSERT INTO site_runs (id, run_id, site_id, status, force_rescan, attempt,"
+                        " steps_taken, step_budget, records_found, records_new, records_changed,"
+                        " records_missing, known_path_hits, candidates_considered, tokens_in,"
+                        " tokens_out, spend_usd) VALUES (:i, :r, :s, 'completed', false, 0, 0, 40,"
+                        " 0,0,0,0,0,0,0,0,0)"
+                    ), {"i": srid, "r": rid, "s": sid})
+            engine.dispose()
+
+            command.upgrade(config, "head")
+
+            engine = create_engine(url)
+            with engine.connect() as c:
+                labels = dict(c.execute(text("SELECT id, label FROM runs")).all())
+                queued = c.execute(text("SELECT DISTINCT queued FROM runs")).scalars().all()
+            engine.dispose()
+        finally:
+            with admin.connect() as connection:
+                connection.execute(text(f"DROP DATABASE IF EXISTS {scratch}"))
+            admin.dispose()
+
+        assert labels["r1"] == "Tower Health"
+        assert labels["r2"].endswith(" + 1 more") and labels["r2"].startswith(("Tower", "Geisinger"))
+        assert labels["r3"] == "Kept"  # a name someone chose is never replaced
+        assert queued == [False]  # old runs keep their old behaviour

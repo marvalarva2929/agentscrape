@@ -22,6 +22,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -144,9 +145,31 @@ class Run(TimestampMixin, Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
+    # Waits its turn for the one model budget instead of starting beside the
+    # run that holds it. Every run made through the API is queued.
+    queued: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false"), nullable=False
+    )
+    # Order among waiting runs, 1 first. Ties fall back to created_at, then id.
+    queue_rank: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
+    # Written every couple of seconds by the orchestrator that owns the run, so
+    # a run whose process died can be told apart from one that is still working.
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
     site_runs: Mapped[list[SiteRun]] = relationship(back_populates="run")
 
-    __table_args__ = (Index("ix_runs_status_created", "status", "created_at"),)
+    __table_args__ = (
+        Index("ix_runs_status_created", "status", "created_at"),
+        # The database refuses a second running queued run, whatever process or
+        # code path tries to start it. This is what makes "one at a time" a
+        # guarantee instead of a convention.
+        Index(
+            "ux_runs_one_running_queued", "queued", unique=True,
+            postgresql_where=text("status = 'running' AND queued"),
+        ),
+    )
 
 
 class SiteRun(TimestampMixin, Base):
@@ -168,6 +191,11 @@ class SiteRun(TimestampMixin, Base):
     agent_id: Mapped[str | None] = mapped_column(String(64))
     force_rescan: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     attempt: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Crawl order inside the run: created_at is one shared timestamp for every
+    # school made together, so it cannot say which goes first.
+    position: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
 
     steps_taken: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     step_budget: Mapped[int] = mapped_column(Integer, default=40, nullable=False)

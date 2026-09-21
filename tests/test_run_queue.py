@@ -29,6 +29,7 @@ async def _seed_run(session, *, queued: bool, label: str) -> str:
         status=RunStatus.PENDING,
         label=label,
         config={"concurrency": 1, "queued": queued},
+        queued=queued,
         sites_total=1,
     )
     session.add(run)
@@ -172,7 +173,11 @@ class TestResume:
         assert resumed == [first]
         assert launched == [first]
 
-    async def test_unqueued_runs_still_resume_together(self, session, launched):
+    async def test_runs_from_before_queueing_join_the_queue_one_at_a_time(
+        self, session, launched
+    ):
+        """An interrupted run that was never queued used to relaunch beside the
+        others on every restart. Now it takes its place in line."""
         from agentscrape.orchestrator import service
 
         first = await _seed_run(session, queued=False, label="first")
@@ -180,7 +185,11 @@ class TestResume:
 
         resumed = await service.resume_interrupted_runs()
 
-        assert set(resumed) == {first, second}
+        assert resumed == [first]
+        assert launched == [first]
+        session.expire_all()
+        assert (await session.get(Run, second)).queued is True
+        assert await scheduler.queue_position(session, second) == 1
 
 
 class TestCreateEndpoint:
@@ -217,7 +226,11 @@ class TestCreateEndpoint:
         assert response.status_code == 201
         assert launched == [response.json()["id"]]
 
-    async def test_an_unqueued_run_starts_regardless(self, client, auth, launched):
+    async def test_asking_not_to_queue_does_not_skip_the_line(
+        self, client, auth, launched
+    ):
+        """A client (or an old cached page) that sends queued=false used to start
+        a second crawl beside the running one. The server queues it anyway."""
         register(_FakeOrchestrator("already-running"))
         try:
             response = await client.post(
@@ -229,7 +242,9 @@ class TestCreateEndpoint:
             unregister("already-running")
 
         assert response.status_code == 201
-        assert launched == [response.json()["id"]]
+        assert response.json()["queued"] is True
+        assert response.json()["queue_position"] == 1
+        assert launched == []
 
 
 async def _seed_run_with_sites(session, *, queued: bool, label: str, domains: list[str]):
@@ -238,11 +253,12 @@ async def _seed_run_with_sites(session, *, queued: bool, label: str, domains: li
         status=RunStatus.PENDING,
         label=label,
         config={"concurrency": 1, "queued": queued},
+        queued=queued,
         sites_total=len(domains),
     )
     session.add(run)
     await session.flush()
-    for domain in domains:
+    for position, domain in enumerate(domains):
         site = Site(root_domain=domain, canonical_url=f"https://{domain}/")
         session.add(site)
         await session.flush()
@@ -252,6 +268,7 @@ async def _seed_run_with_sites(session, *, queued: bool, label: str, domains: li
                 site_id=site.id,
                 status=SiteRunStatus.PENDING,
                 step_budget=5000,
+                position=position,
             )
         )
     await session.commit()

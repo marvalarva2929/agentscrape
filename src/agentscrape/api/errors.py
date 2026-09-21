@@ -33,6 +33,8 @@ class ErrorCode(StrEnum):
     SITE_UNREACHABLE = "SITE_UNREACHABLE"
     RUN_NOT_CANCELLABLE = "RUN_NOT_CANCELLABLE"
     SITE_NOT_RETRYABLE = "SITE_NOT_RETRYABLE"
+    # Only a run still waiting its turn can be moved in the queue.
+    RUN_NOT_WAITING = "RUN_NOT_WAITING"
     EXPORT_NOT_READY = "EXPORT_NOT_READY"
     SCREENSHOT_EXPIRED = "SCREENSHOT_EXPIRED"
     # Directory search needs a crawled school with a directory link.

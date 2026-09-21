@@ -219,6 +219,10 @@ class RunOut(ApiModel):
     queue_position: int | None = None
 
 
+class MoveRunRequest(BaseModel):
+    direction: Literal["up", "down", "top"]
+
+
 class QueueSiteOut(ApiModel):
     """One school's progress inside a queued or running run."""
 

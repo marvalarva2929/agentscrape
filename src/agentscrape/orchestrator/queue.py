@@ -32,7 +32,7 @@ async def claim_next_site(
             select(SiteRun, Site.canonical_url)
             .join(Site, Site.id == SiteRun.site_id)
             .where(SiteRun.run_id == run_id, SiteRun.status == SiteRunStatus.PENDING)
-            .order_by(SiteRun.created_at)
+            .order_by(SiteRun.position, SiteRun.created_at, SiteRun.id)
             .limit(1)
             .with_for_update(of=SiteRun, skip_locked=True)
         )

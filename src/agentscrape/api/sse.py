@@ -20,7 +20,7 @@ from collections.abc import AsyncIterator
 from ..db.enums import TERMINAL_RUN_STATUSES
 from ..db.models import Run
 from ..db.session import get_sessionmaker
-from ..orchestrator.events import Event, EventType, get_event_bus
+from ..orchestrator.events import TERMINAL_EVENTS, Event, EventType, get_event_bus
 from ..orchestrator.pool import get_active
 
 log = logging.getLogger("agentscrape.sse")
@@ -34,17 +34,22 @@ def format_event(event: Event) -> str:
     return f"event: {event.type}\ndata: {payload}\n\n"
 
 
-def _live_spend(run: Run) -> float:
-    """Spend so far, from the running orchestrator when there is one.
+def _live_figures(run: Run) -> dict[str, object]:
+    """The run's counters, from the running orchestrator when there is one.
 
-    The run row only takes spend when a site finishes, so mid-crawl it still
-    reads zero. A client that connects then would be told the crawl has cost
-    nothing until the next heartbeat corrected it.
+    The database takes spend and people every couple of seconds, so it is close,
+    but a client that connects should not be a heartbeat behind the meter.
     """
     orchestrator = get_active(run.id)
     if orchestrator is not None:
-        return round(orchestrator.limits.spend_usd, 6)
-    return float(run.spend_usd or 0)
+        return orchestrator.limits.snapshot()
+    return {
+        "records_collected": run.records_found,
+        "spend_usd": float(run.spend_usd or 0),
+        "tokens_in": run.tokens_in,
+        "tokens_out": run.tokens_out,
+        "stop_reason": run.stop_reason,
+    }
 
 
 async def event_stream(run_id: str) -> AsyncIterator[str]:
@@ -54,7 +59,12 @@ async def event_stream(run_id: str) -> AsyncIterator[str]:
     sessionmaker = get_sessionmaker()
 
     try:
-        # Open with a snapshot so a client that connects late is never blank.
+        # Subscribed before the snapshot is taken, so nothing is missed between
+        # the two; `seq` drops the events that turn up in both.
+        history, agents, replayed_to = bus.snapshot(run_id)
+
+        # Open with a snapshot so a client that connects late is never blank:
+        # the counters, who is working on what, and the recent activity.
         async with sessionmaker() as session:
             run = await session.get(Run, run_id)
             if run is not None:
@@ -70,11 +80,15 @@ async def event_stream(run_id: str) -> AsyncIterator[str]:
                             "sites_failed": run.sites_failed,
                             "sites_rejected": run.sites_rejected,
                             "records_found": run.records_found,
-                            "spend_usd": _live_spend(run),
+                            **_live_figures(run),
+                            "active_agents": len(agents),
+                            "agents": agents,
                             "snapshot": True,
                         },
                     )
                 )
+                for event in history:
+                    yield format_event(event)
                 if run.status in TERMINAL_RUN_STATUSES:
                     return
 
@@ -90,12 +104,10 @@ async def event_stream(run_id: str) -> AsyncIterator[str]:
                     return
                 continue
 
+            if event.seq and event.seq <= replayed_to:
+                continue
             yield format_event(event)
-            if event.type in (
-                EventType.RUN_COMPLETED,
-                EventType.RUN_STOPPED_AT_LIMIT,
-                EventType.RUN_CANCELLED,
-            ):
+            if event.type in TERMINAL_EVENTS:
                 return
 
     except asyncio.CancelledError:

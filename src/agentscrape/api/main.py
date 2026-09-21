@@ -84,7 +84,14 @@ async def lifespan(app: FastAPI):
             await resume_interrupted_runs()
         except Exception:
             log.exception("resuming interrupted runs failed; restart them from the UI")
+
+    # Keeps the queue moving after a restart: a run left running by a dead
+    # process only shows itself once its heartbeat stops.
+    from ..orchestrator.scheduler import supervise
+
+    supervisor = asyncio.create_task(supervise())
     yield
+    supervisor.cancel()
     sweep_task.cancel()
     await dispose_engine()
     log.info("agentscrape api stopped")

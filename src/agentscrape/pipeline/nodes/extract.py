@@ -234,6 +234,7 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
                 await deps.emitter.emit(
                     EventType.KNOWN_PATH_HIT,
                     site_id=state["site_id"], site_run_id=state["site_run_id"],
+                    agent_id=state.get("agent_id"), domain=state.get("root_domain"),
                     url=url, records=records_here,
                 )
 
@@ -284,6 +285,9 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
             EventType.SITE_STEP,
             site_id=state["site_id"],
             site_run_id=state["site_run_id"],
+            # Who did it, so the monitor can say what each agent is reading.
+            agent_id=state.get("agent_id"),
+            domain=state.get("root_domain"),
             url=url,
             action=f"fetch:{outcome.fetch_mode}",
             records=records_here,

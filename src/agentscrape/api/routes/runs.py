@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 from ...db.enums import TERMINAL_RUN_STATUSES, RunStatus, SiteRunStatus
 from ...db.models import Run, Site, SiteRun
 from ...domain.schemas import (
+    MoveRunRequest,
     Page,
     QueueOut,
     RunCreate,
@@ -28,10 +29,31 @@ from ..sse import event_stream
 router = APIRouter(prefix="/runs", tags=["runs"])
 
 
-def _run_out(run: Run, pending: int = 0, queue_position: int | None = None) -> RunOut:
+async def _school_names(session, run_ids: list[str]) -> dict[str, str]:
+    """The first school of each run, in one query, for runs with no better name."""
+    if not run_ids:
+        return {}
+    rows = await session.execute(
+        select(SiteRun.run_id, Site.name, Site.hospital_name, Site.root_domain)
+        .join(Site, Site.id == SiteRun.site_id)
+        .where(SiteRun.run_id.in_(run_ids))
+        .order_by(SiteRun.run_id, SiteRun.position, SiteRun.created_at, SiteRun.id)
+    )
+    names: dict[str, str] = {}
+    for run_id, name, hospital, domain in rows:
+        names.setdefault(run_id, name or hospital or domain)
+    return names
+
+
+def _run_out(
+    run: Run,
+    pending: int = 0,
+    queue_position: int | None = None,
+    school_name: str | None = None,
+) -> RunOut:
     config = dict(run.config or {})
     return RunOut(
-        id=run.id, status=run.status, label=run.label, config=config,
+        id=run.id, status=run.status, label=run.label, school_name=school_name, config=config,
         stop_reason=run.stop_reason, error_message=run.error_message,
         sites_total=run.sites_total, sites_completed=run.sites_completed,
         sites_skipped=run.sites_skipped, sites_failed=run.sites_failed,
@@ -46,7 +68,7 @@ def _run_out(run: Run, pending: int = 0, queue_position: int | None = None) -> R
         max_spend_usd=config.get("max_spend_usd"),
         created_at=run.created_at, started_at=run.started_at,
         finished_at=run.finished_at,
-        queued=scheduler.is_queued(config), queue_position=queue_position,
+        queued=run.queued, queue_position=queue_position,
     )
 
 
@@ -70,16 +92,17 @@ async def create_run(body: RunCreate, _: AuthedUser, session: DbSession) -> RunO
             code=ErrorCode.INVALID_CSV,
         )
 
-    if body.config.queued:
-        # Starts now only if the process is idle; otherwise it waits, and the
-        # run that finishes last will start it.
-        await scheduler.start_next_if_idle()
-    else:
-        await service.launch_run(run.id)
+    # Starts now only if nothing is running; otherwise it waits its turn, and the
+    # run that finishes starts it. Every run is queued, so two can never race.
+    await scheduler.start_next_if_idle()
 
     await session.refresh(run)
     position = await scheduler.queue_position(session, run.id)
-    return _run_out(run, pending=run.sites_total, queue_position=position)
+    names = await _school_names(session, [run.id])
+    return _run_out(
+        run, pending=run.sites_total, queue_position=position,
+        school_name=names.get(run.id),
+    )
 
 
 @router.get("", response_model=Page[RunOut])
@@ -121,8 +144,10 @@ async def list_runs(
         if has_more and rows
         else None
     )
+    names = await _school_names(session, [r.id for r in rows])
     return Page[RunOut](
-        items=[_run_out(r) for r in rows], next_cursor=next_cursor, has_more=has_more
+        items=[_run_out(r, school_name=names.get(r.id)) for r in rows],
+        next_cursor=next_cursor, has_more=has_more,
     )
 
 
@@ -154,7 +179,10 @@ async def run_detail(run_id: str, _: AuthedUser, session: DbSession) -> RunOut:
         ) or 0
     )
     position = await scheduler.queue_position(session, run_id)
-    return _run_out(run, pending=pending, queue_position=position)
+    names = await _school_names(session, [run_id])
+    return _run_out(
+        run, pending=pending, queue_position=position, school_name=names.get(run_id)
+    )
 
 
 @router.get("/{run_id}/sites", response_model=Page[SiteRunOut])
@@ -231,7 +259,26 @@ async def cancel_run(run_id: str, _: AuthedUser, session: DbSession) -> RunOut:
         return _run_out(run)
     await service.cancel_run(session, run_id)
     await session.refresh(run)
+    # A run that was waiting or abandoned held the front of the line; let the
+    # next one go if that leaves the model budget free.
+    await scheduler.start_next_if_idle()
     return _run_out(run)
+
+
+@router.post("/{run_id}/move", response_model=QueueOut)
+async def move_run(
+    run_id: str, body: MoveRunRequest, _: AuthedUser, session: DbSession
+) -> QueueOut:
+    """Move a waiting run up, down or to the front of the queue. A run that has
+    started cannot be moved, and the one running always stays first."""
+    await _get_run(session, run_id)
+    try:
+        await scheduler.move_run(session, run_id, body.direction)
+    except LookupError as exc:
+        raise AppError(
+            str(exc), code=ErrorCode.RUN_NOT_WAITING, status_code=409
+        ) from exc
+    return await scheduler.queue_view(session)
 
 
 @router.post("/{run_id}/sites/{site_id}/retry", response_model=SiteRunOut)
@@ -254,13 +301,13 @@ async def retry_site(
 
     if get_active(run_id) is None:
         if run.status in TERMINAL_RUN_STATUSES:
+            # Behind everything already waiting, not ahead of it on its old age.
             run.status = RunStatus.PENDING
             run.finished_at = None
+            run.queued = True
+            run.queue_rank = await scheduler.next_rank(session)
             await session.commit()
-        if scheduler.is_queued(run.config):
-            await scheduler.start_next_if_idle()
-        else:
-            await service.launch_run(run_id)
+        await scheduler.start_next_if_idle()
 
     site = await session.get(Site, site_id)
     return SiteRunOut.model_validate(site_run).model_copy(

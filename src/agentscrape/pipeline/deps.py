@@ -66,6 +66,7 @@ class PipelineDeps:
             site_id=state.get("site_id"),
             site_run_id=state.get("site_run_id"),
             domain=state.get("root_domain"),
+            agent_id=state.get("agent_id"),
             action="note",
             message=message,
             **extra,
