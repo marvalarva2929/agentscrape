@@ -13,6 +13,7 @@ import asyncio
 import json
 import logging
 import re
+import time
 from dataclasses import dataclass
 
 from ..config import settings
@@ -120,14 +121,28 @@ async def triage_links(
     meter: UsageMeter | None = None,
     provider: VisionProvider | None = None,
     batch_size: int | None = None,
+    deadline: float | None = None,
 ) -> list[LinkDecision]:
     """Decide on each link. `links` are dicts with `url` and optionally `text`,
-    `heading`, `in_nav`. Returns one decision per input link, in order."""
+    `heading`, `in_nav`. Returns one decision per input link, in order.
+
+    `deadline` is a `time.monotonic()` value: batches that have not started by
+    then keep the keyword ranking rather than holding up the crawl. Calls are
+    serialized by the process-wide gate, so a slow endpoint spends the budget
+    on the first batches and the rest fall back."""
     if not links:
         return []
     provider = provider or get_provider()
     size = batch_size or (LINK_BATCH if any(link.get("text") for link in links) else URL_ONLY_BATCH)
     heuristics = [score_url(link["url"], title=link.get("text") or None).score for link in links]
+
+    def unranked(start: int, count: int) -> list[LinkDecision]:
+        """Keyword ranking for links the model was not asked about."""
+        return [
+            LinkDecision(link["url"], heuristic_priority(heuristics[start + offset]),
+                         None, False, heuristics[start + offset])
+            for offset, link in enumerate(links[start : start + count])
+        ]
 
     async def run(start: int, count: int, splits_left: int = 1) -> list[LinkDecision]:
         batch = links[start : start + count]
@@ -174,10 +189,28 @@ async def triage_links(
                 out.append(LinkDecision(link["url"], heuristic_priority(h), None, False, h))
         return out
 
+    # Batches wait here rather than all at once inside the provider, so a
+    # batch checks the clock when its turn comes: every coroutine starts the
+    # moment it is created, and checking the deadline there would let a whole
+    # queue through before any of the work had happened.
+    gate = asyncio.Semaphore(max(settings.llm_concurrency, 1))
+
+    async def run_when_free(start: int, count: int) -> list[LinkDecision]:
+        async with gate:
+            if deadline is not None and time.monotonic() >= deadline:
+                return unranked(start, count)
+            return await run(start, count)
+
     results = await asyncio.gather(*(
-        run(i, min(size, len(links) - i)) for i in range(0, len(links), size)
+        run_when_free(i, min(size, len(links) - i)) for i in range(0, len(links), size)
     ))
     decisions = [d for group in results for d in group]
+    unasked = sum(1 for d in decisions if not d.by_model)
+    if deadline is not None and unasked:
+        log.info(
+            "triage (%s): out of time after %d links; %d keep the keyword ranking",
+            source, len(decisions) - unasked, unasked,
+        )
     kept = sum(1 for d in decisions if not d.skipped)
     log.info(
         "triage (%s): %d links, %d kept, %d skipped, %d decided by heuristic fallback",

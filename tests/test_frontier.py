@@ -163,3 +163,38 @@ def test_residency_pages_come_before_fellowship_pages():
     # A 122-person residency roster before a 3-person fellowship's, whatever
     # each page's own priority.
     assert merge_frontier(tail, 0, [], pending_order(programs))[0]["url"].endswith("/im/residents")
+
+
+@pytest.mark.asyncio
+async def test_link_ranking_falls_back_to_the_heuristic_at_its_deadline(monkeypatch):
+    """A slow model endpoint once spent 19 minutes of a 30-minute crawl
+    ranking links; unranked links keep the keyword ranking instead."""
+    import asyncio
+    import time
+
+    from agentscrape.llm.triage import triage_links
+
+    class SlowProvider:
+        def __init__(self):
+            self.calls = 0
+
+        async def complete(self, **kwargs):
+            self.calls += 1
+            await asyncio.sleep(0.4)
+            body = {"links": [{"i": 0, "p": 99}]}
+            return ModelResponse(text=json.dumps(body), usage=Usage(), model="fake")
+
+    from agentscrape.config import settings
+
+    provider = SlowProvider()
+    links = [{"url": f"https://x.edu/current-residents-{i}"} for i in range(40)]
+    monkeypatch.setattr(settings, "llm_concurrency", 4)
+    decisions = await triage_links(
+        links, source="test", provider=provider, batch_size=1,
+        deadline=time.monotonic() + 0.5,
+    )
+
+    assert len(decisions) == 40
+    assert provider.calls < 40  # the rest stopped calling the model
+    assert all(d.priority > 0 for d in decisions)  # nothing is dropped
+    assert any(not d.by_model for d in decisions)

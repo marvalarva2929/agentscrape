@@ -96,6 +96,11 @@ class Settings(BaseSettings):
     # minutes before the model read a single page.
     discovery_timeout_seconds: int = 180
     discovery_source_timeout_seconds: int = 60
+    # Ranking the discovered links with the model, which decides what the
+    # crawl reads first. It is not covered by the discovery budget above, and
+    # when the router was slow it ran for 19 minutes of a 30-minute crawl;
+    # links left unranked when it expires keep their keyword ranking.
+    link_rank_timeout_seconds: int = 240
     enable_crt_sh: bool = True
     crt_sh_timeout_seconds: int = 30
     search_provider: str = "none"  # none | brave | serper

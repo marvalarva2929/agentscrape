@@ -327,6 +327,7 @@ async def discover_links(state: SiteState, deps: PipelineDeps) -> SiteState:
         )
         decisions = await triage_links(
             to_triage, source=f"sitemaps and home pages of {root_domain}", meter=deps.meter,
+            deadline=time.monotonic() + settings.link_rank_timeout_seconds,
         )
     additions = [
         {
