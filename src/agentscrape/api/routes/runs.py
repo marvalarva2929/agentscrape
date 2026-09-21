@@ -26,10 +26,17 @@ from ..sse import event_stream
 router = APIRouter(prefix="/runs", tags=["runs"])
 
 
-def _run_out(run: Run, pending: int = 0) -> RunOut:
+async def _run_out(session: DbSession, run: Run, pending: int = 0) -> RunOut:
     config = dict(run.config or {})
+    school_name = await session.scalar(
+        select(Site.name)
+        .join(SiteRun, Site.id == SiteRun.site_id)
+        .where(SiteRun.run_id == run.id)
+        .order_by(SiteRun.created_at)
+        .limit(1)
+    )
     return RunOut(
-        id=run.id, status=run.status, label=run.label, config=config,
+        id=run.id, status=run.status, label=run.label, school_name=school_name, config=config,
         stop_reason=run.stop_reason, error_message=run.error_message,
         sites_total=run.sites_total, sites_completed=run.sites_completed,
         sites_skipped=run.sites_skipped, sites_failed=run.sites_failed,
@@ -61,7 +68,7 @@ async def create_run(body: RunCreate, _: AdminUser, session: DbSession) -> RunOu
 
     await service.dispatch_next()
     await session.refresh(run)
-    return _run_out(run, pending=run.sites_total)
+    return await _run_out(session, run, pending=run.sites_total)
 
 
 @router.get("", response_model=Page[RunOut])
@@ -98,7 +105,7 @@ async def list_runs(
         else None
     )
     return Page[RunOut](
-        items=[_run_out(r) for r in rows], next_cursor=next_cursor, has_more=has_more
+        items=[await _run_out(session, r) for r in rows], next_cursor=next_cursor, has_more=has_more
     )
 
 
@@ -119,7 +126,7 @@ async def run_detail(run_id: str, _: AuthedUser, session: DbSession) -> RunOut:
             )
         ) or 0
     )
-    return _run_out(run, pending=pending)
+    return await _run_out(session, run, pending=pending)
 
 
 @router.get("/{run_id}/sites", response_model=Page[SiteRunOut])
@@ -197,7 +204,7 @@ async def cancel_run(run_id: str, _: AdminUser, session: DbSession) -> RunOut:
         )
     await service.cancel_run(session, run_id)
     await session.refresh(run)
-    return _run_out(run)
+    return await _run_out(session, run)
 
 
 @router.post("/{run_id}/sites/{site_id}/retry", response_model=SiteRunOut)

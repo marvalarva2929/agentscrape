@@ -160,6 +160,7 @@ class RunOut(ApiModel):
     id: str
     status: str
     label: str | None
+    school_name: str | None = None
     config: dict[str, Any]
     stop_reason: str | None
     error_message: str | None = None

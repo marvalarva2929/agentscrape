@@ -75,6 +75,8 @@ class Site(TimestampMixin, Base):
     root_domain: Mapped[str] = mapped_column(String(253), nullable=False, unique=True)
     canonical_url: Mapped[str] = mapped_column(Text, nullable=False)
     directory_url: Mapped[str | None] = mapped_column(Text)
+    directory_config: Mapped[dict[str, Any] | None] = mapped_column(JSONType)
+    affiliated_domains: Mapped[dict[str, Any] | None] = mapped_column(JSONType)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     hospital_name: Mapped[str | None] = mapped_column(Text)
     # Display fields for the school list. `name` falls back to the domain.

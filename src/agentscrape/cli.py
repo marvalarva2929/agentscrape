@@ -228,6 +228,23 @@ def seed_demo_command(
     asyncio.run(_go())
 
 
+@app.command("import-school-catalog")
+def import_school_catalog(
+    dry_run: bool = typer.Option(False, "--dry-run", help="Validate and report without writing"),
+) -> None:
+    """Synchronize the shipped 23-school Excel catalog without deleting history."""
+    from .db.session import dispose_engine, get_sessionmaker
+    from .school_catalog import import_catalog
+
+    async def _go() -> None:
+        async with get_sessionmaker()() as session:
+            result = await import_catalog(session, dry_run=dry_run)
+        await dispose_engine()
+        console.print(result)
+
+    asyncio.run(_go())
+
+
 @app.command()
 def sweep() -> None:
     """Expire screenshots and exports past their retention window."""
