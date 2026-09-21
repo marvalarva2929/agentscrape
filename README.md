@@ -208,6 +208,16 @@ API URL at build time, or use the login screen/API query override at runtime.
 for this FastAPI app, plus RDS Postgres. Run `uv run alembic upgrade head`
 against the RDS database during deploy. Persist `ARTIFACT_DIR` on EFS or move
 artifacts to object storage before relying on screenshots/exports in production.
+
+Deploys are additive: every `drop_table` in `alembic/versions/` belongs to a
+`downgrade()`, and the startup retention sweep only touches screenshots and
+exports. Crawled people are erased by exactly two things, neither of which
+belongs anywhere near a deploy script: `agentscrape seed-demo --reset`, which
+truncates every table, and `scripts/crawl.sh`, which deletes the sites it is
+about to re-benchmark (and cascades to their records). Point `DATABASE_URL` at
+RDS rather than a database inside the task, or each deployment starts empty.
+`SEED_DEMO_ON_STARTUP` is off unless set, so an empty production database stays
+empty instead of filling with demo schools.
 Set `CORS_ORIGINS` to the exact GitHub Pages origin and any local origins you
 still use.
 

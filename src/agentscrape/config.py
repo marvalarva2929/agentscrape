@@ -30,8 +30,11 @@ class Settings(BaseSettings):
     # A root domain listed first in /schools, so the UI opens on it.
     featured_school: str = ""
     # Load the crawl snapshots in demo/ when the API starts on an empty
-    # database, so a fresh deployment never opens on an empty school list.
-    seed_demo_on_startup: bool = True
+    # database, so a local checkout never opens on an empty school list. Off by
+    # default: a production database that is empty — a new region, a restore
+    # still in progress — should stay empty rather than quietly fill with demo
+    # schools that read as real ones. `.env.example` turns it on for local work.
+    seed_demo_on_startup: bool = False
     # Pick up runs that were in flight when the API last stopped. Each school
     # resumes from its checkpoint (after mapping, once per batch of pages).
     resume_runs_on_startup: bool = True
