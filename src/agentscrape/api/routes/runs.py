@@ -59,7 +59,7 @@ async def create_run(body: RunCreate, _: AdminUser, session: DbSession) -> RunOu
             code=ErrorCode.INVALID_CSV,
         )
 
-    await service.launch_run(run.id)
+    await service.dispatch_next()
     await session.refresh(run)
     return _run_out(run, pending=run.sites_total)
 
@@ -223,7 +223,7 @@ async def retry_site(
             run.status = RunStatus.PENDING
             run.finished_at = None
             await session.commit()
-        await service.launch_run(run_id)
+        await service.dispatch_next()
 
     site = await session.get(Site, site_id)
     return SiteRunOut.model_validate(site_run).model_copy(

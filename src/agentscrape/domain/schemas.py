@@ -139,7 +139,7 @@ class RecordStats(BaseModel):
 
 
 class RunConfigIn(BaseModel):
-    concurrency: int = Field(default=4, ge=1, le=8)
+    concurrency: int = Field(default=1, ge=1, le=8)
     skip_threshold: float = Field(default=0.90, ge=0.0, le=1.0)
     step_budget: int = Field(default=40, ge=1, le=500)
     force_rescan: bool = False
@@ -385,7 +385,7 @@ class SubmissionRunRequest(BaseModel):
     max_spend_usd: float | None = Field(
         default=None, gt=0, description="Stop the run once estimated spend reaches this"
     )
-    concurrency: int = Field(default=4, ge=1, le=8)
+    concurrency: int = Field(default=1, ge=1, le=8)
     force_rescan: bool = False
 
 

@@ -131,9 +131,9 @@ async def run_submission(
             ),
         ),
     )
-    await service.launch_run(run.id)
+    await service.dispatch_next()
 
-    submission.status = SubmissionStatus.RUNNING
+    submission.status = SubmissionStatus.PENDING
     submission.run_id = run.id
     submission.reviewed_at = datetime.now(UTC)
     await session.commit()

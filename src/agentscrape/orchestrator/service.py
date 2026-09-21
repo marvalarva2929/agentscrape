@@ -18,7 +18,7 @@ from ..db.enums import (
     SiteRunStatus,
     ValidationStatus,
 )
-from ..db.models import KnownPath, Record, Run, Site, SiteRun
+from ..db.models import CsvSubmission, KnownPath, Record, Run, Site, SiteRun
 from ..db.repositories.records import stored_identity_keys
 from ..db.repositories.sites import upsert_site
 from ..db.session import get_sessionmaker
@@ -33,6 +33,7 @@ log = logging.getLogger("agentscrape.runs")
 # asyncio keeps only a weak reference to a running task, so an orchestrator
 # launched fire-and-forget could be garbage collected mid-run.
 _BACKGROUND_TASKS: set[asyncio.Task] = set()
+_DISPATCH_LOCK = asyncio.Lock()
 
 # Column names that plausibly hold the institution URL.
 URL_COLUMNS = ("url", "website", "site", "link", "domain", "homepage", "hospital_url")
@@ -190,6 +191,7 @@ async def create_run(session: AsyncSession, body: RunCreate) -> Run:
     # institution ("uni.edu", "www.uni.edu/", "https://uni.edu/index.html"), and
     # without collapsing them the unique constraint would fail the whole run.
     seen_site_ids: set[str] = set()
+    school_names: list[str] = []
 
     for raw in body.sites:
         url = normalize_site_input(raw)
@@ -202,6 +204,7 @@ async def create_run(session: AsyncSession, body: RunCreate) -> Run:
             log.info("collapsing duplicate input %r onto site %s", raw, site.root_domain)
             continue
         seen_site_ids.add(site.id)
+        school_names.append(site.name or site.hospital_name or site.root_domain)
 
         forced = (
             config.force_rescan
@@ -220,6 +223,8 @@ async def create_run(session: AsyncSession, body: RunCreate) -> Run:
         created += 1
 
     run.sites_total = created
+    if not run.label and school_names:
+        run.label = school_names[0] if len(school_names) == 1 else f"{school_names[0]} + {len(school_names) - 1} more"
     await session.commit()
     log.info(
         "created run %s with %d sites (%d duplicate inputs collapsed)",
@@ -261,11 +266,47 @@ async def launch_run(run_id: str, *, use_browser: bool = True) -> RunOrchestrato
             await _mark_failed(run_id, f"{type(exc).__name__}: {exc}"[:500])
         finally:
             unregister(run_id)
+            await dispatch_next()
 
     task = asyncio.create_task(_run())
     _BACKGROUND_TASKS.add(task)
     task.add_done_callback(_BACKGROUND_TASKS.discard)
     return orchestrator
+
+
+async def dispatch_next() -> RunOrchestrator | None:
+    """Start exactly one oldest pending run when no run is active.
+
+    The lock covers the check-and-claim in this application process; the
+    row-status update makes a restart safe because a running row is never
+    selected again.
+    """
+    async with _DISPATCH_LOCK:
+        async with get_sessionmaker()() as session:
+            active = await session.scalar(
+                select(Run.id).where(Run.status == RunStatus.RUNNING).limit(1)
+            )
+            if active:
+                return None
+            run = await session.scalar(
+                select(Run)
+                .where(Run.status == RunStatus.PENDING)
+                .order_by(Run.created_at, Run.id)
+                .limit(1)
+                .with_for_update(skip_locked=True)
+            )
+            if run is None:
+                return None
+            run.status = RunStatus.RUNNING
+            run.started_at = datetime.now(UTC)
+            await session.execute(
+                update(CsvSubmission)
+                .where(CsvSubmission.run_id == run.id)
+                .values(status="running", reviewed_at=datetime.now(UTC))
+            )
+            await session.commit()
+            run_id = run.id
+        return await launch_run(run_id)
 
 
 async def _mark_failed(run_id: str, message: str) -> None:

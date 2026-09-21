@@ -66,6 +66,14 @@ class PipelineDeps:
             site_id=state.get("site_id"),
             site_run_id=state.get("site_run_id"),
             domain=state.get("root_domain"),
+            agent_id=state.get("agent_id"),
+            action={
+                "discovering": "Discovering crawl candidates",
+                "directory": "Fetching and extracting directory pages",
+                "finalizing": "Saving crawl results",
+                "complete": "Crawl complete",
+            }.get(stage, stage),
+            url=state.get("root_url"),
             stage=stage,
             progress=progress,
             records_found=(

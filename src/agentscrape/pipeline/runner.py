@@ -81,6 +81,7 @@ async def run_site(
     emitter: EventEmitter | None = None,
     should_stop=None,
     fetcher: Fetcher | None = None,
+    on_usage=None,
 ) -> SiteState:
     """Run one site end to end. Never raises: failures are recorded and returned."""
     emitter = emitter or NullEmitter()
@@ -109,6 +110,7 @@ async def run_site(
     await emitter.emit(
         EventType.SITE_STARTED,
         site_id=site_id, site_run_id=site_run_id, domain=domain, agent_id=agent_id,
+        action="Starting crawl", url=canonical,
     )
 
     state = initial_state(
@@ -124,7 +126,7 @@ async def run_site(
         step_budget=budget,
     )
 
-    meter = UsageMeter(scope=site_run_id)
+    meter = UsageMeter(scope=site_run_id, on_usage=on_usage)
     owns_fetcher = fetcher is None
 
     try:

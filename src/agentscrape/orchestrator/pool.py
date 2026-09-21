@@ -20,7 +20,7 @@ from ..browser.fetcher import Fetcher
 from ..browser.renderer import BrowserPool
 from ..config import settings
 from ..db.enums import RunStatus, SiteRunStatus, StopReason
-from ..db.models import Run, SiteRun
+from ..db.models import CsvSubmission, Run, SiteRun
 from ..db.session import get_sessionmaker
 from ..llm.usage import Usage
 from ..pipeline.runner import run_site
@@ -73,6 +73,11 @@ class RunOrchestrator:
                 update(Run)
                 .where(Run.id == self.run_id)
                 .values(status=RunStatus.RUNNING, started_at=datetime.now(UTC))
+            )
+            await session.execute(
+                update(CsvSubmission)
+                .where(CsvSubmission.run_id == self.run_id)
+                .values(status="done", reviewed_at=datetime.now(UTC))
             )
             await session.commit()
         if resumed:
@@ -155,6 +160,7 @@ class RunOrchestrator:
                         emitter=self.emitter,
                         should_stop=lambda: self.limits.should_stop,
                         fetcher=fetcher,
+                        on_usage=meter_hook,
                     )
                 except asyncio.CancelledError:
                     await self._mark_cancelled(site_run_id)
@@ -182,6 +188,21 @@ class RunOrchestrator:
             await self.limits.add_usage(
                 usage.input_tokens, usage.output_tokens, usage.cost_usd
             )
+            # Persist the live aggregate immediately. Site-level totals are
+            # still written at finalization, but a monitor must not wait for a
+            # long crawl to finish before seeing its spend.
+            async with self.sessionmaker() as session:
+                await session.execute(
+                    update(Run)
+                    .where(Run.id == self.run_id)
+                    .values(
+                        tokens_in=self.limits.tokens_in,
+                        tokens_out=self.limits.tokens_out,
+                        spend_usd=self.limits.spend_usd,
+                    )
+                )
+                await session.commit()
+            await self.emitter.emit(EventType.RUN_PROGRESS, **self.limits.snapshot())
 
         return hook
 

@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     user_agent: str = "agentscrape/0.1 (+contact: ops@example.com)"
     respect_robots: bool = False
     requests_per_second_per_domain: float = 2.0
-    in_site_fetch_concurrency: int = 4
+    in_site_fetch_concurrency: int = 1
     page_timeout_seconds: int = 30
     fetch_timeout_seconds: int = 20
     max_html_bytes: int = 4_000_000
@@ -61,7 +61,7 @@ class Settings(BaseSettings):
     search_api_key: str = ""
 
     # --- run defaults ---------------------------------------------------
-    default_concurrency: int = 4
+    default_concurrency: int = 1
     max_concurrency: int = 8
     default_skip_threshold: float = 0.90
     # A teaching hospital publishes one roster per programme, and a medical
