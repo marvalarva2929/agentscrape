@@ -1,8 +1,8 @@
-"""The extracted-person shape shared by the HTML and vision extractors."""
+"""The extracted-person shape shared by the HTML and model-reading extractors."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from ..db.enums import PersonCategory
@@ -19,9 +19,6 @@ class ExtractedPerson:
     pgy: int | None = None
     class_of: int | None = None
     specialty_raw: str | None = None
-    # Text the value was read from, used for locating it on the screenshot.
-    locate_hints: list[str] = field(default_factory=list)
-    field_locations: dict[str, dict[str, int]] = field(default_factory=dict)
     confidence: float = 0.5
     source_note: str | None = None
 

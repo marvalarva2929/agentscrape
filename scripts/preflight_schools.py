@@ -103,7 +103,7 @@ async def check_page(
         check.pdf_links = len(re.findall(r'href="[^"]+\.pdf(?:[?#][^"]*)?"', http_html, re.IGNORECASE))
         check.challenge = _challenge("", text)
 
-    rendered = await render_page(context, url, capture_screenshot=False)
+    rendered = await render_page(context, url)
     check.browser_status, check.browser_final, check.browser_error = rendered.status, rendered.final_url, rendered.error
     if rendered.ok:
         check.browser_chars = len(rendered.text or "")

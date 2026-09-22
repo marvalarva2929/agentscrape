@@ -13,7 +13,6 @@ from ..db.session import dispose_engine
 from .errors import register_exception_handlers
 from .routes import (
     admin,
-    artifacts,
     auth,
     health,
     records,
@@ -39,11 +38,10 @@ async def lifespan(app: FastAPI):
     # idle, so a schedule would silently never fire.
     import asyncio
 
-    from ..storage.artifacts import sweep_expired_exports, sweep_expired_screenshots
+    from ..storage.artifacts import sweep_expired_exports
 
     async def _sweep() -> None:
         try:
-            await sweep_expired_screenshots()
             await sweep_expired_exports()
         except Exception:
             log.exception("startup retention sweep failed")
@@ -120,7 +118,6 @@ def create_app() -> FastAPI:
         sites.router,
         sites.meta_router,
         admin.router,
-        artifacts.router,
     ):
         app.include_router(router, prefix=API_PREFIX)
     return app

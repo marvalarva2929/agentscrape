@@ -7,8 +7,7 @@ For each page:
      and whether people are hidden or missing
   3. escalate to a rendered page when the model says the people are not in the
      HTML, or it counts more people than it could read; activate up to five
-     tabs / "load more" controls it picks from the accessibility tree; read the
-     screenshot with the vision model when text still falls short
+     tabs / "load more" controls it picks from the accessibility tree
   4. every link on the page (with its anchor text and heading) goes to the
      model for triage, and the unvisited tail is re-sorted by its priority
 
@@ -45,12 +44,6 @@ from ...llm.reader import PageReading, combine_with_regex, fold, merge_people, r
 from ...llm.triage import triage_links
 from ...orchestrator.events import EventType
 from ...orchestrator.limits import SiteCounts
-from ...storage.artifacts import (
-    png_dimensions,
-    relative_path,
-    save_screenshot,
-    screenshot_expiry,
-)
 from ...urls import canonicalize, host_of, in_scope, registrable_domain, url_hash
 from ..browser_fetch import browser_fetch
 from ..checkpoint import save_checkpoint
@@ -75,9 +68,6 @@ class PageOutcome:
     url: str
     people: list[ExtractedPerson] = field(default_factory=list)
     fetch_mode: FetchMode = FetchMode.HTML
-    screenshot_rel: str | None = None
-    shot_size: tuple[int | None, int | None] = (None, None)
-    field_locations: dict[str, dict[str, int]] = field(default_factory=dict)
     title: str = ""
     links: list[LinkContext] = field(default_factory=list)
     reading: PageReading | None = None
@@ -217,11 +207,6 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
                     else ExtractionMethod.DISCOVERY
                 ),
                 fetch_mode=outcome.fetch_mode,
-                screenshot_path=outcome.screenshot_rel,
-                screenshot_expires_at=screenshot_expiry() if outcome.screenshot_rel else None,
-                screenshot_width=outcome.shot_size[0],
-                screenshot_height=outcome.shot_size[1],
-                field_locations=outcome.field_locations,
                 page_score=float(candidate.get("priority", candidate.get("score", 0.0))),
                 run_id=state.get("run_id"),
                 site_run_id=state["site_run_id"],
@@ -307,9 +292,6 @@ async def extract_batch(state: SiteState, deps: PipelineDeps) -> SiteState:
             page_type=outcome.reading.page_type if outcome.reading and outcome.reading.ok else None,
             program=outcome.reading.program if outcome.reading and outcome.reading.ok else None,
             message=_describe(outcome, records_here, trainees_here),
-            screenshot_url=(
-                f"/api/v1/artifacts/{outcome.screenshot_rel}" if outcome.screenshot_rel else None
-            ),
             steps_taken=steps_taken + steps_used,
             step_budget=state["step_budget"],
         )
@@ -474,13 +456,12 @@ class _Rendered:
 async def _render_and_extract(
     deps: PipelineDeps, url: str, state: SiteState, outcome: PageOutcome
 ) -> _Rendered | None:
-    """Browser escalation: render, read, work hidden controls, read the
-    screenshot if text still falls short, then measure field boxes."""
+    """Browser escalation: render, read, and work hidden controls."""
     from ...browser.renderer import click_by_accessible_name, render_page
 
     try:
         rendered = await asyncio.wait_for(
-            render_page(deps.browser_context, url, capture_screenshot=True),
+            render_page(deps.browser_context, url),
             timeout=settings.page_timeout_seconds + 15,
         )
     except TimeoutError:
@@ -508,8 +489,7 @@ async def _render_and_extract(
     ):
         decision = await decide_navigation(
             url=rendered.final_url, title=rendered.title, text=rendered.text,
-            links=rendered.links, controls=rendered.controls,
-            screenshot=rendered.screenshot, meter=deps.meter,
+            links=rendered.links, controls=rendered.controls, meter=deps.meter,
         )
         if decision.reason:
             log.info("navigation for %s: %s (%s)", url, decision.page_type, decision.reason)
@@ -534,42 +514,8 @@ async def _render_and_extract(
                 links, extract_link_contexts(after.html, after.final_url, allowed_domains=allowed)
             )
 
-    # Contacts published as images, or layout that carries the meaning: read
-    # the screenshot itself when the text still falls short of what the page
-    # shows.
-    expected = max(
-        reading.expected_people_count,
-        outcome.reading.expected_people_count if outcome.reading else 0,
-    )
-    if rendered.screenshot and (not people or len(people) < expected * 0.75):
-        vision = await read_page(
-            url=url, title=rendered.title, text=rendered.text or text,
-            screenshot=rendered.screenshot, meter=deps.meter,
-        )
-        if vision.ok:
-            people = merge_people(people, vision.people)
-
-    field_locations = rendered.field_locations
-    hints = [h for person in people for h in person.locate_hints]
-    if hints and not field_locations:
-        located = await render_page(
-            deps.browser_context, url, capture_screenshot=False, locate=hints
-        )
-        field_locations = located.field_locations if located.ok else {}
-
-    if rendered.screenshot:
-        path = save_screenshot(
-            rendered.screenshot,
-            site_run_id=state["site_run_id"],
-            url_hash=url_hash(url),
-        )
-        outcome.screenshot_rel = relative_path(path)
-        # Needed to place the field boxes, which are in screenshot pixels.
-        outcome.shot_size = png_dimensions(rendered.screenshot)
-
     outcome.people = people
     outcome.fetch_mode = FetchMode.BOTH
-    outcome.field_locations = field_locations
     outcome.title = rendered.title or outcome.title
     if reading.ok and (
         outcome.reading is None

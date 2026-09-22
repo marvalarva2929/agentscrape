@@ -86,7 +86,7 @@ async def context():
 @pytest.mark.asyncio
 async def test_a_refusal_is_reported_as_a_refusal(context) -> None:
     with _serve() as base:
-        result = await render_page(context, f"{base}/forbidden", capture_screenshot=False)
+        result = await render_page(context, f"{base}/forbidden")
     assert result.ok is False
     assert result.status == 403 and "403" in (result.error or "")
 
@@ -94,7 +94,7 @@ async def test_a_refusal_is_reported_as_a_refusal(context) -> None:
 @pytest.mark.asyncio
 async def test_a_bot_protection_page_is_not_read_as_an_empty_school(context) -> None:
     with _serve() as base:
-        result = await render_page(context, f"{base}/challenge", capture_screenshot=False)
+        result = await render_page(context, f"{base}/challenge")
     assert result.ok is False
     assert "bot-protection" in (result.error or "")
 
@@ -102,7 +102,7 @@ async def test_a_bot_protection_page_is_not_read_as_an_empty_school(context) -> 
 @pytest.mark.asyncio
 async def test_a_roster_inside_an_iframe_is_part_of_the_page(context) -> None:
     with _serve() as base:
-        result = await render_page(context, f"{base}/parent", capture_screenshot=False)
+        result = await render_page(context, f"{base}/parent")
     assert result.ok
     assert "Resident 3 Example" in result.text
     assert "Resident 3 Example" in result.html
@@ -111,7 +111,7 @@ async def test_a_roster_inside_an_iframe_is_part_of_the_page(context) -> None:
 @pytest.mark.asyncio
 async def test_an_ordinary_page_is_unchanged(context) -> None:
     with _serve() as base:
-        result = await render_page(context, f"{base}/ordinary", capture_screenshot=False)
+        result = await render_page(context, f"{base}/ordinary")
     assert result.ok and "residency program" in result.text
 
 

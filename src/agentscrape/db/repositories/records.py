@@ -48,11 +48,6 @@ class ExtractionContext:
     page_title: str | None
     extraction_method: ExtractionMethod
     fetch_mode: FetchMode
-    screenshot_path: str | None = None
-    screenshot_expires_at: datetime | None = None
-    screenshot_width: int | None = None
-    screenshot_height: int | None = None
-    field_locations: dict[str, dict[str, int]] = field(default_factory=dict)
     page_score: float = 0.0
     run_id: str | None = None
     site_run_id: str | None = None
@@ -275,7 +270,7 @@ async def _create_record(
 
     version = _make_version(
         record_id=record.id, version_no=1, fields=fields,
-        changed_fields={}, person=person, context=context,
+        changed_fields={}, context=context,
     )
     session.add(version)
     await session.flush()
@@ -364,7 +359,7 @@ async def _update_record(
 
     version = _make_version(
         record_id=record.id, version_no=record.version_count, fields=fields,
-        changed_fields=changes, person=person, context=context,
+        changed_fields=changes, context=context,
     )
     session.add(version)
     await session.flush()
@@ -378,23 +373,8 @@ def _make_version(
     version_no: int,
     fields: dict[str, object],
     changed_fields: dict[str, object],
-    person: ExtractedPerson,
     context: ExtractionContext,
 ) -> RecordVersion:
-    # Only keep locations for fields this person actually has.
-    locations = {
-        name: box
-        for name, box in (context.field_locations or {}).items()
-        if name in (person.full_name or "", person.email or "")
-        or name in (person.locate_hints or [])
-    }
-    field_locations: dict[str, dict[str, int]] = {}
-    if person.full_name and person.full_name in locations:
-        field_locations["full_name"] = locations[person.full_name]
-    if person.email and person.email in locations:
-        field_locations["email"] = locations[person.email]
-    field_locations.update(person.field_locations or {})
-
     return RecordVersion(
         id=new_version_id(),
         record_id=record_id,
@@ -403,16 +383,10 @@ def _make_version(
         changed_fields=changed_fields,
         source_url=context.source_url,
         page_title=context.page_title,
-        screenshot_path=context.screenshot_path,
-        screenshot_available=context.screenshot_path is not None,
-        screenshot_expires_at=context.screenshot_expires_at,
-        screenshot_width=context.screenshot_width,
-        screenshot_height=context.screenshot_height,
         captured_at=context.captured_at,
         extraction_method=context.extraction_method,
         fetch_mode=context.fetch_mode,
         confidence=float(fields["confidence"]),
-        field_locations=field_locations or None,
         run_id=context.run_id,
         site_run_id=context.site_run_id,
     )

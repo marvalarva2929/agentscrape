@@ -268,11 +268,11 @@ API URL at build time, or use the login screen/API query override at runtime.
 **Backend on AWS:** use a container service such as App Runner or ECS/Fargate
 for this FastAPI app, plus RDS Postgres. Run `uv run alembic upgrade head`
 against the RDS database during deploy. Persist `ARTIFACT_DIR` on EFS or move
-artifacts to object storage before relying on screenshots/exports in production.
+artifacts to object storage before relying on exports in production.
 
 Deploys are additive: every `drop_table` in `alembic/versions/` belongs to a
-`downgrade()`, and the startup retention sweep only touches screenshots and
-exports. Crawled people are erased by exactly two things, neither of which
+`downgrade()`, and the startup retention sweep only touches exports. Crawled
+people are erased by exactly two things, neither of which
 belongs anywhere near a deploy script: `agentscrape seed-demo --reset`, which
 truncates every table, and `scripts/crawl.sh`, which deletes the sites it is
 about to re-benchmark (and cascades to their records). Point `DATABASE_URL` at
@@ -316,16 +316,10 @@ The `/api/v1` contract is implemented as specified. Four things you need:
    and blocked by Safari and increasingly Chrome. `GET /runs/{id}/events` also
    accepts `?token=` since `EventSource` cannot set headers.
 
-5. **Screenshots use signed links.** `screenshot_url` comes back with `exp` and
-   `sig` query parameters and is valid for an hour, so it can go straight into
-   an `<img src>` without an Authorization header. Each version also carries
-   `screenshot_width`/`screenshot_height` so the stored per-field boxes (in
-   screenshot pixels) can be positioned as percentages.
-
-6. **Missing people sort to the bottom** of any list rather than being filtered
+5. **Missing people sort to the bottom** of any list rather than being filtered
    out, marked with `status: "missing"`.
 
-7. **Crawl, directory search, or both.** `POST /runs` takes
+6. **Crawl, directory search, or both.** `POST /runs` takes
    `config.modes`: `["crawl"]` (the default), `["directory"]` or both. Each
    school carries `has_crawl_data`, `directory_url` and
    `directory_search_available`; offer directory search only when the last is
@@ -333,7 +327,7 @@ The `/api/v1` contract is implemented as specified. Four things you need:
    DIRECTORY_SEARCH_UNAVAILABLE`, whose `details.sites` says why per school.
    Values filled from the directory carry `extraction_method: "directory"`.
 
-8. **Run limits.** `config.max_records`, `max_trainees`, `max_emails` and
+7. **Run limits.** `config.max_records`, `max_trainees`, `max_emails` and
    `max_spend_usd` (all optional). Heartbeats carry `records_collected`,
    `trainees_collected`, `emails_collected` and `spend_usd`; a run that hit one
    ends `stopped_at_limit` with `stop_reason` `max_records`, `max_trainees`,
@@ -400,7 +394,7 @@ valid and nothing is re-scored or re-fetched.
 | Step | Cost | When |
 |---|---|---|
 | Plain HTML fetch | cheap | always tried first |
-| Render + screenshot | expensive | JS-rendered page, no addresses in the DOM, or contacts published as images |
+| Render in browser | expensive | JS-rendered page, no addresses in the DOM |
 | One interaction | expensive | only when the accessibility tree offers pagination or "load more" |
 
 A site stops early once `STOP_AFTER_BARREN_PAGES` consecutive candidate pages
@@ -413,9 +407,9 @@ a site before it reached anything it had not already seen.
 
 The method used is recorded on every extraction, as both a debugging and a cost
 signal. When the agent drives the browser it identifies elements from the
-**accessibility tree by role and name** — never by predicting pixel coordinates
-from a screenshot. Vision is used to read pages, read contacts rendered as
-images, and disambiguate similar links; it never produces click targets.
+**accessibility tree by role and name** — never by predicting pixel
+coordinates. The model reads page text to find people and disambiguate
+similar links; it never produces click targets.
 
 **Reconciliation.** Serialized per site with a Postgres advisory lock, so sites
 run in parallel but one site's writes never interleave. Identical data touches
@@ -429,16 +423,9 @@ from was successfully revisited in that run — otherwise a discovery miss or a
 
 ## Provenance
 
-Every `RecordVersion` stores the exact URL, the page title at capture, a
-screenshot, the capture timestamp, the extraction method, a confidence score,
-and per-field bounding boxes so the frontend can highlight exactly where on the
-page a value was found. Boxes are measured from the real DOM with
-`getBoundingClientRect`, not guessed by the model.
-
-A school keeps only its **most recent run's** screenshots: when a school is
-crawled again, the previous images are deleted and replaced. **Provenance
-survives** — URL, title, timestamp, method and field locations stay, and
-`screenshot_available` flips to false for the superseded versions.
+Every `RecordVersion` stores the exact URL, the page title at capture, the
+capture timestamp, the extraction method and a confidence score, so any value
+can be traced back to the page it came from.
 
 ---
 
@@ -507,8 +494,6 @@ departments and the rest of the site.
    honouring `Crawl-delay`, and only fetching publicly published pages. The
    parser is retained behind `RESPECT_ROBOTS`, so enforcing it is a one-line
    config change.
-7. **Screenshots live on local disk**, consistent with the one-box constraint.
-   Moving to object storage later is a path migration.
 
 ## Known limitations
 

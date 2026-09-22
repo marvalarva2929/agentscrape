@@ -92,11 +92,6 @@ async def seeded(session):
             extraction_method=ExtractionMethod.DISCOVERY,
             fetch_mode=FetchMode.BOTH,
             confidence=0.9,
-            screenshot_available=True,
-            screenshot_path="screenshots/a/b.png",
-            screenshot_width=1440,
-            screenshot_height=3200,
-            field_locations={"email": {"x": 10, "y": 20, "width": 100, "height": 16}},
         )
         session.add(version)
         await session.flush()
@@ -190,51 +185,6 @@ class TestNavigation:
         assert body["pgy_capture_date"] is not None
         # No inference: the page never stated a class year.
         assert body["year"] is None
-
-
-class TestScreenshotLinks:
-    async def test_source_returns_a_signed_link_and_dimensions(
-        self, client, seeded, session
-    ):
-        from sqlalchemy import select
-
-        headers = await _headers(client, CLIENT_PW)
-        record_id = (
-            await session.execute(select(Record.id).where(Record.full_name == "Jane Doe"))
-        ).scalar_one()
-        body = (
-            await client.get(f"{API}/people/{record_id}/source", headers=headers)
-        ).json()
-        # An <img> tag cannot send an Authorization header, so the URL is signed.
-        assert "sig=" in body["screenshot_url"] and "exp=" in body["screenshot_url"]
-        assert body["field_locations"]["email"]["x"] == 10
-
-    async def test_a_signed_link_needs_no_token(self, client, seeded, session):
-        from sqlalchemy import select
-
-        headers = await _headers(client, CLIENT_PW)
-        record_id = (
-            await session.execute(select(Record.id).where(Record.full_name == "Jane Doe"))
-        ).scalar_one()
-        url = (
-            await client.get(f"{API}/people/{record_id}/source", headers=headers)
-        ).json()["screenshot_url"]
-
-        # No auth header at all: 404 because the file is absent, not 401.
-        response = await client.get(url)
-        assert response.status_code == 404
-
-    async def test_an_unsigned_artifact_still_requires_auth(self, client):
-        response = await client.get(f"{API}/artifacts/screenshots/a/b.png")
-        assert response.status_code == 401
-        assert response.json()["error"]["code"] == "AUTH_REQUIRED"
-
-    async def test_a_tampered_signature_is_rejected(self, client):
-        response = await client.get(
-            f"{API}/artifacts/screenshots/a/b.png",
-            params={"exp": "99999999999", "sig": "0" * 32},
-        )
-        assert response.status_code == 401
 
 
 class TestAdminScope:

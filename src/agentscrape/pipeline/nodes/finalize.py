@@ -15,7 +15,6 @@ from ...db.repositories.records import lock_site, mark_missing_records
 from ...db.repositories.sites import mark_scraped, set_dominant_specialty, visited_hashes
 from ...llm.planner import FOUND
 from ...orchestrator.events import EventType
-from ...storage.artifacts import replace_school_screenshots
 from ..checkpoint import clear_checkpoint
 from ..deps import PipelineDeps
 from ..state import SiteState
@@ -27,8 +26,7 @@ async def finalize(state: SiteState, deps: PipelineDeps) -> SiteState:
     site_id = state["site_id"]
     site_run_id = state["site_run_id"]
     missing = 0
-    # A directory-only run visits no pages and captures no screenshots: there
-    # is nothing to mark missing and no screenshot set to replace.
+    # A directory-only run visits no pages: there is nothing to mark missing.
     crawled = "crawl" in (state.get("modes") or ["crawl"])
 
     if state.get("status") != "rejected":
@@ -47,10 +45,6 @@ async def finalize(state: SiteState, deps: PipelineDeps) -> SiteState:
                 await _update_dominant_specialty(session, site_id)
                 await refresh_program_counts(session, site_id)
             await session.commit()
-
-        # A school keeps only its most recent run's screenshots.
-        if crawled:
-            await replace_school_screenshots(site_id, site_run_id)
 
     status = _final_status(state)
     found = (

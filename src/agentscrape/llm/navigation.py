@@ -1,4 +1,4 @@
-"""Multimodal judgment for the next action on a rendered page."""
+"""Judgment for the next action on a rendered page."""
 
 from __future__ import annotations
 
@@ -30,7 +30,6 @@ async def decide_navigation(
     text: str,
     links: list[dict],
     controls: list[dict],
-    screenshot: bytes | None,
     meter: UsageMeter | None = None,
     provider: VisionProvider | None = None,
     max_controls: int = 5,
@@ -44,7 +43,6 @@ async def decide_navigation(
         response = await provider.complete(
             system=NAVIGATION_SYSTEM,
             user=prompt,
-            image_bytes=screenshot,
             meter=meter,
             max_tokens=1_500,
         )

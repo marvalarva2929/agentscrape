@@ -118,6 +118,13 @@ class ExportStatus(StrEnum):
     EXPIRED = "expired"
 
 
+class VerificationStatus(StrEnum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
 class StopReason(StrEnum):
     MAX_RECORDS = "max_records"
     # Residents and fellows collected, and people with an address.

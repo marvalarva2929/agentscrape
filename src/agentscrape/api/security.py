@@ -9,9 +9,6 @@ GitHub Pages, so a session cookie would be third-party to the API's origin,
 requiring SameSite=None and being blocked outright by Safari and increasingly by
 Chrome. That would work locally and fail in production, which is the worst
 failure mode available.
-
-Because an <img> tag cannot send an Authorization header, screenshots are served
-via short-lived signed links instead (see `sign_artifact_path`).
 """
 
 from __future__ import annotations
@@ -26,7 +23,6 @@ from ..config import settings
 from .errors import AuthRequiredError, ErrorCode, InvalidTokenError
 
 _HKDF_INFO = b"agentscrape-auth-v1"
-_ARTIFACT_INFO = b"agentscrape-artifact-v1"
 ISSUER = "agentscrape"
 
 CLIENT_SCOPE = "client"
@@ -79,38 +75,6 @@ def issue_token(scope: str = CLIENT_SCOPE) -> tuple[str, datetime]:
 def has_scope(claims: dict, required: str) -> bool:
     granted = str(claims.get("scope", CLIENT_SCOPE))
     return _SCOPE_RANK.get(granted, 0) >= _SCOPE_RANK.get(required, 99)
-
-
-def sign_artifact_path(path: str, *, ttl_seconds: int | None = None) -> str:
-    """A short-lived signature for one artifact path.
-
-    Lets `<img src>` load a screenshot without an Authorization header, without
-    making the artifact store public.
-    """
-    ttl = ttl_seconds or settings.artifact_link_ttl_seconds
-    expires = int((datetime.now(UTC) + timedelta(seconds=ttl)).timestamp())
-    digest = hmac.new(
-        _hkdf_secret(settings.app_password + settings.admin_password),
-        _ARTIFACT_INFO + f"{path}|{expires}".encode(),
-        hashlib.sha256,
-    ).hexdigest()[:32]
-    return f"exp={expires}&sig={digest}"
-
-
-def verify_artifact_signature(path: str, expires: str | None, signature: str | None) -> bool:
-    if not expires or not signature:
-        return False
-    try:
-        if int(expires) < int(datetime.now(UTC).timestamp()):
-            return False
-    except ValueError:
-        return False
-    expected = hmac.new(
-        _hkdf_secret(settings.app_password + settings.admin_password),
-        _ARTIFACT_INFO + f"{path}|{expires}".encode(),
-        hashlib.sha256,
-    ).hexdigest()[:32]
-    return hmac.compare_digest(expected, signature)
 
 
 def decode_token(token: str) -> dict:

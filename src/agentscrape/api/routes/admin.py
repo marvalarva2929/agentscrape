@@ -142,14 +142,6 @@ async def admin_stats(_: AuthedUser, session: DbSession) -> AdminStats:
         SiteRun, SiteRun.status == SiteRunStatus.COMPLETED, SiteRun.known_path_hits > 0
     )
 
-    disk_bytes = 0
-    from ...config import settings
-
-    if settings.screenshot_dir.exists():
-        disk_bytes = sum(
-            f.stat().st_size for f in settings.screenshot_dir.rglob("*") if f.is_file()
-        )
-
     return AdminStats(
         sites_total=await count(Site),
         sites_rejected=await count(
@@ -170,15 +162,6 @@ async def admin_stats(_: AuthedUser, session: DbSession) -> AdminStats:
         total_spend_usd=float(await session.scalar(select(func.sum(Run.spend_usd))) or 0),
         total_tokens_in=int(await session.scalar(select(func.sum(Run.tokens_in))) or 0),
         total_tokens_out=int(await session.scalar(select(func.sum(Run.tokens_out))) or 0),
-        screenshots_on_disk=await count(
-            RecordVersion, RecordVersion.screenshot_available.is_(True)
-        ),
-        screenshots_expired=await count(
-            RecordVersion,
-            RecordVersion.screenshot_available.is_(False),
-            RecordVersion.screenshot_path.is_(None),
-        ),
-        disk_bytes=disk_bytes,
     )
 
 
@@ -194,10 +177,7 @@ async def clear_known_path(
 
 @router.post("/sweep")
 async def sweep(_: AuthedUser) -> dict:
-    """Run the retention sweep now (screenshots and exports past their window)."""
-    from ...storage.artifacts import sweep_expired_exports, sweep_expired_screenshots
+    """Run the retention sweep now (exports past their window)."""
+    from ...storage.artifacts import sweep_expired_exports
 
-    return {
-        "screenshots": await sweep_expired_screenshots(),
-        "exports": await sweep_expired_exports(),
-    }
+    return {"exports": await sweep_expired_exports()}

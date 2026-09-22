@@ -1,12 +1,8 @@
 """Playwright rendering — the expensive path, used only on escalation.
 
-Two deliberate reliability decisions live here:
-
-  * Interaction targets come from the **accessibility tree** (role + name), never
-    from pixel coordinates predicted off a screenshot. Vision reads and
-    disambiguates; it does not produce click targets.
-  * Field locations are measured from the real DOM with getBoundingClientRect,
-    not guessed by the model, so the frontend's highlight boxes are exact.
+Interaction targets come from the **accessibility tree** (role + name), never
+from pixel coordinates: clicks and taps are driven by real DOM elements, not
+guessed positions.
 """
 
 from __future__ import annotations
@@ -25,42 +21,6 @@ from ..urls import host_of
 from .ratelimit import get_rate_limiter
 
 log = logging.getLogger("agentscrape.render")
-
-# Locates the on-screen rectangle of each needle string. Runs in the page.
-_LOCATE_JS = """
-(needles) => {
-  const out = {};
-  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-  const nodes = [];
-  while (walker.nextNode()) nodes.push(walker.currentNode);
-  const rectOf = (node) => {
-    const range = document.createRange();
-    range.selectNodeContents(node);
-    const r = range.getBoundingClientRect();
-    return r && r.width > 0 && r.height > 0
-      ? {x: Math.round(r.x + window.scrollX), y: Math.round(r.y + window.scrollY),
-         width: Math.round(r.width), height: Math.round(r.height)}
-      : null;
-  };
-  for (const needle of needles) {
-    if (!needle) continue;
-    const lower = needle.toLowerCase();
-    for (const node of nodes) {
-      const text = (node.textContent || '').toLowerCase();
-      if (text.includes(lower)) { const r = rectOf(node); if (r) { out[needle] = r; break; } }
-    }
-    if (!out[needle]) {
-      const link = document.querySelector(`a[href*="${CSS.escape(needle)}"]`);
-      if (link) {
-        const r = link.getBoundingClientRect();
-        if (r && r.width > 0) out[needle] = {x: Math.round(r.x + window.scrollX),
-          y: Math.round(r.y + window.scrollY), width: Math.round(r.width), height: Math.round(r.height)};
-      }
-    }
-  }
-  return out;
-}
-"""
 
 # Visible controls are collected broadly. The model, not a label regex, decides
 # which one is useful for reaching current trainee information.
@@ -193,8 +153,6 @@ class RenderResult:
     title: str
     html: str
     text: str
-    screenshot: bytes | None = None
-    field_locations: dict[str, dict[str, int]] = field(default_factory=dict)
     controls: list[dict[str, Any]] = field(default_factory=list)
     links: list[dict[str, Any]] = field(default_factory=list)
     ok: bool = True
@@ -336,15 +294,8 @@ class BrowserPool:
         self._browser = self._playwright = None
 
 
-async def render_page(
-    context: BrowserContext,
-    url: str,
-    *,
-    capture_screenshot: bool = True,
-    locate: list[str] | None = None,
-    full_page: bool = True,
-) -> RenderResult:
-    """Load a page, optionally screenshot it, and measure where fields sit."""
+async def render_page(context: BrowserContext, url: str) -> RenderResult:
+    """Load and read a page in the browser."""
     await get_rate_limiter().acquire(host_of(url))
     page: Page | None = None
     try:
@@ -385,13 +336,6 @@ async def render_page(
             html = f"{html}\n{frame_html}"
             text = f"{text}\n{frame_text}"
 
-        locations: dict[str, dict[str, int]] = {}
-        if locate:
-            try:
-                locations = await page.evaluate(_LOCATE_JS, locate[:200]) or {}
-            except PlaywrightError as exc:
-                log.debug("field location lookup failed on %s: %s", url, exc)
-
         controls: list[dict[str, Any]] = []
         try:
             controls = await page.evaluate(_CONTROLS_JS) or []
@@ -404,21 +348,9 @@ async def render_page(
         except PlaywrightError:
             pass
 
-        shot: bytes | None = None
-        if capture_screenshot:
-            try:
-                shot = await page.screenshot(full_page=full_page, type="png")
-            except PlaywrightError as exc:
-                # Very tall pages can exceed the capture limit; fall back to viewport.
-                log.debug("full-page screenshot failed on %s (%s); viewport only", url, exc)
-                try:
-                    shot = await page.screenshot(full_page=False, type="png")
-                except PlaywrightError:
-                    shot = None
-
         return RenderResult(
             url=url, final_url=page.url, title=title, html=html, text=text,
-            screenshot=shot, field_locations=locations, controls=controls, links=links,
+            controls=controls, links=links,
             ok=True, status=response.status if response else None,
         )
     except PlaywrightError as exc:

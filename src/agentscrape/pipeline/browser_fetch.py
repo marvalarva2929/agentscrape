@@ -27,7 +27,7 @@ async def browser_fetch(deps: PipelineDeps, url: str) -> FetchResult:
                            ok=False, error="no browser available")
     try:
         rendered = await asyncio.wait_for(
-            render_page(deps.browser_context, url, capture_screenshot=False),
+            render_page(deps.browser_context, url),
             timeout=settings.page_timeout_seconds + 15,
         )
     except TimeoutError:

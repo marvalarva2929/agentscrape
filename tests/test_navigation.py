@@ -22,7 +22,7 @@ class FakeProvider(VisionProvider):
 
 
 @pytest.mark.asyncio
-async def test_navigation_decision_includes_screenshot_and_page_context() -> None:
+async def test_navigation_decision_includes_page_context() -> None:
     provider = FakeProvider(
         {
             "page_type": "program",
@@ -34,7 +34,6 @@ async def test_navigation_decision_includes_screenshot_and_page_context() -> Non
             "reason": "The roster button and current-residents link are promising.",
         }
     )
-    screenshot = b"png bytes"
     decision = await decide_navigation(
         url="https://medicine.example.edu/program",
         title="Internal Medicine Residency",
@@ -49,12 +48,10 @@ async def test_navigation_decision_includes_screenshot_and_page_context() -> Non
         controls=[
             {"role": "button", "name": "Load more residents", "disabled": False}
         ],
-        screenshot=screenshot,
         provider=provider,
     )
 
     assert provider.request is not None
-    assert provider.request["image_bytes"] == screenshot
     assert "Internal Medicine Residency" in provider.request["user"]
     assert "Current Residents" in provider.request["user"]
     assert decision.control == {"role": "button", "name": "Load more residents"}
@@ -77,7 +74,6 @@ async def test_navigation_rejects_controls_not_supplied_by_browser() -> None:
         text="Program page",
         links=[],
         controls=[{"role": "button", "name": "Real action", "disabled": False}],
-        screenshot=b"shot",
         provider=provider,
     )
     assert decision.control is None

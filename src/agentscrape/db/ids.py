@@ -47,3 +47,7 @@ def submission_id() -> str:
 
 def export_id() -> str:
     return new_id("exp")
+
+
+def verification_id() -> str:
+    return new_id("ver_job")

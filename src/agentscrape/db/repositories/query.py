@@ -43,7 +43,6 @@ class RecordFilters:
     run_id: str | None = None
     changed_since: datetime | None = None
     q: str | None = None
-    has_screenshot: bool | None = None
     has_email: bool | None = None                          # additive
     include_role_accounts: bool = False
 
@@ -66,7 +65,6 @@ class RecordFilters:
             run_id=kwargs.get("run_id"),
             changed_since=kwargs.get("changed_since"),
             q=kwargs.get("q"),
-            has_screenshot=kwargs.get("has_screenshot"),
             has_email=kwargs.get("has_email"),
             include_role_accounts=bool(kwargs.get("include_role_accounts")),
         )
@@ -78,7 +76,7 @@ class RecordFilters:
             "status": self.status, "category": self.category, "pgy": self.pgy,
             "hospital": self.hospital, "run_id": self.run_id,
             "changed_since": self.changed_since.isoformat() if self.changed_since else None,
-            "q": self.q, "has_screenshot": self.has_screenshot,
+            "q": self.q,
             "has_email": self.has_email,
             "include_role_accounts": self.include_role_accounts,
         }
@@ -146,20 +144,6 @@ def apply_filters(
                 )
             )
 
-    if filters.has_screenshot is not None:
-        # correlate(Record) is required: without it SQLAlchemy correlates the
-        # version table too and the subquery is left with no FROM clause.
-        subquery = (
-            select(RecordVersion.id)
-            .where(
-                RecordVersion.id == Record.current_version_id,
-                RecordVersion.screenshot_available.is_(True),
-            )
-            .correlate(Record)
-            .exists()
-        )
-        statement = statement.where(subquery if filters.has_screenshot else ~subquery)
-
     return statement
 
 
@@ -195,14 +179,8 @@ async def query_records(
     column = SORTABLE.get(sort, Record.last_seen_at)
 
     statement = (
-        select(
-            Record,
-            Site.hospital_name,
-            Site.root_domain,
-            RecordVersion.screenshot_available,
-        )
+        select(Record, Site.hospital_name, Site.root_domain)
         .join(Site, Site.id == Record.site_id)
-        .outerjoin(RecordVersion, RecordVersion.id == Record.current_version_id)
     )
     statement = apply_filters(statement, filters)
     if record_id:
@@ -243,10 +221,7 @@ async def query_records(
     rows = result[:limit]
 
     today = datetime.now(UTC).date()
-    items = [
-        _to_dict(record, hospital, domain, bool(has_shot), today)
-        for record, hospital, domain, has_shot in rows
-    ]
+    items = [_to_dict(record, hospital, domain, today) for record, hospital, domain in rows]
 
     next_cursor = None
     if has_more and rows:
@@ -260,9 +235,7 @@ async def query_records(
     return items, next_cursor, has_more
 
 
-def _to_dict(
-    record: Record, hospital: str | None, domain: str, has_screenshot: bool, today: date
-) -> dict[str, Any]:
+def _to_dict(record: Record, hospital: str | None, domain: str, today: date) -> dict[str, Any]:
     return {
         "id": record.id,
         "site_id": record.site_id,
@@ -273,6 +246,8 @@ def _to_dict(
         "category": record.category,
         "position": record.position,
         "role_account": record.role_account,
+        "roles": record.roles,
+        "roles_checked_at": record.roles_checked_at,
         "area": record.specialty_normalized,
         "area_raw": record.specialty_raw,
         "year": record.class_of,
@@ -286,7 +261,6 @@ def _to_dict(
         "last_seen_at": record.last_seen_at,
         "last_changed_at": record.last_changed_at,
         "missing_since": record.missing_since,
-        "screenshot_available": has_screenshot,
     }
 
 
@@ -328,14 +302,6 @@ async def record_stats(session: AsyncSession, filters: RecordFilters) -> dict[st
         "with_email": await scalar(
             select(func.count(Record.id)).where(
                 Record.id.in_(select(ids.c.id)), Record.email.isnot(None)
-            )
-        ),
-        "with_screenshot": await scalar(
-            select(func.count(Record.id))
-            .join(RecordVersion, RecordVersion.id == Record.current_version_id)
-            .where(
-                Record.id.in_(select(ids.c.id)),
-                RecordVersion.screenshot_available.is_(True),
             )
         ),
         "average_confidence": round(

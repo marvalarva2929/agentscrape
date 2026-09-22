@@ -265,7 +265,7 @@ async def _learn(deps: PipelineDeps, directory_url: str, probes: list[str]) -> d
 
     from ..browser.renderer import render_page, search_in_browser
 
-    rendered = await render_page(deps.browser_context, directory_url, capture_screenshot=False)
+    rendered = await render_page(deps.browser_context, directory_url)
     if not rendered.ok:
         return {"mode": UNAVAILABLE, "reason": f"could not load it ({rendered.error})"}
     if looks_like_login(rendered.final_url, rendered.html):

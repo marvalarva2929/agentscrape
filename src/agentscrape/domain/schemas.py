@@ -46,6 +46,12 @@ class RecordOut(ApiModel):
         default=None, description="Title exactly as the page printed it"
     )
     role_account: bool = False
+    roles: list[str] | None = Field(
+        default=None,
+        description="Every role a verification job confirmed the source page "
+        "supports; null until one has run. `category` above is unaffected.",
+    )
+    roles_checked_at: datetime | None = None
 
     area: str | None = Field(default=None, description="Normalized specialty")
     area_raw: str | None = None
@@ -68,7 +74,6 @@ class RecordOut(ApiModel):
     last_seen_at: datetime
     last_changed_at: datetime | None = None
     missing_since: datetime | None = None
-    screenshot_available: bool = False
 
 
 class FieldChange(BaseModel):
@@ -92,15 +97,11 @@ class RecordVersionOut(ApiModel):
     page_title: str | None = None
     extraction_method: str
     fetch_mode: str
-    screenshot_available: bool
-    screenshot_url: str | None = None
-    screenshot_expires_at: datetime | None = None
-    field_locations: dict[str, dict[str, int]] | None = None
     run_id: str | None = None
 
 
 class SourceOut(BaseModel):
-    """Provenance for one record version. Survives screenshot expiry."""
+    """Provenance for one record version."""
 
     record_id: str
     version_id: str
@@ -111,14 +112,6 @@ class SourceOut(BaseModel):
     extraction_method: str
     fetch_mode: str
     confidence: float
-    screenshot_available: bool
-    screenshot_url: str | None
-    screenshot_expires_at: datetime | None
-    # Natural size of the screenshot. `field_locations` are in screenshot pixel
-    # coordinates, so these are required to place them as percentages.
-    screenshot_width: int | None = None
-    screenshot_height: int | None = None
-    field_locations: dict[str, dict[str, int]] | None
     run_id: str | None
 
 
@@ -130,7 +123,6 @@ class RecordStats(BaseModel):
     sites_covered: int
     recently_changed: int = Field(description="Changed in the last 30 days")
     with_email: int
-    with_screenshot: int
     average_confidence: float
     average_versions: float
 
@@ -418,9 +410,6 @@ class AdminStats(BaseModel):
     total_spend_usd: float
     total_tokens_in: int
     total_tokens_out: int
-    screenshots_on_disk: int
-    screenshots_expired: int
-    disk_bytes: int
 
 
 # --------------------------------------------------------------------------
@@ -445,6 +434,28 @@ class ExportOut(ApiModel):
     error: str | None
     created_at: datetime
     expires_at: datetime | None
+
+
+class VerificationCreate(BaseModel):
+    """Check the roles already-scraped records were given against their
+    stored source page. Give either `site_id` (every current record at that
+    site) or `record_ids` (just those rows)."""
+
+    site_id: str | None = None
+    record_ids: list[str] | None = None
+
+
+class VerificationOut(ApiModel):
+    id: str
+    status: str
+    site_id: str | None
+    record_ids: list[str] | None
+    records_total: int
+    records_checked: int
+    records_corrected: int
+    error: str | None
+    created_at: datetime
+    finished_at: datetime | None
 
 
 class MetaValues(BaseModel):

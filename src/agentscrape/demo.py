@@ -12,8 +12,6 @@ blank year fields, and a mix of trainees, faculty, staff and alumni.
 from __future__ import annotations
 
 import logging
-import struct
-import zlib
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -40,13 +38,9 @@ from .db.models import (
 )
 from .db.repositories.programs import program_name_for
 from .db.session import session_scope
-from .storage.artifacts import relative_path
 from .urls import url_hash
 
 log = logging.getLogger("agentscrape.demo")
-
-SCREENSHOT_WIDTH = 1200
-SCREENSHOT_HEIGHT = 900
 
 SCHOOLS: list[dict] = [
     {
@@ -84,37 +78,6 @@ PEOPLE_TEMPLATE: list[tuple] = [
     # Someone who has dropped off the site: kept, never deleted.
     ("Owen Cole", PersonCategory.RESIDENT, "Resident", 3, None, True, RecordStatus.MISSING),
 ]
-
-
-def _placeholder_png(width: int, height: int) -> bytes:
-    """A small valid PNG, so the provenance panel has something to render.
-
-    Hand-rolled rather than pulling in an image library for one fixture.
-    """
-
-    def chunk(tag: bytes, data: bytes) -> bytes:
-        body = tag + data
-        return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body))
-
-    header = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
-    # One light-grey row per scanline, each prefixed with a filter byte.
-    row = b"\x00" + b"\xf2\xf4\xf7" * width
-    pixels = zlib.compress(row * height, 6)
-    return (
-        b"\x89PNG\r\n\x1a\n"
-        + chunk(b"IHDR", header)
-        + chunk(b"IDAT", pixels)
-        + chunk(b"IEND", b"")
-    )
-
-
-def _write_screenshot(site_run_id: str, key: str) -> str | None:
-    settings.ensure_dirs()
-    directory = settings.screenshot_dir / site_run_id
-    directory.mkdir(parents=True, exist_ok=True)
-    path = directory / f"{url_hash(key)[:32]}.png"
-    path.write_bytes(_placeholder_png(SCREENSHOT_WIDTH, SCREENSHOT_HEIGHT))
-    return relative_path(path)
 
 
 def snapshot_dir() -> Path:
@@ -277,7 +240,6 @@ async def _seed_invented(*, reset: bool = False) -> dict[str, int]:
                 counts["programs"] += 1
 
                 source_url = f"{program.directory_url}"
-                screenshot = _write_screenshot(site_run.id, f"{site.id}:{specialty}")
 
                 people_total = residents = fellows = 0
                 for person_index, (
@@ -333,35 +295,10 @@ async def _seed_invented(*, reset: bool = False) -> dict[str, int]:
                         changed_fields={},
                         source_url=source_url,
                         page_title=f"{program.name} | {spec['name']}",
-                        screenshot_path=screenshot,
-                        screenshot_available=screenshot is not None,
-                        screenshot_width=SCREENSHOT_WIDTH,
-                        screenshot_height=SCREENSHOT_HEIGHT,
                         captured_at=now - timedelta(days=school_index),
                         extraction_method=ExtractionMethod.DISCOVERY,
                         fetch_mode=FetchMode.BOTH,
                         confidence=record.confidence,
-                        # Boxes in screenshot pixel space, as the crawler stores them.
-                        field_locations={
-                            "full_name": {
-                                "x": 120,
-                                "y": 150 + person_index * 60,
-                                "width": 240,
-                                "height": 24,
-                            },
-                            **(
-                                {
-                                    "email": {
-                                        "x": 420,
-                                        "y": 152 + person_index * 60,
-                                        "width": 320,
-                                        "height": 20,
-                                    }
-                                }
-                                if email
-                                else {}
-                            ),
-                        },
                         run_id=run.id,
                         site_run_id=site_run.id,
                     )
@@ -392,10 +329,6 @@ async def _seed_invented(*, reset: bool = False) -> dict[str, int]:
                                 },
                                 source_url=source_url,
                                 page_title=f"{program.name} | {spec['name']}",
-                                screenshot_path=screenshot,
-                                screenshot_available=screenshot is not None,
-                                screenshot_width=SCREENSHOT_WIDTH,
-                                screenshot_height=SCREENSHOT_HEIGHT,
                                 captured_at=now - timedelta(days=school_index),
                                 extraction_method=ExtractionMethod.KNOWN_PATH,
                                 fetch_mode=FetchMode.HTML,

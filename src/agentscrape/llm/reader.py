@@ -110,14 +110,12 @@ def name_in_text(name: str, folded_text: str) -> bool:
 
 
 def coerce_person(
-    raw: Any, *, folded_text: str, program: str | None, source: str, from_image: bool = False
+    raw: Any, *, folded_text: str, program: str | None, source: str
 ) -> ExtractedPerson | None:
     if not isinstance(raw, dict):
         return None
     name = clean_model_name(raw.get("full_name"))
-    # A name read off a screenshot is on the page but not in its text: rosters
-    # published as pictures are exactly the ones the text check would empty.
-    if name and not from_image and not name_in_text(name, folded_text):
+    if name and not name_in_text(name, folded_text):
         log.info("discarding %r: name not present in page text", name)
         name = None
 
@@ -150,7 +148,6 @@ def coerce_person(
     return ExtractedPerson(
         full_name=name, email=email, category=category, position=position,
         pgy=pgy, class_of=class_of, specialty_raw=specialty,
-        locate_hints=[t for t in (name, email) if t],
         confidence=0.85 if (name and email) else 0.7,
         source_note=source,
     )
@@ -189,7 +186,6 @@ def merge_people(*groups: list[ExtractedPerson]) -> list[ExtractedPerson]:
                     setattr(current, attr, getattr(person, attr))
             if current.category == PersonCategory.UNKNOWN and person.category != PersonCategory.UNKNOWN:
                 current.category = person.category
-            current.locate_hints = list(dict.fromkeys([*current.locate_hints, *person.locate_hints]))
             if name_key:
                 by_name.setdefault(name_key, existing_key)
     return list(merged.values())
@@ -202,16 +198,14 @@ _MIN_SPLIT_CHARS = 2_000
 
 async def _read_chunk(
     *, provider: VisionProvider, url: str, title: str, text: str, part: int, parts: int,
-    screenshot: bytes | None, meter: UsageMeter | None, splits_left: int = MAX_SPLITS,
+    meter: UsageMeter | None, splits_left: int = MAX_SPLITS,
 ) -> list[dict]:
     """Payloads for one chunk: one normally, several when a timeout split it."""
     prompt = reader_user_prompt(url=url, title=title, text=text, part=part, parts=parts)
-    model = settings.llm_model if screenshot else settings.text_model
     for attempt in range(2):
         try:
             response = await provider.complete(
-                system=READER_SYSTEM, user=prompt, image_bytes=screenshot,
-                meter=meter, model=model,
+                system=READER_SYSTEM, user=prompt, meter=meter, model=settings.text_model,
             )
         except LLMUnavailable:
             raise
@@ -227,10 +221,9 @@ async def _read_chunk(
                 results = await asyncio.gather(*(
                     _read_chunk(
                         provider=provider, url=url, title=title, text=half, part=part,
-                        parts=parts, screenshot=screenshot if i == 0 else None,
-                        meter=meter, splits_left=splits_left - 1,
+                        parts=parts, meter=meter, splits_left=splits_left - 1,
                     )
-                    for i, half in enumerate(halves)
+                    for half in halves
                 ))
                 return [payload for group in results for payload in group]
             log.warning("page reading timed out for %s (part %d/%d): %s", url, part, parts, exc)
@@ -246,8 +239,6 @@ async def _read_chunk(
         if isinstance(payload, list):
             payload = {"people": payload}
         if isinstance(payload, dict):
-            if screenshot:
-                payload["_from_image"] = True
             return [payload]
         # Unparseable usually means the JSON was cut off; one retry, then give up.
         log.warning("page reading for %s returned unparseable output (attempt %d)", url, attempt + 1)
@@ -261,7 +252,6 @@ async def read_page(
     url: str,
     title: str,
     text: str,
-    screenshot: bytes | None = None,
     meter: UsageMeter | None = None,
     provider: VisionProvider | None = None,
 ) -> PageReading:
@@ -272,7 +262,7 @@ async def read_page(
     payloads = await asyncio.gather(*(
         _read_chunk(
             provider=provider, url=url, title=title, text=chunk, part=i + 1,
-            parts=len(chunks), screenshot=screenshot if i == 0 else None, meter=meter,
+            parts=len(chunks), meter=meter,
         )
         for i, chunk in enumerate(chunks)
     ))
@@ -302,10 +292,7 @@ async def read_page(
         raw_people = payload.get("people") if isinstance(payload.get("people"), list) else []
         groups.append([
             p for p in (
-                coerce_person(
-                    raw, folded_text=folded, program=reading.program, source="llm",
-                    from_image=bool(payload.get("_from_image")),
-                )
+                coerce_person(raw, folded_text=folded, program=reading.program, source="llm")
                 for raw in raw_people
             ) if p
         ])
@@ -338,6 +325,5 @@ def combine_with_regex(
             person.full_name = None
             person.position = None
             person.category = PersonCategory.UNKNOWN
-            person.locate_hints = [person.email]
             out.append(person)
     return out

@@ -64,11 +64,11 @@ async def seeded(session):
     now = datetime.now(UTC)
     made = []
     people = [
-        ("Naomi Goldrich", "naomi@med.example.edu", PersonCategory.RESIDENT, 5, 2027, True),
-        ("Chad Caraway", "chad@med.example.edu", PersonCategory.RESIDENT, 2, 2030, False),
-        ("Mira Patel", "mira@med.example.edu", PersonCategory.FELLOW, None, 2028, True),
+        ("Naomi Goldrich", "naomi@med.example.edu", PersonCategory.RESIDENT, 5, 2027),
+        ("Chad Caraway", "chad@med.example.edu", PersonCategory.RESIDENT, 2, 2030),
+        ("Mira Patel", "mira@med.example.edu", PersonCategory.FELLOW, None, 2028),
     ]
-    for name, email, role, pgy, class_of, has_shot in people:
+    for name, email, role, pgy, class_of in people:
         record = Record(
             site_id=site.id, identity_key=f"email:{email}", identity_kind="email",
             full_name=name, email=email, category=role, position="Resident",
@@ -85,13 +85,8 @@ async def seeded(session):
             fields={"full_name": name, "email": email},
             changed_fields={}, source_url="https://med.example.edu/residents",
             page_title="Current Residents",
-            screenshot_path="screenshots/x/a.png" if has_shot else None,
-            screenshot_available=has_shot,
-            screenshot_expires_at=now + timedelta(days=90) if has_shot else None,
             captured_at=now, extraction_method=ExtractionMethod.DISCOVERY,
             fetch_mode=FetchMode.BOTH, confidence=0.9,
-            field_locations={"email": {"x": 10, "y": 20, "width": 100, "height": 16}}
-            if has_shot else None,
             run_id=run.id,
         )
         session.add(version)
@@ -169,7 +164,7 @@ class TestRecordsQuery:
         row = body["items"][0]
         # `area` is the normalized specialty and `year` the class-of year.
         for field in ("id", "area", "year", "pgy", "category", "position",
-                      "hospital", "status", "screenshot_available", "confidence"):
+                      "hospital", "status", "confidence"):
             assert field in row
         assert row["area"] == "Radiation Oncology"
         assert row["hospital"] == "Example Teaching Hospital"
@@ -186,16 +181,6 @@ class TestRecordsQuery:
         response = await client.get(f"{API}/people", params={"category": "fellow"}, headers=auth)
         items = response.json()["items"]
         assert len(items) == 1 and items[0]["category"] == "fellow"
-
-    async def test_filter_by_screenshot_availability(self, client, auth, seeded):
-        available = await client.get(
-            f"{API}/people", params={"has_screenshot": True}, headers=auth
-        )
-        expired = await client.get(
-            f"{API}/people", params={"has_screenshot": False}, headers=auth
-        )
-        assert len(available.json()["items"]) == 2
-        assert len(expired.json()["items"]) == 1
 
     async def test_free_text_search(self, client, auth, seeded):
         response = await client.get(f"{API}/people", params={"q": "Goldrich"}, headers=auth)
@@ -234,7 +219,6 @@ class TestStats:
         assert body["by_area"]["Radiation Oncology"] == 3
         assert body["sites_covered"] == 1
         assert body["with_email"] == 3
-        assert body["with_screenshot"] == 2
 
     async def test_stats_honour_the_same_filters_as_the_list(self, client, auth, seeded):
         response = await client.get(
@@ -250,27 +234,6 @@ class TestProvenance:
         assert body["source_url"] == "https://med.example.edu/residents"
         assert body["page_title"] == "Current Residents"
         assert body["extraction_method"] == "discovery"
-        assert body["screenshot_available"] is True
-        assert body["screenshot_url"].startswith("/api/v1/artifacts/")
-        assert body["field_locations"]["email"]["x"] == 10
-
-    async def test_provenance_survives_screenshot_expiry(self, client, auth, seeded, session):
-        """URL, title, timestamp and method are kept after the image is swept."""
-        from sqlalchemy import update
-
-        record = seeded["records"][0]
-        await session.execute(
-            update(RecordVersion)
-            .where(RecordVersion.record_id == record.id)
-            .values(screenshot_available=False, screenshot_path=None)
-        )
-        await session.commit()
-
-        body = (await client.get(f"{API}/people/{record.id}/source", headers=auth)).json()
-        assert body["screenshot_available"] is False
-        assert body["screenshot_url"] is None
-        assert body["source_url"] == "https://med.example.edu/residents"
-        assert body["page_title"] == "Current Residents"
         assert body["captured_at"]
         assert body["extraction_method"] == "discovery"
 
@@ -287,7 +250,7 @@ class TestProvenance:
                 page_title="Current Residents",
                 captured_at=datetime.now(UTC),
                 extraction_method=ExtractionMethod.KNOWN_PATH,
-                fetch_mode=FetchMode.HTML, confidence=0.9, screenshot_available=False,
+                fetch_mode=FetchMode.HTML, confidence=0.9,
             )
         )
         await session.commit()

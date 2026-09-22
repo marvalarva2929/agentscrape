@@ -161,8 +161,8 @@ def test_a_few_chief_residents_do_not_cover_a_program() -> None:
 
 
 @pytest.mark.asyncio
-async def test_a_roster_published_as_pictures_is_kept_when_read_from_the_screenshot() -> None:
-    """The names are on the page, in the image, and nowhere in its text."""
+async def test_a_name_not_present_in_the_page_text_is_dropped() -> None:
+    """A name the model reports that never appears in the page text is refused."""
     provider = ReaderProvider({
         "page_type": "roster", "is_current_trainee_roster": True, "expected_people_count": 2,
         "people": [
@@ -171,16 +171,10 @@ async def test_a_roster_published_as_pictures_is_kept_when_read_from_the_screens
         ],
     })
     text = "Meet our residents. Our first-year class is shown below."
-    with_image = await read_page(
-        url="https://x.org/r", title="Residents", text=text, screenshot=b"png", provider=provider
-    )
-    assert {p.full_name for p in with_image.people} == {"Marisol Vega", "Tobias Lindqvist"}
-
-    # The same names with no image to have read them from are still refused.
-    without_image = await read_page(
+    reading = await read_page(
         url="https://x.org/r", title="Residents", text=text, provider=provider
     )
-    assert without_image.people == []
+    assert reading.people == []
 
 
 @pytest.mark.asyncio

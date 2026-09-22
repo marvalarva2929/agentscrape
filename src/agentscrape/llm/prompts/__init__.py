@@ -6,63 +6,11 @@ Design notes that matter for reliability:
   * The model is told to omit rather than guess. A null is recoverable on the
     next run; a hallucinated email is not, and it is what the client would
     actually send mail to.
-  * Vision is used to READ pages, never to produce click coordinates.
 """
 
 from __future__ import annotations
 
 import json
-
-EXTRACTION_SYSTEM = """\
-You extract people from institutional medical web pages.
-
-Return ONLY a JSON array. No prose, no markdown fences, no explanation.
-
-Each element describes one person:
-{
-  "full_name":  string | null,   // as printed, without titles or credentials
-  "email":      string | null,   // exactly as shown; never invent or complete one
-  "position":   string | null,   // their title as printed, e.g. "Program Director",
-                                 // "PGY-2 Resident", "Associate Professor"
-  "category":   "resident" | "fellow" | "faculty" | "staff" |
-                "student" | "alumni" | "unknown",
-  "pgy":        integer | null,  // 1-9, only if the page states it
-  "class_of":   integer | null,  // 4-digit year, only if the page states it
-  "specialty":  string | null    // the programme or department, as printed
-}
-
-Rules:
-- Include EVERY person listed on the page: residents, fellows, faculty,
-  attendings, program directors, coordinators, staff, students and alumni.
-- Categorise by their stated role. If a page lists past trainees, they are
-  "alumni". Use "unknown" when the page does not say.
-- Never guess or reconstruct an email address. If it is not legible, use null.
-- A person with no email is still wanted. Report the name and whatever else the
-  page states.
-- Report only what the page states. Do not convert between PGY and class year,
-  and do not infer a missing value from another field \u2014 leave it null.
-- If the page lists no people, return [].
-"""
-
-EXTRACTION_USER_TEMPLATE = """\
-Page title: {title}
-URL: {url}
-
-Extract every person listed on this page: residents, fellows, faculty, staff,
-students and alumni alike.
-{image_note}
-Page text:
----
-{text}
----
-"""
-
-IMAGE_NOTE_WITH_SCREENSHOT = (
-    "A screenshot of the page is attached. Some contact details on these pages "
-    "are published as images rather than text; read those from the screenshot. "
-    "The page text below may be incomplete.\n"
-)
-IMAGE_NOTE_TEXT_ONLY = ""
 
 INSTITUTION_SYSTEM = """\
 You classify whether a website belongs to a post-secondary institution.
@@ -94,7 +42,6 @@ every person listed, above all the current residents and fellows. The page may
 hide people behind tabs (one per class year or campus), accordions, "load more"
 or "view all" buttons, or pagination controls.
 
-Use the screenshot together with the page text, links, and interactive controls.
 Return ONLY this JSON object:
 {
   "page_type": "roster" | "program" | "directory" | "event" | "news" |
@@ -116,9 +63,6 @@ patient-care navigation.
 NAVIGATION_USER_TEMPLATE = """\
 Current URL: {url}
 Page title: {title}
-
-A screenshot of this rendered page is attached. Use its visual layout and labels as
-evidence alongside the structured page data below.
 
 Visible page text:
 ---
@@ -199,6 +143,47 @@ READER_USER_TEMPLATE = """\
 URL: {url}
 Page title: {title}
 {part_note}
+Page text:
+---
+{text}
+---
+"""
+
+
+VERIFY_ROLES_SYSTEM = """\
+You are auditing labels a crawler already assigned to people on an academic
+medical institution's page. You get the page text and a list of people the
+crawler found on it, each with the single category it picked: resident,
+fellow, faculty, staff, student or alumni.
+
+A person can genuinely hold more than one of these at once (someone who is
+both "Faculty" and a fellowship's "Fellow", for instance), but the crawler
+only ever stores one. Read the page and report EVERY category this page's
+text actually supports for each listed person - usually that is just the one
+already given.
+
+Return ONLY JSON:
+{"people": [{"name": "<name exactly as given>",
+             "roles": ["resident" | "fellow" | "faculty" | "staff" |
+                       "student" | "alumni"]}]}
+
+Rules:
+- Include every listed person exactly once, with at least one role.
+- Add a role beyond the one given only when the page itself supports it: the
+  person appears again under a different heading/section, or their own entry
+  names a second role. Never infer a role from a title alone (e.g. "Program
+  Director" does not by itself imply "faculty" beyond what was already given).
+- Never invent a role the page's text does not support, and never output
+  "unknown".
+"""
+
+VERIFY_ROLES_USER_TEMPLATE = """\
+URL: {url}
+Page title: {title}
+
+People the crawler found on this page, with the category it picked:
+{people}
+
 Page text:
 ---
 {text}
@@ -357,20 +342,14 @@ def reader_user_prompt(
     )
 
 
-def extraction_user_prompt(
-    *, title: str, url: str, text: str, has_screenshot: bool, max_chars: int = 24_000
+def verify_roles_user_prompt(
+    *, url: str, title: str, text: str, people: list[dict], max_text_chars: int = 20_000
 ) -> str:
-    body = (text or "").strip()
-    if len(body) > max_chars:
-        # Keep both ends: rosters put people in the middle, headings at the top.
-        head = body[: int(max_chars * 0.7)]
-        tail = body[-int(max_chars * 0.3) :]
-        body = f"{head}\n...[truncated]...\n{tail}"
-    return EXTRACTION_USER_TEMPLATE.format(
-        title=title or "(none)",
+    return VERIFY_ROLES_USER_TEMPLATE.format(
         url=url,
-        text=body or "(no text content)",
-        image_note=IMAGE_NOTE_WITH_SCREENSHOT if has_screenshot else IMAGE_NOTE_TEXT_ONLY,
+        title=title or "(none)",
+        people=json.dumps(people, ensure_ascii=False),
+        text=(text or "").strip()[:max_text_chars] or "(no text content)",
     )
 
 

@@ -37,6 +37,7 @@ from .ids import (
     site_id,
     site_run_id,
     submission_id,
+    verification_id,
     version_id,
 )
 
@@ -332,6 +333,14 @@ class Record(TimestampMixin, Base):
     # The person's title exactly as the page printed it.
     position: Mapped[str | None] = mapped_column(Text)
 
+    # Every category the source page actually supports for this person, e.g.
+    # ["faculty", "fellow"] for someone the page lists as both. `category`
+    # above stays the single coarse bucket everything else filters on; this is
+    # only filled in once a verification job has read the source page. Null
+    # until then, never overwritten by the ordinary crawl.
+    roles: Mapped[list[str] | None] = mapped_column(JSONType)
+    roles_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
     # `area` in the API contract.
     specialty_normalized: Mapped[str | None] = mapped_column(String(128))
     specialty_raw: Mapped[str | None] = mapped_column(Text)
@@ -379,12 +388,7 @@ class Record(TimestampMixin, Base):
 
 
 class RecordVersion(Base):
-    """Immutable snapshot, written only when something changed. Carries provenance.
-
-    Provenance outlives the screenshot: url, title, timestamp, method and field
-    locations are kept after the image is swept, and `screenshot_available` tells
-    the frontend which of the two states it is rendering.
-    """
+    """Immutable snapshot, written only when something changed. Carries provenance."""
 
     __tablename__ = "record_versions"
 
@@ -402,15 +406,6 @@ class RecordVersion(Base):
     # --- provenance ---
     source_url: Mapped[str] = mapped_column(Text, nullable=False)
     page_title: Mapped[str | None] = mapped_column(Text)
-    screenshot_path: Mapped[str | None] = mapped_column(Text)
-    screenshot_available: Mapped[bool] = mapped_column(
-        Boolean, default=False, nullable=False
-    )
-    screenshot_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    # Natural pixel size of the screenshot. The frontend needs it to place the
-    # field boxes below, which are stored in screenshot pixel coordinates.
-    screenshot_width: Mapped[int | None] = mapped_column(Integer)
-    screenshot_height: Mapped[int | None] = mapped_column(Integer)
     captured_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -419,8 +414,6 @@ class RecordVersion(Base):
     )
     fetch_mode: Mapped[str] = mapped_column(_enum(e.FetchMode, "fetch_mode_v"), nullable=False)
     confidence: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
-    # {field: {"x":..,"y":..,"width":..,"height":..}} in screenshot pixel space.
-    field_locations: Mapped[dict[str, Any] | None] = mapped_column(JSONType)
 
     run_id: Mapped[str | None] = mapped_column(String(64))
     site_run_id: Mapped[str | None] = mapped_column(String(64))
@@ -431,7 +424,6 @@ class RecordVersion(Base):
         UniqueConstraint("record_id", "version_no", name="uq_version_record_no"),
         Index("ix_versions_record", "record_id", "version_no"),
         Index("ix_versions_captured", "captured_at"),
-        Index("ix_versions_screenshot_expiry", "screenshot_expires_at"),
         CheckConstraint("version_no > 0", name="ck_version_no_positive"),
     )
 
@@ -519,3 +511,35 @@ class Export(TimestampMixin, Base):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (Index("ix_exports_status", "status", "created_at"),)
+
+
+class VerificationJob(TimestampMixin, Base):
+    """On-demand re-check of already-scraped records' role labels.
+
+    Run manually against data already in the database — never as part of a
+    crawl — because it re-fetches each record's stored source page and asks
+    the model to confirm every role it supports, not just the one the crawl
+    picked.
+    """
+
+    __tablename__ = "verification_jobs"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=verification_id)
+    status: Mapped[str] = mapped_column(
+        _enum(e.VerificationStatus, "verification_status"),
+        default=e.VerificationStatus.PENDING,
+        nullable=False,
+    )
+    site_id: Mapped[str | None] = mapped_column(
+        ForeignKey("sites.id", ondelete="CASCADE")
+    )
+    # An explicit subset of record ids to check ("verify these rows"). Null
+    # means every current record at `site_id`.
+    record_ids: Mapped[list[str] | None] = mapped_column(JSONType)
+    records_total: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    records_checked: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    records_corrected: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    error: Mapped[str | None] = mapped_column(Text)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (Index("ix_verification_jobs_status", "status", "created_at"),)

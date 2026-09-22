@@ -46,8 +46,8 @@ def _spawn(coro) -> asyncio.Task:
 
 # The client's working sheet, plus Position now that everyone on a site is
 # collected rather than just trainees. Provenance columns are deliberately not
-# exported: the source URL and screenshot are for reviewing a person in the app,
-# not for the outreach sheet.
+# exported: the source URL is for reviewing a person in the app, not for the
+# outreach sheet.
 BASE_COLUMNS = [
     "Hospital", "Program", "Specialty", "R/F", "Position", "Full Name",
     "PGY", "Class of", "Email",

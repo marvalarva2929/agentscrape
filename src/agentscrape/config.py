@@ -20,8 +20,6 @@ class Settings(BaseSettings):
     # cancel or retry runs themselves, so the scope currently gates nothing extra.
     admin_password: str = "change-me-admin"
     token_ttl_hours: int = 720
-    # Signed screenshot links, so an <img> tag can load one without a header.
-    artifact_link_ttl_seconds: int = 3600
     # Explicit origins: the frontend is served from GitHub Pages, a different
     # origin from the API, so "*" is both unsafe and insufficient here.
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
@@ -173,12 +171,10 @@ class Settings(BaseSettings):
 
     # --- retention (None = keep forever) --------------------------------
     artifact_dir: Path = Path("./artifacts")
-    screenshot_retention_days: int | None = None
     version_retention_days: int | None = None
     export_retention_days: int | None = 7
 
     @field_validator(
-        "screenshot_retention_days",
         "version_retention_days",
         "export_retention_days",
         mode="before",
@@ -204,15 +200,10 @@ class Settings(BaseSettings):
         return self.llm_cheap_model or self.text_model
 
     @property
-    def screenshot_dir(self) -> Path:
-        return self.artifact_dir / "screenshots"
-
-    @property
     def export_dir(self) -> Path:
         return self.artifact_dir / "exports"
 
     def ensure_dirs(self) -> None:
-        self.screenshot_dir.mkdir(parents=True, exist_ok=True)
         self.export_dir.mkdir(parents=True, exist_ok=True)
 
 

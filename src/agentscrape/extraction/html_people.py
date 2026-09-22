@@ -693,7 +693,6 @@ def _from_tables(
                 pgy=parse_pgy(year_text),
                 class_of=parse_class_of(year_text),
                 specialty_raw=cell(specialty_col) or None,
-                locate_hints=[t for t in (name, emails[0] if emails else None) if t],
                 confidence=0.85,  # a labelled table is strong structure
                 source_note="html:table",
             )
@@ -746,7 +745,6 @@ def _from_layout_table(
             position=_extract_position(text, name),
             pgy=parse_pgy(text),
             class_of=parse_class_of(text),
-            locate_hints=[t for t in (name, emails[0] if emails else None) if t],
             confidence=0.6 if emails else 0.4,
             source_note="html:layout-table",
         )
@@ -818,7 +816,6 @@ def _from_cards(
             position=_extract_position(text, name),
             pgy=parse_pgy(text),
             class_of=parse_class_of(text),
-            locate_hints=[t for t in (name, email) if t],
             confidence=0.8 if name else 0.55,
             source_note="html:card",
         )
@@ -907,7 +904,6 @@ def _from_headings(
                     position=_extract_position(context, name),
                     pgy=parse_pgy(context),
                     class_of=parse_class_of(context),
-                    locate_hints=[t for t in (name, emails[0] if emails else None) if t],
                     confidence=0.5 if emails else 0.35,
                     source_note="html:heading",
                 )
@@ -994,7 +990,6 @@ def _from_repeated_blocks(
             position=_extract_position(text, name),
             pgy=parse_pgy(text),
             class_of=parse_class_of(text),
-            locate_hints=[t for t in (name, emails[0] if emails else None) if t],
             confidence=0.55 if emails else 0.4,
             source_note="html:grid",
         )
@@ -1060,7 +1055,6 @@ def _from_person_blocks(
                 position=_extract_position(text, name),
                 pgy=parse_pgy(text),
                 class_of=parse_class_of(text),
-                locate_hints=[t for t in (name, emails[0] if emails else None) if t],
                 confidence=0.6 if emails else 0.4,
                 source_note="html:block",
             )

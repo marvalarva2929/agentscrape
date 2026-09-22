@@ -334,32 +334,18 @@ class TestSkipInputs:
 
 
 class TestProvenance:
-    async def test_version_carries_screenshot_and_field_locations(self, session):
+    async def test_version_carries_source_and_fetch_mode(self, session):
         site = await _make_site(session)
-        expires = datetime.now(UTC) + timedelta(days=90)
         person = _person()
-        person.locate_hints = ["Jane Doe", "jane@med.example.edu"]
         await lock_site(session, site.id)
         await reconcile_people(
             session, [person],
-            _context(
-                site,
-                screenshot_path="screenshots/sr_1/abc.png",
-                screenshot_expires_at=expires,
-                fetch_mode=FetchMode.BOTH,
-                field_locations={
-                    "Jane Doe": {"x": 10, "y": 20, "width": 100, "height": 18},
-                    "jane@med.example.edu": {"x": 10, "y": 40, "width": 180, "height": 16},
-                },
-            ),
+            _context(site, fetch_mode=FetchMode.BOTH),
         )
         await session.commit()
 
         version = (await session.execute(select(RecordVersion))).scalar_one()
-        assert version.screenshot_available is True
-        assert version.screenshot_expires_at is not None
-        assert version.field_locations["full_name"]["y"] == 20
-        assert version.field_locations["email"]["x"] == 10
+        assert version.source_url == ROSTER_URL
         assert version.fetch_mode == FetchMode.BOTH
 
 

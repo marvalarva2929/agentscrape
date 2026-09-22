@@ -55,7 +55,7 @@ async def _page(deps: PipelineDeps, url: str) -> tuple[str, str, str, str] | Non
 
         try:
             rendered = await asyncio.wait_for(
-                render_page(deps.browser_context, url, capture_screenshot=False),
+                render_page(deps.browser_context, url),
                 timeout=settings.page_timeout_seconds + 15,
             )
         except TimeoutError:

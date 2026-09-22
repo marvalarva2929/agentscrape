@@ -41,8 +41,7 @@ async def populated(session):
             source_url="https://med.example.edu/residents",
             page_title="Current Residents", captured_at=now,
             extraction_method=ExtractionMethod.KNOWN_PATH, fetch_mode=FetchMode.HTML,
-            confidence=0.9, screenshot_available=True,
-            screenshot_path="screenshots/a/b.png",
+            confidence=0.9,
         )
         session.add(version)
         await session.flush()

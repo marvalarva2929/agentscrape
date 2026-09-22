@@ -186,7 +186,7 @@ def _print_outcome(state) -> None:
 async def _print_records(site_id: str, limit: int = 30) -> None:
     from sqlalchemy import select
 
-    from .db.models import Record, RecordVersion
+    from .db.models import Record
     from .db.session import get_sessionmaker
 
     async with get_sessionmaker()() as session:
@@ -200,19 +200,12 @@ async def _print_records(site_id: str, limit: int = 30) -> None:
             (await session.execute(select(Record.id).where(Record.site_id == site_id)))
             .scalars().all()
         )
-        shots = (
-            await session.execute(
-                select(RecordVersion.screenshot_available)
-                .join(Record, Record.current_version_id == RecordVersion.id)
-                .where(Record.site_id == site_id)
-            )
-        ).scalars().all()
 
     if not rows:
         console.print("[yellow]no records stored for this site[/yellow]")
         return
 
-    table = Table(title=f"records ({total} total, {sum(1 for s in shots if s)} with screenshots)")
+    table = Table(title=f"records ({total} total)")
     for column in ("name", "email", "category", "position", "PGY", "class", "specialty", "status"):
         table.add_column(column, overflow="fold")
     for record in rows:
@@ -329,11 +322,10 @@ def import_school_catalog(
 
 @app.command()
 def sweep() -> None:
-    """Expire screenshots and exports past their retention window."""
-    from .storage.artifacts import sweep_expired_exports, sweep_expired_screenshots
+    """Expire exports past their retention window."""
+    from .storage.artifacts import sweep_expired_exports
 
     async def _go() -> None:
-        console.print("screenshots:", await sweep_expired_screenshots())
         console.print("exports:", await sweep_expired_exports())
 
     asyncio.run(_go())
