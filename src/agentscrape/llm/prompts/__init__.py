@@ -162,7 +162,9 @@ only ever stores one. Read the page and report EVERY category this page's
 text actually supports for each listed person - usually that is just the one
 already given.
 
-Return ONLY JSON:
+Return ONLY JSON, and nothing else - no notes, no explanation, no second
+attempt or correction after it, even if you change your mind partway through:
+decide each person's roles first, then output the one JSON object below once.
 {"people": [{"name": "<name exactly as given>",
              "roles": ["resident" | "fellow" | "faculty" | "staff" |
                        "student" | "alumni"]}]}
@@ -171,8 +173,9 @@ Rules:
 - Include every listed person exactly once, with at least one role.
 - Add a role beyond the one given only when the page itself supports it: the
   person appears again under a different heading/section, or their own entry
-  names a second role. Never infer a role from a title alone (e.g. "Program
-  Director" does not by itself imply "faculty" beyond what was already given).
+  names a second role. Never infer a role from a title, a degree or a
+  credential alone (e.g. "Program Director", "PhD" or "CNM" do not by
+  themselves imply "faculty" or "alumni" beyond what was already given).
 - Never invent a role the page's text does not support, and never output
   "unknown".
 """

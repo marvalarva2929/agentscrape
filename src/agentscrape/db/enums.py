@@ -88,6 +88,9 @@ class ExtractionMethod(StrEnum):
     AGENT_NAV = "agent_nav"
     # Filled in by searching the institution's people directory.
     DIRECTORY = "directory"
+    # A verification job's finding promoted into `category`, not a fresh page
+    # read. `extraction_method` is a plain VARCHAR(10), so this stays short.
+    VERIFY = "verify"
 
 
 class FetchMode(StrEnum):

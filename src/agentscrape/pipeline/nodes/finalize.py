@@ -13,8 +13,10 @@ from ...db.models import Record, SiteRun
 from ...db.repositories.programs import refresh_program_counts
 from ...db.repositories.records import lock_site, mark_missing_records
 from ...db.repositories.sites import mark_scraped, set_dominant_specialty, visited_hashes
+from ...domain.schemas import VerificationCreate
 from ...llm.planner import FOUND
 from ...orchestrator.events import EventType
+from ...verification.service import VerificationBusy, create_verification_job
 from ..checkpoint import clear_checkpoint
 from ..deps import PipelineDeps
 from ..state import SiteState
@@ -84,6 +86,9 @@ async def finalize(state: SiteState, deps: PipelineDeps) -> SiteState:
             )
         )
         await session.commit()
+
+    if status == SiteRunStatus.COMPLETED:
+        await _start_auto_verification(deps, site_id, state["root_domain"])
 
     event = {
         SiteRunStatus.COMPLETED: EventType.SITE_COMPLETED,
@@ -166,6 +171,23 @@ def _final_status(state: SiteState) -> SiteRunStatus:
     if status == "cancelled":
         return SiteRunStatus.CANCELLED
     return SiteRunStatus.COMPLETED
+
+
+async def _start_auto_verification(deps: PipelineDeps, site_id: str, domain: str) -> None:
+    """Check the site's fresh labels against their source pages, same as the
+    manual "Verify" action - run automatically once a crawl finishes so
+    nobody has to remember to trigger it. Silently skipped, never fatal to
+    the crawl: `VerificationBusy` means one is already in flight for this
+    site (a manual trigger raced this one, or the site was re-crawled before
+    its last verification finished), and any other failure here is this
+    feature's problem, not the crawl's."""
+    async with deps.sessionmaker() as session:
+        try:
+            await create_verification_job(session, VerificationCreate(site_id=site_id))
+        except VerificationBusy as exc:
+            log.info("auto-verification skipped for %s: %s", domain, exc)
+        except Exception:
+            log.exception("could not start auto-verification for %s", domain)
 
 
 async def _update_dominant_specialty(session, site_id: str) -> None:

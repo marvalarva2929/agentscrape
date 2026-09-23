@@ -28,7 +28,7 @@ from ...domain.schemas import (
 )
 from ...storage.artifacts import absolute_path
 from ..deps import AuthedUser, DbSession
-from ..errors import AppError, ErrorCode, NotFoundError
+from ..errors import AppError, ConflictError, ErrorCode, NotFoundError
 
 router = APIRouter(tags=["people"])
 
@@ -206,10 +206,12 @@ async def start_verification(
     source page. Manual only: give a `site_id` to check everything currently
     on file for that site, or `record_ids` to check just those rows. Returns
     a job id immediately; poll it below for progress."""
-    from ...verification.service import create_verification_job
+    from ...verification.service import VerificationBusy, create_verification_job
 
     try:
         job = await create_verification_job(session, body)
+    except VerificationBusy as exc:
+        raise ConflictError(str(exc)) from exc
     except ValueError as exc:
         raise AppError(str(exc), code=ErrorCode.VALIDATION_ERROR) from exc
     return _verification_out(job)
