@@ -76,6 +76,17 @@ async def lifespan(app: FastAPI):
         except Exception:
             log.exception("resuming interrupted runs failed; restart them from the UI")
 
+    # A verification job stuck at running/pending from before this process
+    # started is not actually running - the background task that owned it
+    # died with the last process. Left alone, it blocks all future
+    # verification for its site forever (see VerificationBusy).
+    from ..verification.service import recover_orphaned_verification_jobs
+
+    try:
+        await recover_orphaned_verification_jobs()
+    except Exception:
+        log.exception("recovering orphaned verification jobs failed")
+
     # Keeps the queue moving after a restart: a run left running by a dead
     # process only shows itself once its heartbeat stops.
     from ..orchestrator.scheduler import supervise

@@ -82,6 +82,36 @@ async def _site_busy(session: AsyncSession, site_id: str) -> str | None:
     return None
 
 
+async def recover_orphaned_verification_jobs() -> int:
+    """Fail every job still marked pending/running from before this process
+    started.
+
+    A background task never survives a restart - `_spawn` holds it in an
+    in-memory set that dies with the process, nothing persists it. Without
+    this, a job orphaned by a crash, deploy or container recycle sits at
+    `running` in the database forever, and that stuck row is exactly what
+    `VerificationBusy` watches for: it would silently block every future
+    verification, manual or auto-triggered, for that site - looking exactly
+    like "verification doesn't work" with no error anywhere to explain why.
+    Call once at startup, before anything can rely on the guard.
+    """
+    async with session_scope() as session:
+        result = await session.execute(
+            update(VerificationJob)
+            .where(VerificationJob.status.in_(_ACTIVE_VERIFICATION))
+            .values(
+                status=VerificationStatus.FAILED,
+                error="orphaned: the server restarted while this job was running",
+                finished_at=datetime.now(UTC),
+            )
+        )
+        await session.commit()
+        count = int(result.rowcount or 0)
+    if count:
+        log.warning("recovered %d verification job(s) orphaned by a restart", count)
+    return count
+
+
 async def create_verification_job(
     session: AsyncSession, body: VerificationCreate
 ) -> VerificationJob:
@@ -240,6 +270,8 @@ async def run_verification(
         checked = 0
         corrected = 0
         rendered_count = 0
+        fetch_failures = 0
+        model_failures = 0
         semaphore = asyncio.Semaphore(concurrency)
         meter = UsageMeter()
         browser_pool: BrowserPool | None = None
@@ -250,7 +282,7 @@ async def run_verification(
             browser_context = await browser_pool.acquire("verification")
 
         async def _one(url: str, title: str | None, people: list[RoleCheckInput]) -> None:
-            nonlocal checked, corrected, rendered_count
+            nonlocal checked, corrected, rendered_count, fetch_failures, model_failures
             # Held for the whole page - fetch, model call, and any render
             # escalation together - so `concurrency` bounds total concurrent
             # model calls too, not just the I/O either side of them. A
@@ -258,6 +290,7 @@ async def run_verification(
             # call fire at once, which is what was overloading the provider.
             async with semaphore:
                 roles_by_record: dict[str, list[str]] = {}
+                fetched_ok = False
                 for attempt in range(page_attempts):
                     result = await fetcher.get(url)
                     # A plain-text source (a program's .txt intro doc, not a
@@ -270,7 +303,9 @@ async def run_verification(
                         if attempt + 1 < page_attempts:
                             await asyncio.sleep(1.5 * (attempt + 1))
                             continue
+                        fetch_failures += len(people)
                         return
+                    fetched_ok = True
                     text = result.text if is_plain_text else html_to_model_text(result.text)
                     roles_by_record = await verify_page_roles(
                         url=url, title=title or "", text=text, people=people, meter=meter,
@@ -278,6 +313,12 @@ async def run_verification(
                     if roles_by_record or attempt + 1 == page_attempts:
                         break
                     await asyncio.sleep(1.5 * (attempt + 1))
+                if not roles_by_record and fetched_ok and browser_context is None:
+                    # The page loaded but the model call never came back with
+                    # a usable answer on any attempt (LLM unreachable,
+                    # misconfigured, or persistently malformed output) - not
+                    # the same as "the page genuinely needed no correction".
+                    model_failures += len(people)
                 if not roles_by_record and browser_context is not None:
                     # Plain HTML grounded nobody: the page may paint its
                     # people in with client-side script, same as the crawler
@@ -297,6 +338,8 @@ async def run_verification(
                         if roles_by_record or render_attempt + 1 == page_attempts:
                             break
                         await asyncio.sleep(1.5 * (render_attempt + 1))
+                    if not roles_by_record:
+                        model_failures += len(people)
             if not roles_by_record:
                 return
             prior = {p.record_id: p.category for p in people}
@@ -322,6 +365,41 @@ async def run_verification(
                 await browser_pool.stop()
         log.info("verification %s: %d pages escalated to a browser render", job_id, rendered_count)
 
+        # A completed job with nothing checked looks identical to "every page
+        # was already correct" unless it says otherwise - and if every single
+        # page failed to fetch or every model call came back unusable, that's
+        # not "nothing to fix", that's the checker never actually running.
+        # Surface it as a failure so it isn't mistaken for a clean pass.
+        total_failures = fetch_failures + model_failures
+        if checked == 0 and rows and total_failures >= len(rows):
+            cause = (
+                "every page failed to fetch"
+                if fetch_failures and not model_failures
+                else "the model never returned a usable answer for any page"
+                if model_failures and not fetch_failures
+                else "every page either failed to fetch or got no usable model answer"
+            )
+            async with session_scope() as session:
+                await session.execute(
+                    update(VerificationJob)
+                    .where(VerificationJob.id == job_id)
+                    .values(
+                        status=VerificationStatus.FAILED,
+                        records_checked=checked,
+                        records_corrected=corrected,
+                        error=(
+                            f"checked 0 of {len(rows)} records: {cause} "
+                            f"({fetch_failures} fetch failures, {model_failures} model failures)"
+                        )[:500],
+                        finished_at=datetime.now(UTC),
+                    )
+                )
+            log.warning(
+                "verification %s: total failure, 0/%d checked (%d fetch, %d model failures)",
+                job_id, len(rows), fetch_failures, model_failures,
+            )
+            return
+
         async with session_scope() as session:
             await session.execute(
                 update(VerificationJob)
@@ -334,8 +412,8 @@ async def run_verification(
                 )
             )
         log.info(
-            "verification %s: %d/%d records checked, %d corrected",
-            job_id, checked, len(rows), corrected,
+            "verification %s: %d/%d records checked, %d corrected (%d fetch, %d model failures)",
+            job_id, checked, len(rows), corrected, fetch_failures, model_failures,
         )
     except Exception as exc:
         log.exception("verification %s failed", job_id)
