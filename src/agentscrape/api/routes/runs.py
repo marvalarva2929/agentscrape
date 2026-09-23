@@ -9,7 +9,7 @@ from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 
-from ...db.enums import TERMINAL_RUN_STATUSES, RunStatus, SiteRunStatus
+from ...db.enums import RUN_KIND_CRAWL, TERMINAL_RUN_STATUSES, RunStatus, SiteRunStatus
 from ...db.models import Run, Site, SiteRun
 from ...domain.schemas import (
     MoveRunRequest,
@@ -53,7 +53,7 @@ def _run_out(
 ) -> RunOut:
     config = dict(run.config or {})
     return RunOut(
-        id=run.id, status=run.status, label=run.label, school_name=school_name, config=config,
+        id=run.id, kind=run.kind, status=run.status, label=run.label, school_name=school_name, config=config,
         stop_reason=run.stop_reason, error_message=run.error_message,
         sites_total=run.sites_total, sites_completed=run.sites_completed,
         sites_skipped=run.sites_skipped, sites_failed=run.sites_failed,
@@ -112,8 +112,10 @@ async def list_runs(
     cursor: str | None = None,
     limit: int = 25,
     status: Annotated[list[str] | None, Query()] = None,
+    kind: str = RUN_KIND_CRAWL,
 ) -> Page[RunOut]:
-    statement = select(Run)
+    # Past crawls by default: verification passes share the queue, not the history.
+    statement = select(Run).where(Run.kind == kind)
     if status:
         statement = statement.where(Run.status.in_(status))
 

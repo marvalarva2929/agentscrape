@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
 from ..db.enums import (
+    RUN_KIND_VERIFY,
     TERMINAL_SITE_RUN_STATUSES,
     RunStatus,
     SiteRunStatus,
@@ -327,12 +328,18 @@ async def resume_interrupted_runs() -> list[str]:
     return [started] if started is not None else []
 
 
-async def launch_run(run_id: str, *, use_browser: bool = True) -> RunOrchestrator:
-    """Start the orchestrator for a run as a background task."""
+async def launch_run(run_id: str, *, use_browser: bool = True) -> RunOrchestrator | None:
+    """Start the orchestrator for a run as a background task. A verification
+    run has no orchestrator: it starts its own task and returns None."""
     async with get_sessionmaker()() as session:
         run = await session.get(Run, run_id)
         if run is None:
             raise ValueError(f"no run {run_id}")
+        if run.kind == RUN_KIND_VERIFY:
+            from ..verification.service import launch_verification_run
+
+            await launch_verification_run(run_id)
+            return None
         config = dict(run.config or {})
         queued = bool(run.queued)
         # A resumed run has already spent money. Start the meter from there, or
@@ -417,14 +424,27 @@ async def cancel_run(session: AsyncSession, run_id: str) -> Run:
 
     await cancel_pending(session, run_id)
     orchestrator = None
-    from .pool import get_active
+    from .pool import get_active, get_active_task
 
     orchestrator = get_active(run_id)
+    task = get_active_task(run_id)
     if orchestrator is not None:
         await orchestrator.cancel()
+    elif task is not None:
+        # A verification pass: its task records the cancellation and hands
+        # the queue on as it unwinds.
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        await session.refresh(run)
     else:
         run.status = RunStatus.CANCELLED
         run.finished_at = datetime.now(UTC)
+        if run.kind == RUN_KIND_VERIFY:
+            # Taken out of the queue before its turn: end the job too, or
+            # whoever is waiting on it would wait forever.
+            from ..verification.service import end_unstarted_job
+
+            await end_unstarted_job(session, run_id, "removed from the queue before it ran")
         await session.commit()
     return run
 

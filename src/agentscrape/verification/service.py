@@ -1,30 +1,42 @@
-"""On-demand verification of already-scraped role labels.
+"""Verification of already-scraped role labels, run as an item in the queue.
 
-Triggered manually ("Verify these rows" in the UI) against data already in
-the database - never automatically as part of a crawl, and never re-crawls
-anything beyond the one stored source page per record. Re-fetches each
-record's current source page with a plain HTTP GET and asks the model which
-roles the page text supports; `run_verification(..., use_browser=True)`
-escalates to a real browser render for a page that grounds nobody as plain
-HTML, the same escalation the crawler itself uses for client-rendered pages.
+Started by the "Verify" action in the UI, and automatically once a crawl
+finishes a school. Either way it never starts on its own: it becomes a
+queued run of kind `verify` and waits its turn behind whatever crawl holds
+the model budget, exactly like a crawl. When its turn comes it re-reads each
+record's stored source page and asks the model which roles the page supports.
 
-The job id comes back immediately; the client polls for status.
+A page is read with a plain HTTP GET first. When that is turned away (many
+hospital sites refuse a script - more so from a cloud server's address than
+from a laptop) or the crawl itself needed a browser to read that page, it is
+opened in a real browser instead, the same escalation the crawler uses.
+
+The job id comes back immediately; the client polls it for progress.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+from collections import Counter
 from datetime import UTC, datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..browser.fetcher import Fetcher
 from ..browser.renderer import BrowserPool, render_page
-from ..db.enums import ExtractionMethod, RecordStatus, SiteRunStatus, VerificationStatus
+from ..db.enums import (
+    RUN_KIND_VERIFY,
+    TERMINAL_RUN_STATUSES,
+    ExtractionMethod,
+    FetchMode,
+    RecordStatus,
+    RunStatus,
+    VerificationStatus,
+)
 from ..db.ids import version_id as new_version_id
-from ..db.models import Record, RecordVersion, SiteRun, VerificationJob
+from ..db.models import Record, RecordVersion, Run, Site, VerificationJob
 from ..db.session import session_scope
 from ..domain.matching import VERSIONED_FIELDS
 from ..domain.schemas import VerificationCreate
@@ -34,76 +46,134 @@ from ..llm.verify import RoleCheckInput, verify_page_roles
 
 log = logging.getLogger("agentscrape.verification")
 
-# Background tasks are kept in a module-level set for the same reason exports
-# are: asyncio holds only a weak reference to a running task, so a
-# fire-and-forget job could otherwise be garbage collected mid-run.
-_BACKGROUND_TASKS: set[asyncio.Task] = set()
-
-
-def _spawn(coro) -> asyncio.Task:
-    task = asyncio.create_task(coro)
-    _BACKGROUND_TASKS.add(task)
-    task.add_done_callback(_BACKGROUND_TASKS.discard)
-    return task
-
-
-# Distinct source pages fetched and read at once. Bounded independently of the
-# crawl's own concurrency, since this always runs well after a crawl.
+# Distinct source pages fetched and read at once.
 _PAGE_CONCURRENCY = 8
+# Browser renders at once: each is a real page in Chromium, far heavier than a GET.
+_RENDER_CONCURRENCY = 2
 
-# A verification job in either of these states still holds the site.
+# How often a running verification tells the queue it is still alive. Well
+# inside the scheduler's RUN_STALE_SECONDS.
+_HEARTBEAT_SECONDS = 5.0
+
+# A verification job in either of these states has not finished.
 _ACTIVE_VERIFICATION = (VerificationStatus.PENDING, VerificationStatus.RUNNING)
 
 
-class VerificationBusy(ValueError):
-    """A crawl or another verification already has this site; try again once
-    it finishes rather than run two passes over the same records at once."""
+async def _label(session: AsyncSession, body: VerificationCreate) -> str:
+    """What the queue calls this pass: how much it checks, and where."""
+    if body.site_id:
+        site_ids = [body.site_id]
+    else:
+        site_ids = list(
+            (
+                await session.execute(
+                    select(Record.site_id).where(Record.id.in_(body.record_ids or [])).distinct()
+                )
+            ).scalars()
+        )
+    names = [
+        name or hospital or domain
+        for name, hospital, domain in (
+            await session.execute(
+                select(Site.name, Site.hospital_name, Site.root_domain)
+                .where(Site.id.in_(site_ids))
+                .order_by(Site.name)
+            )
+        ).all()
+    ]
+    where = names[0] if names else "unknown school"
+    if len(names) > 1:
+        where = f"{where} + {len(names) - 1} more"
+    if body.site_id:
+        return f"Verify all people — {where}"
+    count = len(body.record_ids or [])
+    return f"Verify {count} row{'' if count == 1 else 's'} — {where}"
 
 
-async def _site_busy(session: AsyncSession, site_id: str) -> str | None:
-    """Why a verification can't start for this site right now, or None."""
-    crawling = await session.scalar(
-        select(SiteRun.id)
-        .where(SiteRun.site_id == site_id, SiteRun.status == SiteRunStatus.RUNNING)
-        .limit(1)
+async def create_verification_job(
+    session: AsyncSession, body: VerificationCreate
+) -> VerificationJob:
+    """Put a verification pass in the queue. Does not start it.
+
+    It waits behind every run already queued, crawls included, so it never
+    shares the model budget with one. A whole-site pass for a site that
+    already has one waiting is not queued twice: the waiting one is returned.
+    """
+    if not body.site_id and not body.record_ids:
+        raise ValueError("verification needs a site_id or a list of record_ids")
+
+    if body.site_id and not body.record_ids:
+        waiting = await session.scalar(
+            select(VerificationJob)
+            .where(
+                VerificationJob.site_id == body.site_id,
+                VerificationJob.record_ids.is_(None),
+                VerificationJob.status == VerificationStatus.PENDING,
+                VerificationJob.run_id.isnot(None),
+            )
+            .limit(1)
+        )
+        if waiting is not None:
+            return waiting
+
+    from ..orchestrator.scheduler import next_rank
+
+    run = Run(
+        kind=RUN_KIND_VERIFY,
+        status=RunStatus.PENDING,
+        label=await _label(session, body),
+        config={"queued": True, "site_id": body.site_id, "records": len(body.record_ids or [])},
+        queued=True,
+        queue_rank=await next_rank(session),
+        sites_total=0,
     )
-    if crawling is not None:
-        return "a crawl is still running for this site"
-    verifying = await session.scalar(
-        select(VerificationJob.id)
+    session.add(run)
+    await session.flush()
+    job = VerificationJob(
+        site_id=body.site_id, record_ids=body.record_ids or None, run_id=run.id,
+    )
+    session.add(job)
+    await session.flush()
+    await session.commit()
+    log.info("queued verification %s as run %s (%s)", job.id, run.id, run.label)
+    return job
+
+
+async def end_unstarted_job(session: AsyncSession, run_id: str, reason: str) -> None:
+    """Fail the job of a verify run that will never run. Caller commits."""
+    await session.execute(
+        update(VerificationJob)
         .where(
-            VerificationJob.site_id == site_id,
+            VerificationJob.run_id == run_id,
             VerificationJob.status.in_(_ACTIVE_VERIFICATION),
         )
-        .limit(1)
+        .values(status=VerificationStatus.FAILED, error=reason, finished_at=datetime.now(UTC))
     )
-    if verifying is not None:
-        return "a verification is already running for this site"
-    return None
 
 
 async def recover_orphaned_verification_jobs() -> int:
-    """Fail every job still marked pending/running from before this process
-    started.
+    """Fail every unfinished job that nothing will ever pick up again.
 
-    A background task never survives a restart - `_spawn` holds it in an
-    in-memory set that dies with the process, nothing persists it. Without
-    this, a job orphaned by a crash, deploy or container recycle sits at
-    `running` in the database forever, and that stuck row is exactly what
-    `VerificationBusy` watches for: it would silently block every future
-    verification, manual or auto-triggered, for that site - looking exactly
-    like "verification doesn't work" with no error anywhere to explain why.
-    Call once at startup, before anything can rely on the guard.
+    A job whose queued run is still live is left alone: the queue puts a run
+    abandoned by a restart back in line and runs it again from the start.
+    What is failed here is a job from before verification was queued (no
+    run), or one whose run already ended without finishing it - left at
+    `running` forever, it would read as a verification that never ends.
     """
     async with session_scope() as session:
+        ended_runs = select(Run.id).where(Run.status.in_(TERMINAL_RUN_STATUSES))
         result = await session.execute(
             update(VerificationJob)
-            .where(VerificationJob.status.in_(_ACTIVE_VERIFICATION))
+            .where(
+                VerificationJob.status.in_(_ACTIVE_VERIFICATION),
+                VerificationJob.run_id.is_(None) | VerificationJob.run_id.in_(ended_runs),
+            )
             .values(
                 status=VerificationStatus.FAILED,
                 error="orphaned: the server restarted while this job was running",
                 finished_at=datetime.now(UTC),
             )
+            .execution_options(synchronize_session=False)
         )
         await session.commit()
         count = int(result.rowcount or 0)
@@ -112,48 +182,117 @@ async def recover_orphaned_verification_jobs() -> int:
     return count
 
 
-async def create_verification_job(
-    session: AsyncSession, body: VerificationCreate
-) -> VerificationJob:
-    """Persist the job and kick off checking in the background.
+# -- the queued run ---------------------------------------------------------
 
-    Refuses to start while the site is still crawling, or another
-    verification for it is already in flight - one pass over a site's
-    records at a time, so two runs never race writing the same `roles` field.
+
+async def launch_verification_run(run_id: str) -> None:
+    """Start a verify run the queue just claimed, as a background task.
+
+    Registered with the pool like an orchestrator, so the queue sees it as
+    running and nothing else starts until it hands the budget on.
     """
-    if not body.site_id and not body.record_ids:
-        raise ValueError("verification needs a site_id or a list of record_ids")
+    from ..orchestrator.pool import register_task
 
-    if body.site_id:
-        site_ids = {body.site_id}
-    else:
-        site_ids = set(
-            (
-                await session.execute(
-                    select(Record.site_id).where(Record.id.in_(body.record_ids)).distinct()
-                )
-            ).scalars()
+    async with session_scope() as session:
+        job_id = await session.scalar(
+            select(VerificationJob.id).where(VerificationJob.run_id == run_id).limit(1)
         )
-    for site_id in site_ids:
-        reason = await _site_busy(session, site_id)
-        if reason:
-            raise VerificationBusy(f"cannot start verification for {site_id}: {reason}")
+    task = asyncio.create_task(_run_queued(run_id, job_id))
+    register_task(run_id, task)
 
-    job = VerificationJob(site_id=body.site_id, record_ids=body.record_ids or None)
-    session.add(job)
-    await session.flush()
-    await session.commit()
-    _spawn(run_verification(job.id))
-    return job
+
+async def _heartbeat(run_id: str, meter: UsageMeter) -> None:
+    while True:
+        await asyncio.sleep(_HEARTBEAT_SECONDS)
+        try:
+            async with session_scope() as session:
+                await session.execute(
+                    update(Run)
+                    .where(Run.id == run_id)
+                    .values(
+                        heartbeat_at=datetime.now(UTC),
+                        tokens_in=meter.total.input_tokens,
+                        tokens_out=meter.total.output_tokens,
+                        spend_usd=meter.cost_usd,
+                    )
+                )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("verify run %s: heartbeat failed; will try again", run_id)
+
+
+async def _run_queued(run_id: str, job_id: str | None) -> None:
+    """Run one verification job as the queue's current run, then hand on."""
+    from ..orchestrator.pool import unregister_task
+    from ..orchestrator.scheduler import on_run_finished
+
+    meter = UsageMeter(scope=f"verify:{run_id}")
+    beat = asyncio.create_task(_heartbeat(run_id, meter))
+    status, error = RunStatus.FAILED, None
+    try:
+        if job_id is None:
+            error = "this queued verification has no job to run"
+        else:
+            await run_verification(job_id, meter=meter)
+            async with session_scope() as session:
+                job = await session.get(VerificationJob, job_id)
+            if job is not None and job.status == VerificationStatus.COMPLETED:
+                status = RunStatus.COMPLETED
+            else:
+                error = job.error if job is not None else "the verification job disappeared"
+    except asyncio.CancelledError:
+        status, error = RunStatus.CANCELLED, "stopped before it finished"
+        if job_id is not None:
+            async with session_scope() as session:
+                await session.execute(
+                    update(VerificationJob)
+                    .where(
+                        VerificationJob.id == job_id,
+                        VerificationJob.status.in_(_ACTIVE_VERIFICATION),
+                    )
+                    .values(
+                        status=VerificationStatus.FAILED,
+                        error="stopped before it finished",
+                        finished_at=datetime.now(UTC),
+                    )
+                )
+    except Exception as exc:
+        log.exception("verify run %s crashed", run_id)
+        error = f"{type(exc).__name__}: {exc}"[:500]
+    finally:
+        beat.cancel()
+        try:
+            async with session_scope() as session:
+                await session.execute(
+                    update(Run)
+                    .where(Run.id == run_id)
+                    .values(
+                        status=status,
+                        error_message=error,
+                        finished_at=datetime.now(UTC),
+                        tokens_in=meter.total.input_tokens,
+                        tokens_out=meter.total.output_tokens,
+                        spend_usd=meter.cost_usd,
+                    )
+                )
+        except Exception:
+            log.exception("verify run %s: could not record how it ended", run_id)
+        unregister_task(run_id)
+        # Only now is the model budget free for the next run in line.
+        await on_run_finished(run_id)
+
+
+# -- the check itself -------------------------------------------------------
 
 
 async def _targets(session: AsyncSession, job: VerificationJob) -> list:
-    """(record_id, full_name, category, position, source_url, page_title) for
-    every record this job covers that has a current source page."""
+    """(record_id, full_name, category, position, source_url, page_title,
+    fetch_mode) for every record this job covers that has a current source page."""
     statement = (
         select(
             Record.id, Record.full_name, Record.category, Record.position,
-            RecordVersion.source_url, RecordVersion.page_title,
+            RecordVersion.source_url, RecordVersion.page_title, RecordVersion.fetch_mode,
         )
         .join(RecordVersion, Record.current_version_id == RecordVersion.id)
         .where(Record.full_name.isnot(None), RecordVersion.source_url.isnot(None))
@@ -223,137 +362,200 @@ async def promote_verified_roles(session: AsyncSession, *, site_id: str) -> dict
     return {"promoted": len(promoted), "details": promoted}
 
 
+class _Browser:
+    """A browser started the first time a page needs one, and only then.
+
+    Most pages read fine over plain HTTP, and a verification pass that never
+    needs Chromium should not pay to launch it. If it cannot start at all
+    (no Chromium on this machine), every later request gets the same error
+    rather than trying again per page.
+    """
+
+    def __init__(self) -> None:
+        self._pool: BrowserPool | None = None
+        self._context = None
+        self._error: str | None = None
+        self._lock = asyncio.Lock()
+        self._renders = asyncio.Semaphore(_RENDER_CONCURRENCY)
+        self.rendered = 0
+
+    async def _ensure(self):
+        async with self._lock:
+            if self._context is None and self._error is None:
+                try:
+                    self._pool = BrowserPool(size=1)
+                    await self._pool.start()
+                    self._context = await self._pool.acquire("verification")
+                except Exception as exc:
+                    log.exception("verification: could not start a browser")
+                    self._error = f"no browser available ({type(exc).__name__}: {exc})"[:200]
+            return self._context
+
+    async def read(self, url: str) -> tuple[str | None, str, str | None]:
+        """(model text, page title, error) for the page as a browser shows it."""
+        context = await self._ensure()
+        if context is None:
+            return None, "", self._error
+        async with self._renders:
+            rendered = await render_page(context, url)
+        if not (rendered.ok and rendered.html):
+            return None, "", f"browser: {rendered.error or 'empty page'}"
+        self.rendered += 1
+        return html_to_model_text(rendered.html), rendered.title, None
+
+    async def stop(self) -> None:
+        if self._pool is not None:
+            try:
+                await self._pool.stop()
+            except Exception:
+                log.exception("verification: could not stop the browser")
+
+
+async def _read_plain(fetcher: Fetcher, url: str) -> tuple[str | None, str | None]:
+    """(model text, error) for the page over plain HTTP."""
+    result = await fetcher.get(url)
+    # A plain-text source (a program's .txt intro doc, not a web page) has no
+    # markup to strip; html_to_model_text would discard it as unparseable HTML.
+    is_plain_text = "text/plain" in result.content_type
+    if not result.ok:
+        return None, result.error or f"HTTP {result.status}"
+    if not (result.is_html or is_plain_text):
+        return None, f"not a web page ({result.content_type or 'unknown type'})"
+    return (result.text if is_plain_text else html_to_model_text(result.text)), None
+
+
+def _summarize(errors: Counter) -> str:
+    return ", ".join(f"{reason} ×{count}" for reason, count in errors.most_common(3))
+
+
 async def run_verification(
     job_id: str,
     *,
     concurrency: int = _PAGE_CONCURRENCY,
     page_attempts: int = 1,
     use_browser: bool = False,
+    meter: UsageMeter | None = None,
 ) -> None:
     """Check every target record's source page. Failures are recorded on the
     job, never raised, so a job that dies partway still shows what it got.
 
-    `page_attempts` re-tries a page that came back with nothing (fetch
-    failure, or a model call that never returned usable JSON) before giving
-    up on it - useful for a mop-up pass over records an earlier, more
-    concurrent run missed, where a gentler pace recovers pages that failed
-    under load rather than because they are actually unreachable.
+    Progress is written as each page finishes, so a client polling a long
+    pass sees it move rather than a zero until the very end.
 
-    `use_browser` renders a page in a real browser when the plain HTTP fetch
-    grounds nobody on it - the same escalation the crawler itself uses for a
-    page whose people are painted in by client-side script (tabs,
-    "load more", a roster loaded from an API) rather than present in the raw
-    HTML. Off by default: it is much slower and every record checked this
-    way still only re-confirms the page already on file.
+    A page is opened in a browser whenever plain HTTP cannot read it, or the
+    crawl itself needed a browser for it. `use_browser` additionally renders
+    a page that plain HTTP read but that grounded nobody - off by default:
+    it is much slower and rarely changes the answer.
+
+    `page_attempts` re-tries a page that came back with nothing before
+    giving up on it.
     """
+    meter = meter or UsageMeter(scope=f"verify:{job_id}")
     try:
         async with session_scope() as session:
             job = await session.get(VerificationJob, job_id)
             if job is None:
                 return
             rows = await _targets(session, job)
+            # From zero every time: a pass the queue re-runs after a restart
+            # starts over rather than adding to the counts of the one it replaces.
             await session.execute(
                 update(VerificationJob)
                 .where(VerificationJob.id == job_id)
-                .values(status=VerificationStatus.RUNNING, records_total=len(rows))
+                .values(
+                    status=VerificationStatus.RUNNING, records_total=len(rows),
+                    records_checked=0, records_corrected=0, error=None, finished_at=None,
+                )
             )
 
         by_page: dict[tuple[str, str | None], list[RoleCheckInput]] = {}
-        for record_id, full_name, category, position, source_url, page_title in rows:
+        needs_browser: set[str] = set()
+        for record_id, full_name, category, position, source_url, page_title, mode in rows:
             by_page.setdefault((source_url, page_title), []).append(
                 RoleCheckInput(
                     record_id=record_id, full_name=full_name,
                     category=category, position=position,
                 )
             )
+            if mode in (FetchMode.RENDER, FetchMode.BOTH):
+                needs_browser.add(source_url)
 
         checked = 0
         corrected = 0
-        rendered_count = 0
         fetch_failures = 0
         model_failures = 0
+        fetch_errors: Counter = Counter()
         semaphore = asyncio.Semaphore(concurrency)
-        meter = UsageMeter()
-        browser_pool: BrowserPool | None = None
-        browser_context = None
-        if use_browser:
-            browser_pool = BrowserPool(size=1)
-            await browser_pool.start()
-            browser_context = await browser_pool.acquire("verification")
+        browser = _Browser()
+
+        async def _ask(url: str, title: str, text: str, people: list[RoleCheckInput]) -> dict:
+            for attempt in range(page_attempts):
+                roles = await verify_page_roles(
+                    url=url, title=title, text=text, people=people, meter=meter,
+                )
+                if roles or attempt + 1 == page_attempts:
+                    return roles
+                await asyncio.sleep(1.5 * (attempt + 1))
+            return {}
 
         async def _one(url: str, title: str | None, people: list[RoleCheckInput]) -> None:
-            nonlocal checked, corrected, rendered_count, fetch_failures, model_failures
-            # Held for the whole page - fetch, model call, and any render
-            # escalation together - so `concurrency` bounds total concurrent
-            # model calls too, not just the I/O either side of them. A
-            # semaphore only around the fetch still let every page's model
-            # call fire at once, which is what was overloading the provider.
+            nonlocal checked, corrected, fetch_failures, model_failures
+            # Held for the whole page - fetch, model call and any render - so
+            # `concurrency` bounds concurrent model calls too, not just I/O.
             async with semaphore:
                 roles_by_record: dict[str, list[str]] = {}
-                fetched_ok = False
-                for attempt in range(page_attempts):
-                    result = await fetcher.get(url)
-                    # A plain-text source (a program's .txt intro doc, not a
-                    # web page) has no markup to strip - html_to_model_text
-                    # would otherwise discard it as unparseable HTML and skip
-                    # straight to giving up, without even trying the browser
-                    # fallback.
-                    is_plain_text = "text/plain" in result.content_type
-                    if not result.ok or not (result.is_html or is_plain_text):
-                        if attempt + 1 < page_attempts:
-                            await asyncio.sleep(1.5 * (attempt + 1))
-                            continue
-                        fetch_failures += len(people)
-                        return
-                    fetched_ok = True
-                    text = result.text if is_plain_text else html_to_model_text(result.text)
-                    roles_by_record = await verify_page_roles(
-                        url=url, title=title or "", text=text, people=people, meter=meter,
-                    )
-                    if roles_by_record or attempt + 1 == page_attempts:
-                        break
-                    await asyncio.sleep(1.5 * (attempt + 1))
-                if not roles_by_record and fetched_ok and browser_context is None:
-                    # The page loaded but the model call never came back with
-                    # a usable answer on any attempt (LLM unreachable,
-                    # misconfigured, or persistently malformed output) - not
-                    # the same as "the page genuinely needed no correction".
-                    model_failures += len(people)
-                if not roles_by_record and browser_context is not None:
-                    # Plain HTML grounded nobody: the page may paint its
-                    # people in with client-side script, same as the crawler
-                    # sees. Retried too - a render is expensive enough that
-                    # losing its model call to a transient rate limit, with
-                    # nothing left to fall back on, would waste the render.
-                    for render_attempt in range(page_attempts):
-                        rendered = await render_page(browser_context, url)
-                        if not (rendered.ok and rendered.html):
-                            break
-                        rendered_count += 1
-                        text = html_to_model_text(rendered.html)
-                        roles_by_record = await verify_page_roles(
-                            url=url, title=title or rendered.title, text=text,
-                            people=people, meter=meter,
+                text, page_title, error = None, title or "", None
+                if url not in needs_browser:
+                    text, error = await _read_plain(fetcher, url)
+                    if text is not None:
+                        roles_by_record = await _ask(url, page_title, text, people)
+                # Plain HTTP was refused, or the crawl only ever read this page
+                # in a browser, or (with use_browser) plain HTML grounded nobody.
+                if text is None or (use_browser and not roles_by_record):
+                    rendered, rendered_title, render_error = await browser.read(url)
+                    if rendered is not None:
+                        text = rendered
+                        roles_by_record = await _ask(
+                            url, title or rendered_title, rendered, people,
                         )
-                        if roles_by_record or render_attempt + 1 == page_attempts:
-                            break
-                        await asyncio.sleep(1.5 * (render_attempt + 1))
-                    if not roles_by_record:
-                        model_failures += len(people)
-            if not roles_by_record:
-                return
+                    elif text is None:
+                        error = f"{error}; {render_error}" if error else render_error
+                if text is None:
+                    fetch_failures += len(people)
+                    fetch_errors[error or "unreadable"] += 1
+                    log.info("verification %s: could not read %s: %s", job_id, url, error)
+                    return
+                if not roles_by_record:
+                    # Read, but the model never gave an answer that grounded
+                    # anyone - not the same as "nothing needed correcting".
+                    model_failures += len(people)
+                    return
             prior = {p.record_id: p.category for p in people}
             now = datetime.now(UTC)
+            page_checked = page_corrected = 0
             async with session_scope() as write_session:
                 for record_id, roles in roles_by_record.items():
                     record = await write_session.get(Record, record_id)
                     if record is None:
                         continue
-                    checked += 1
+                    page_checked += 1
                     record.roles = roles
                     record.roles_checked_at = now
                     if roles != [prior.get(record_id)]:
-                        corrected += 1
+                        page_corrected += 1
+                # Added in SQL, so pages finishing out of order can't write
+                # an older total over a newer one.
+                await write_session.execute(
+                    update(VerificationJob)
+                    .where(VerificationJob.id == job_id)
+                    .values(
+                        records_checked=VerificationJob.records_checked + page_checked,
+                        records_corrected=VerificationJob.records_corrected + page_corrected,
+                        updated_at=func.now(),
+                    )
+                )
+            checked += page_checked
+            corrected += page_corrected
 
         try:
             async with Fetcher() as fetcher:
@@ -361,59 +563,39 @@ async def run_verification(
                     _one(url, title, people) for (url, title), people in by_page.items()
                 ))
         finally:
-            if browser_pool is not None:
-                await browser_pool.stop()
-        log.info("verification %s: %d pages escalated to a browser render", job_id, rendered_count)
+            await browser.stop()
 
-        # A completed job with nothing checked looks identical to "every page
-        # was already correct" unless it says otherwise - and if every single
-        # page failed to fetch or every model call came back unusable, that's
-        # not "nothing to fix", that's the checker never actually running.
-        # Surface it as a failure so it isn't mistaken for a clean pass.
-        total_failures = fetch_failures + model_failures
-        if checked == 0 and rows and total_failures >= len(rows):
-            cause = (
-                "every page failed to fetch"
-                if fetch_failures and not model_failures
-                else "the model never returned a usable answer for any page"
-                if model_failures and not fetch_failures
-                else "every page either failed to fetch or got no usable model answer"
-            )
-            async with session_scope() as session:
-                await session.execute(
-                    update(VerificationJob)
-                    .where(VerificationJob.id == job_id)
-                    .values(
-                        status=VerificationStatus.FAILED,
-                        records_checked=checked,
-                        records_corrected=corrected,
-                        error=(
-                            f"checked 0 of {len(rows)} records: {cause} "
-                            f"({fetch_failures} fetch failures, {model_failures} model failures)"
-                        )[:500],
-                        finished_at=datetime.now(UTC),
-                    )
-                )
-            log.warning(
-                "verification %s: total failure, 0/%d checked (%d fetch, %d model failures)",
-                job_id, len(rows), fetch_failures, model_failures,
-            )
-            return
+        failed = len(rows) - checked
+        reasons = []
+        if fetch_failures:
+            reasons.append(f"{fetch_failures} couldn't be read ({_summarize(fetch_errors)})")
+        if model_failures:
+            why = f"; last error: {meter.last_failure}" if meter.last_failure else ""
+            reasons.append(f"{model_failures} got no usable answer from the model{why}")
+        summary = "; ".join(reasons)
 
+        # A pass that checked nobody is the checker never running, not a
+        # clean bill of health: report it as a failure with the reason.
+        total_failure = checked == 0 and bool(rows)
         async with session_scope() as session:
             await session.execute(
                 update(VerificationJob)
                 .where(VerificationJob.id == job_id)
                 .values(
-                    status=VerificationStatus.COMPLETED,
+                    status=VerificationStatus.FAILED if total_failure else VerificationStatus.COMPLETED,
                     records_checked=checked,
                     records_corrected=corrected,
+                    error=(
+                        f"checked 0 of {len(rows)} records: {summary or 'no page could be checked'}"[:500]
+                        if total_failure
+                        else (f"{failed} of {len(rows)} not checked: {summary}"[:500] if failed and summary else None)
+                    ),
                     finished_at=datetime.now(UTC),
                 )
             )
         log.info(
-            "verification %s: %d/%d records checked, %d corrected (%d fetch, %d model failures)",
-            job_id, checked, len(rows), corrected, fetch_failures, model_failures,
+            "verification %s: %d/%d records checked, %d corrected, %d pages rendered (%s)",
+            job_id, checked, len(rows), corrected, browser.rendered, summary or "no failures",
         )
     except Exception as exc:
         log.exception("verification %s failed", job_id)

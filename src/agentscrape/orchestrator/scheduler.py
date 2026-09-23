@@ -34,7 +34,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.enums import RunStatus, SiteRunStatus
-from ..db.models import Run, Site, SiteRun
+from ..db.models import Run, Site, SiteRun, VerificationJob
 from ..db.session import get_sessionmaker
 from ..domain.schemas import QueueEntryOut, QueueOut, QueueSiteOut
 from .pool import active_run_ids
@@ -306,6 +306,18 @@ async def queue_view(session: AsyncSession) -> QueueOut:
             )
         ).all()
     )
+    # A verification pass has no schools to show; its job's counts are its progress.
+    checks = {
+        run_id: (total, checked)
+        for run_id, total, checked in (
+            await session.execute(
+                select(
+                    VerificationJob.run_id, VerificationJob.records_total,
+                    VerificationJob.records_checked,
+                ).where(VerificationJob.run_id.in_(run_ids))
+            )
+        ).all()
+    }
     now = datetime.now(UTC)
     active = set(active_run_ids())
 
@@ -332,6 +344,9 @@ async def queue_view(session: AsyncSession) -> QueueOut:
             created_at=run.created_at,
             started_at=run.started_at,
             sites=own,
+            kind=run.kind,
+            records_total=checks.get(run.id, (0, 0))[0],
+            records_checked=checks.get(run.id, (0, 0))[1],
         )
 
     view = QueueOut()

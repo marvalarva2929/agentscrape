@@ -28,6 +28,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from . import enums as e
+from .enums import RUN_KIND_CRAWL
 from .ids import (
     export_id,
     path_id,
@@ -123,6 +124,11 @@ class Run(TimestampMixin, Base):
         _enum(e.RunStatus, "run_status"), default=e.RunStatus.PENDING, nullable=False
     )
     label: Mapped[str | None] = mapped_column(Text)
+    # `crawl`, or `verify` for a verification pass waiting its turn in the
+    # same queue (its VerificationJob points back here).
+    kind: Mapped[str] = mapped_column(
+        String(16), default=RUN_KIND_CRAWL, server_default=RUN_KIND_CRAWL, nullable=False
+    )
     config: Mapped[dict[str, Any]] = mapped_column(JSONType, default=dict, nullable=False)
     stop_reason: Mapped[str | None] = mapped_column(_enum(e.StopReason, "stop_reason"))
     error_message: Mapped[str | None] = mapped_column(Text)
@@ -536,6 +542,11 @@ class VerificationJob(TimestampMixin, Base):
     # An explicit subset of record ids to check ("verify these rows"). Null
     # means every current record at `site_id`.
     record_ids: Mapped[list[str] | None] = mapped_column(JSONType)
+    # The queued run (kind `verify`) this job waits in. Null only for jobs
+    # from before verification was queued.
+    run_id: Mapped[str | None] = mapped_column(
+        ForeignKey("runs.id", ondelete="SET NULL"), index=True
+    )
     records_total: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     records_checked: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     records_corrected: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

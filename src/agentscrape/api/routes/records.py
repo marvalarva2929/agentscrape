@@ -28,7 +28,7 @@ from ...domain.schemas import (
 )
 from ...storage.artifacts import absolute_path
 from ..deps import AuthedUser, DbSession
-from ..errors import AppError, ConflictError, ErrorCode, NotFoundError
+from ..errors import AppError, ErrorCode, NotFoundError
 
 router = APIRouter(tags=["people"])
 
@@ -189,9 +189,16 @@ async def record_source(
     )
 
 
-def _verification_out(job) -> VerificationOut:
+async def _verification_out(session, job) -> VerificationOut:
+    from ...orchestrator.scheduler import queue_position
+
+    position = (
+        await queue_position(session, job.run_id)
+        if job.run_id and job.status == "pending" else None
+    )
     return VerificationOut(
         id=job.id, status=job.status, site_id=job.site_id, record_ids=job.record_ids,
+        run_id=job.run_id, queue_position=position,
         records_total=job.records_total, records_checked=job.records_checked,
         records_corrected=job.records_corrected, error=job.error,
         created_at=job.created_at, finished_at=job.finished_at,
@@ -202,19 +209,22 @@ def _verification_out(job) -> VerificationOut:
 async def start_verification(
     body: VerificationCreate, _: AuthedUser, session: DbSession
 ) -> VerificationOut:
-    """Re-check already-scraped records' role labels against their stored
-    source page. Manual only: give a `site_id` to check everything currently
-    on file for that site, or `record_ids` to check just those rows. Returns
-    a job id immediately; poll it below for progress."""
-    from ...verification.service import VerificationBusy, create_verification_job
+    """Queue a re-check of already-scraped records' role labels against their
+    stored source page: give a `site_id` to check everything currently on
+    file for that site, or `record_ids` to check just those rows. It waits
+    its turn in the run queue like a crawl. Returns a job id immediately;
+    poll it below for its place in line and then its progress."""
+    from ...orchestrator import scheduler
+    from ...verification.service import create_verification_job
 
     try:
         job = await create_verification_job(session, body)
-    except VerificationBusy as exc:
-        raise ConflictError(str(exc)) from exc
     except ValueError as exc:
         raise AppError(str(exc), code=ErrorCode.VALIDATION_ERROR) from exc
-    return _verification_out(job)
+    # Starts now only if nothing else holds the queue.
+    await scheduler.start_next_if_idle()
+    await session.refresh(job)
+    return await _verification_out(session, job)
 
 
 @router.get("/people/verify/{job_id}", response_model=VerificationOut)
@@ -226,7 +236,7 @@ async def verification_status(
     job = await session.get(VerificationJob, job_id)
     if job is None:
         raise NotFoundError(f"No verification job with id {job_id!r}.")
-    return _verification_out(job)
+    return await _verification_out(session, job)
 
 
 @router.post("/people/export", response_model=ExportOut, status_code=202)

@@ -50,6 +50,9 @@ def offline_model(monkeypatch):
     monkeypatch.setattr(provider, "_provider", OfflineProvider())
     # Every call fails here by design; the abort is tested explicitly.
     monkeypatch.setattr(settings, "llm_max_consecutive_failures", 0)
+    # A finished crawl would otherwise queue a verification pass that outlives
+    # the test; verification is tested on its own.
+    monkeypatch.setattr(settings, "auto_verify_after_crawl", False)
     yield
 
 

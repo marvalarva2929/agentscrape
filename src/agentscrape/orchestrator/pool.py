@@ -421,5 +421,22 @@ def get_active(run_id: str) -> RunOrchestrator | None:
     return _active.get(run_id)
 
 
+# Queued runs that are not crawls (a verification pass) hold the queue the same
+# way, but have no orchestrator: just the task doing the work, so cancel can stop it.
+_active_tasks: dict[str, asyncio.Task] = {}
+
+
+def register_task(run_id: str, task: asyncio.Task) -> None:
+    _active_tasks[run_id] = task
+
+
+def unregister_task(run_id: str) -> None:
+    _active_tasks.pop(run_id, None)
+
+
+def get_active_task(run_id: str) -> asyncio.Task | None:
+    return _active_tasks.get(run_id)
+
+
 def active_run_ids() -> list[str]:
-    return list(_active)
+    return list(_active) + list(_active_tasks)

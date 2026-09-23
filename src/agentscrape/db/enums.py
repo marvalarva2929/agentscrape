@@ -22,6 +22,12 @@ class RunStatus(StrEnum):
     FAILED = "failed"
 
 
+# What a queued run does when its turn comes: crawl its schools, or re-check
+# already-scraped role labels (a VerificationJob with this run's id).
+RUN_KIND_CRAWL = "crawl"
+RUN_KIND_VERIFY = "verify"
+
+
 TERMINAL_RUN_STATUSES = frozenset(
     {RunStatus.COMPLETED, RunStatus.CANCELLED, RunStatus.STOPPED_AT_LIMIT, RunStatus.FAILED}
 )

@@ -72,6 +72,8 @@ class UsageMeter:
     # was awkward.
     failures: int = 0
     consecutive_failures: int = 0
+    # What the most recent failure was, for a report that says why.
+    last_failure: str | None = None
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
     on_usage: object = None  # async callable(Usage) -> None
 
@@ -93,6 +95,7 @@ class UsageMeter:
         """Count a failed model call; raise once failures stop being isolated."""
         self.failures += 1
         self.consecutive_failures += 1
+        self.last_failure = f"{what}: {exc}"[:300]
         limit = settings.llm_max_consecutive_failures
         if limit and self.consecutive_failures >= limit:
             raise LLMUnavailable(

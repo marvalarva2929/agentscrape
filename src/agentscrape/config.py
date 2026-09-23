@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     # Pick up runs that were in flight when the API last stopped. Each school
     # resumes from its checkpoint (after mapping, once per batch of pages).
     resume_runs_on_startup: bool = True
+    # Queue a role-verification pass for each school a crawl completes. It
+    # waits its turn in the run queue behind the crawls already there.
+    auto_verify_after_crawl: bool = True
     # Where those snapshots live; blank means the repository's demo/ folder.
     demo_snapshot_dir: str = ""
     # The school spreadsheets staff are sent (CSV or .xlsx, one row per

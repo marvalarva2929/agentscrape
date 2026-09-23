@@ -174,6 +174,7 @@ class RunCreate(BaseModel):
 
 class RunOut(ApiModel):
     id: str
+    kind: str = "crawl"
     status: str
     label: str | None
     school_name: str | None = None
@@ -241,6 +242,11 @@ class QueueEntryOut(ApiModel):
     created_at: datetime
     started_at: datetime | None = None
     sites: list[QueueSiteOut] = Field(default_factory=list)
+    # `crawl`, or `verify` for a verification pass; a verify entry has no
+    # sites and reports its progress in records instead.
+    kind: str = "crawl"
+    records_total: int = 0
+    records_checked: int = 0
 
 
 class QueueOut(ApiModel):
@@ -450,6 +456,10 @@ class VerificationOut(ApiModel):
     status: str
     site_id: str | None
     record_ids: list[str] | None
+    # The queued run this pass waits in, and its place in line while it waits
+    # (1 = next); None once it has started.
+    run_id: str | None = None
+    queue_position: int | None = None
     records_total: int
     records_checked: int
     records_corrected: int
