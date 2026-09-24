@@ -37,10 +37,10 @@ from ..db.enums import (
     VerificationStatus,
 )
 from ..db.ids import version_id as new_version_id
-from ..db.models import Record, RecordVersion, Run, Site, VerificationAttempt, VerificationJob
+from ..db.models import Record, RecordVersion, Run, Site, SiteRun, VerificationAttempt, VerificationJob
 from ..db.session import session_scope
 from ..domain.matching import VERSIONED_FIELDS
-from ..domain.schemas import VerificationCreate
+from ..domain.schemas import RunConfigIn, RunCreate, VerificationCreate
 from ..extraction.text import html_to_model_text
 from ..llm.usage import UsageMeter
 from ..llm.verify import RoleCheckInput, verify_page_roles
@@ -304,11 +304,11 @@ async def _run_queued(run_id: str, job_id: str | None) -> None:
 
 
 async def _targets(session: AsyncSession, job: VerificationJob) -> list:
-    """(record_id, full_name, category, position, source_url, page_title,
-    fetch_mode) for every record this job covers that has a current source page."""
+    """(site_id, record_id, full_name, category, position, source_url,
+    page_title, fetch_mode) for every covered record with a source page."""
     statement = (
         select(
-            Record.id, Record.full_name, Record.category, Record.position,
+            Record.site_id, Record.id, Record.full_name, Record.category, Record.position,
             RecordVersion.source_url, RecordVersion.page_title, RecordVersion.fetch_mode,
         )
         .join(RecordVersion, Record.current_version_id == RecordVersion.id)
@@ -319,6 +319,80 @@ async def _targets(session: AsyncSession, job: VerificationJob) -> list:
     else:
         statement = statement.where(Record.site_id == job.site_id)
     return (await session.execute(statement)).all()
+
+
+async def _queue_crawl_fallback(site_ids: set[str], job_id: str) -> str | None:
+    """Queue one ordinary crawl for sites whose stored verification pages died.
+
+    A source URL can legitimately disappear after a crawl.  Re-reading that
+    dead URL cannot verify anybody, but treating it as a terminal verification
+    error loses a perfectly usable institution entry point.  A normal crawl
+    rediscovers the current roster and replaces stale source URLs.  The marker
+    prevents this recovery crawl from auto-starting verification again and
+    creating a 404 -> crawl -> verify loop.
+    """
+    if not site_ids:
+        return None
+    async with session_scope() as session:
+        # Repeated clicks, automatic verification, and a retry can all notice
+        # the same stale page.  One refresh is enough; do not fill the queue
+        # with identical recovery crawls.
+        active = (
+            await session.execute(
+                select(SiteRun.site_id, Run.id, Run.config)
+                .join(Run, SiteRun.run_id == Run.id)
+                .where(
+                    SiteRun.site_id.in_(site_ids),
+                    Run.kind == "crawl",
+                    Run.status.in_((RunStatus.PENDING, RunStatus.RUNNING)),
+                )
+            )
+        ).all()
+        already_refreshing = {
+            site_id for site_id, _, config in active
+            if (config or {}).get("verification_fallback")
+        }
+        existing_run_id = next(
+            (run_id for site_id, run_id, config in active
+             if site_id in already_refreshing and (config or {}).get("verification_fallback")),
+            None,
+        )
+        site_ids -= already_refreshing
+        if not site_ids:
+            return existing_run_id
+        sites = (
+            await session.execute(
+                select(Site).where(Site.id.in_(site_ids)).order_by(Site.name, Site.root_domain)
+            )
+        ).scalars().all()
+        urls = [site.canonical_url for site in sites if site.canonical_url]
+        if not urls:
+            return None
+        from ..orchestrator.service import create_run
+
+        run = await create_run(
+            session,
+            RunCreate(
+                sites=urls,
+                config=RunConfigIn(
+                    # Recovery runs are serialized by the queue.  Keeping the
+                    # declared value at one also lets this safety net run on a
+                    # small deployment where the interactive default is too
+                    # large for the browser-memory admission check.
+                    concurrency=1,
+                    modes=["crawl"],
+                    label=f"Refresh stale verification pages ({len(urls)} school{'s' if len(urls) != 1 else ''})",
+                ),
+            ),
+        )
+        run.config = {
+            **(run.config or {}),
+            "verification_fallback": True,
+            "verification_job_id": job_id,
+        }
+        await session.commit()
+    log.warning("verification %s: queued crawl fallback %s for %d site(s)", job_id, run.id, len(urls))
+    return run.id
 
 
 async def promote_verified_roles(session: AsyncSession, *, site_id: str) -> dict:
@@ -524,19 +598,19 @@ async def run_verification(
                 )
             )
 
-        by_page: dict[tuple[str, str | None], list[RoleCheckInput]] = {}
+        by_page: dict[tuple[str, str, str | None], list[RoleCheckInput]] = {}
         # A role claim cannot be attached safely when the school has multiple
         # active records with the same normalized name. Reconciliation already
         # deduplicates extraction identities; this is a final verification gate
         # for legacy or ambiguous records and intentionally never deletes data.
-        name_counts = Counter(str(full_name).casefold().strip() for _, full_name, *_ in rows)
+        name_counts = Counter(str(full_name).casefold().strip() for _, _, full_name, *_ in rows)
         duplicate_ids = {
-            record_id for record_id, full_name, *_ in rows
+            record_id for _, record_id, full_name, *_ in rows
             if name_counts[str(full_name).casefold().strip()] > 1
         }
         needs_browser: set[str] = set()
-        for record_id, full_name, category, position, source_url, page_title, mode in rows:
-            by_page.setdefault((source_url, page_title), []).append(
+        for site_id, record_id, full_name, category, position, source_url, page_title, mode in rows:
+            by_page.setdefault((site_id, source_url, page_title), []).append(
                 RoleCheckInput(
                     record_id=record_id, full_name=full_name,
                     category=category, position=position,
@@ -551,6 +625,7 @@ async def run_verification(
         fetch_failures = 0
         model_failures = 0
         fetch_errors: Counter = Counter()
+        fallback_site_ids: set[str] = set()
         semaphore = asyncio.Semaphore(concurrency)
         browser = _Browser()
 
@@ -564,7 +639,7 @@ async def run_verification(
                 await asyncio.sleep(1.5 * (attempt + 1))
             return {}
 
-        async def _one(url: str, title: str | None, people: list[RoleCheckInput]) -> None:
+        async def _one(site_id: str, url: str, title: str | None, people: list[RoleCheckInput]) -> None:
             nonlocal checked, corrected, unresolved, fetch_failures, model_failures
             # Held for the whole page - fetch, model call and any render - so
             # `concurrency` bounds concurrent model calls too, not just I/O.
@@ -589,6 +664,7 @@ async def run_verification(
                 if text is None:
                     fetch_failures += len(people)
                     fetch_errors[error or "unreadable"] += 1
+                    fallback_site_ids.add(site_id)
                     log.info("verification %s: could not read %s: %s", job_id, url, error)
                     await _audit_attempt(job_id, people, stage="fetch", outcome="unreadable", url=url, detail=error)
                     return
@@ -596,6 +672,11 @@ async def run_verification(
                     # Read, but the model never gave an answer that grounded
                     # anyone - not the same as "nothing needed correcting".
                     model_failures += len(people)
+                    # The source was readable but verification could not make
+                    # a grounded decision (provider failure, malformed answer,
+                    # or stale page content).  Let the ordinary crawler find
+                    # the current roster instead of leaving this site stuck.
+                    fallback_site_ids.add(site_id)
                     await _audit_attempt(job_id, people, stage="model", outcome="no_decision", url=url, detail=meter.last_failure)
                     return
                 # The page was readable, but a person without a source-backed
@@ -649,10 +730,13 @@ async def run_verification(
         try:
             async with Fetcher() as fetcher:
                 await asyncio.gather(*(
-                    _one(url, title, people) for (url, title), people in by_page.items()
+                    _one(site_id, url, title, people)
+                    for (site_id, url, title), people in by_page.items()
                 ))
         finally:
             await browser.stop()
+
+        fallback_run_id = await _queue_crawl_fallback(fallback_site_ids, job_id)
 
         failed = len(rows) - checked
         reasons = []
@@ -663,6 +747,8 @@ async def run_verification(
             reasons.append(f"{model_failures} got no usable answer from the model{why}")
         if unresolved:
             reasons.append(f"{unresolved} had no source-backed role decision")
+        if fallback_run_id:
+            reasons.append(f"a normal crawl was queued to refresh stale pages (run {fallback_run_id})")
         summary = "; ".join(reasons)
 
         # A pass that checked nobody is the checker never running, not a

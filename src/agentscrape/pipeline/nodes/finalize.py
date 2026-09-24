@@ -10,7 +10,7 @@ from sqlalchemy import select, update
 
 from ...config import settings
 from ...db.enums import SiteRunStatus
-from ...db.models import Record, SiteRun
+from ...db.models import Record, Run, SiteRun
 from ...db.repositories.programs import refresh_program_counts
 from ...db.repositories.records import lock_site, mark_missing_records
 from ...db.repositories.sites import mark_scraped, set_dominant_specialty, visited_hashes
@@ -88,7 +88,7 @@ async def finalize(state: SiteState, deps: PipelineDeps) -> SiteState:
         )
         await session.commit()
 
-    if status == SiteRunStatus.COMPLETED and settings.auto_verify_after_crawl:
+    if status == SiteRunStatus.COMPLETED and settings.auto_verify_after_crawl and await _should_auto_verify(deps, state):
         await _start_auto_verification(deps, site_id, state["root_domain"])
 
     event = {
@@ -172,6 +172,20 @@ def _final_status(state: SiteState) -> SiteRunStatus:
     if status == "cancelled":
         return SiteRunStatus.CANCELLED
     return SiteRunStatus.COMPLETED
+
+
+async def _should_auto_verify(deps: PipelineDeps, state: SiteState) -> bool:
+    """Avoid looping when a verification failure deliberately refreshed a site.
+
+    The refresh crawl is recovery for stale/unreadable source URLs; immediately
+    re-verifying the same stale records would just queue the same recovery again.
+    """
+    run_id = state.get("run_id")
+    if not run_id:
+        return True
+    async with deps.sessionmaker() as session:
+        run = await session.get(Run, run_id)
+        return not bool((run.config or {}).get("verification_fallback")) if run else True
 
 
 async def _start_auto_verification(deps: PipelineDeps, site_id: str, domain: str) -> None:

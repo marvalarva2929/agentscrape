@@ -192,16 +192,39 @@ async def record_source(
 
 async def _verification_out(session, job) -> VerificationOut:
     from ...orchestrator.scheduler import queue_position
+    from sqlalchemy import func, select
+    from ...db.models import Run, VerificationAttempt
 
     position = (
         await queue_position(session, job.run_id)
         if job.run_id and job.status == "pending" else None
+    )
+    attempts = (
+        await session.execute(
+            select(
+                VerificationAttempt.stage,
+                VerificationAttempt.outcome,
+                func.count(VerificationAttempt.id),
+            )
+            .where(VerificationAttempt.job_id == job.id)
+            .group_by(VerificationAttempt.stage, VerificationAttempt.outcome)
+        )
+    ).all()
+    # Recovery-run linkage lives in the run's JSON config so no migration is
+    # required to expose it to the UI.
+    fallback_run_id = await session.scalar(
+        select(Run.id)
+        .where(Run.config["verification_job_id"].as_string() == job.id)
+        .order_by(Run.created_at.desc())
+        .limit(1)
     )
     return VerificationOut(
         id=job.id, status=job.status, site_id=job.site_id, record_ids=job.record_ids,
         run_id=job.run_id, queue_position=position,
         records_total=job.records_total, records_checked=job.records_checked,
         records_corrected=job.records_corrected, error=job.error,
+        attempt_summary={f"{stage}:{outcome}": count for stage, outcome, count in attempts},
+        fallback_run_id=fallback_run_id,
         created_at=job.created_at, finished_at=job.finished_at,
     )
 

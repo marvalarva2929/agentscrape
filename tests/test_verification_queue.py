@@ -26,7 +26,7 @@ from agentscrape.db.enums import (
     RunStatus,
     VerificationStatus,
 )
-from agentscrape.db.models import Record, RecordVersion, Run, Site, VerificationJob
+from agentscrape.db.models import Record, RecordVersion, Run, Site, SiteRun, VerificationJob
 from agentscrape.orchestrator import scheduler
 from agentscrape.orchestrator.pool import active_run_ids, register, unregister
 from agentscrape.verification import service as verification
@@ -97,6 +97,34 @@ async def _wait_idle(timeout: float = 5.0) -> None:
 
 
 class TestQueued:
+    async def test_status_exposes_attempt_reasons_and_recovery_run(self, client, auth, session):
+        ids = await _seed_people(session)
+        recovery = Run(
+            status=RunStatus.PENDING,
+            queued=True,
+            config={"verification_fallback": True, "verification_job_id": "verify-status"},
+            sites_total=1,
+        )
+        job = VerificationJob(
+            id="verify-status", record_ids=ids, status=VerificationStatus.FAILED,
+            records_total=2, error="checked 0 of 2 records: HTTP 404",
+        )
+        session.add_all((recovery, job))
+        await session.flush()
+        from agentscrape.db.models import VerificationAttempt
+
+        session.add(VerificationAttempt(
+            job_id=job.id, record_id=ids[0], stage="fetch", outcome="unreadable",
+            source_url="https://med.example.edu/residents", http_status=404,
+        ))
+        await session.commit()
+
+        response = await client.get(f"{API}/people/verify/{job.id}", headers=auth)
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        assert payload["attempt_summary"] == {"fetch:unreadable": 1}
+        assert payload["fallback_run_id"] == recovery.id
+
     async def test_verify_waits_behind_a_running_crawl(self, client, auth, session):
         ids = await _seed_people(session)
         crawl = Run(status=RunStatus.RUNNING, queued=True, config={}, sites_total=1,
@@ -290,6 +318,31 @@ class TestReadingPages:
         assert "HTTP 403" in job.error
         assert "checked 0 of 2" in job.error
 
+    async def test_an_unreadable_page_queues_an_ordinary_crawl_to_refresh_it(
+        self, session, monkeypatch, model_confirms, plain_http_refused
+    ):
+        ids = await _seed_people(session)
+
+        async def no_browser(self, url):
+            return None, "", "browser: HTTP 404"
+
+        monkeypatch.setattr(verification._Browser, "read", no_browser)
+        job = await self._run(session, ids)
+        assert job.status == VerificationStatus.FAILED
+        assert "normal crawl was queued" in job.error
+
+        fallback = (
+            await session.execute(
+                Run.__table__.select().where(Run.kind == "crawl").order_by(Run.created_at.desc())
+            )
+        ).first()
+        assert fallback is not None
+        run = await session.get(Run, fallback.id)
+        assert run.config["verification_fallback"] is True
+        assert run.config["modes"] == ["crawl"]
+        site_run = await session.scalar(SiteRun.__table__.select().where(SiteRun.run_id == run.id))
+        assert site_run is not None
+
     async def test_a_page_the_crawl_rendered_goes_straight_to_the_browser(
         self, session, monkeypatch, model_confirms
     ):
@@ -321,3 +374,29 @@ class TestReadingPages:
         assert job.status == VerificationStatus.FAILED
         assert "no usable answer from the model" in job.error
         assert "offline" in job.error
+        assert "normal crawl was queued" in job.error
+
+    async def test_a_repeated_unreadable_page_reuses_its_recovery_crawl(
+        self, session, monkeypatch, model_confirms, plain_http_refused
+    ):
+        ids = await _seed_people(session)
+
+        async def no_browser(self, url):
+            return None, "", "browser: HTTP 404"
+
+        monkeypatch.setattr(verification._Browser, "read", no_browser)
+        first = await self._run(session, ids)
+        first_id = first.id
+        second = await self._run(session, ids)
+        second_id = second.id
+        first = await _job(session, first_id)
+        first_error = first.error
+        second = await _job(session, second_id)
+        assert "normal crawl was queued" in first_error
+        assert "normal crawl was queued" in second.error
+        fallback_runs = (
+            await session.execute(
+                Run.__table__.select().where(Run.kind == "crawl")
+            )
+        ).all()
+        assert len(fallback_runs) == 1

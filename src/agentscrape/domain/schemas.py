@@ -473,6 +473,12 @@ class VerificationOut(ApiModel):
     records_checked: int
     records_corrected: int
     error: str | None
+    # Counts grouped as ``stage:outcome`` (for example ``fetch:unreadable``),
+    # so clients can distinguish a dead page from a blocked browser or model.
+    attempt_summary: dict[str, int] = Field(default_factory=dict)
+    # The queued ordinary crawl that refreshes stale/unusable verification
+    # sources, when one was needed.
+    fallback_run_id: str | None = None
     created_at: datetime
     finished_at: datetime | None
 
