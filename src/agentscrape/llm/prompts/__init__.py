@@ -173,6 +173,13 @@ alumni are alumni. Choose unknown when the page does not establish one of
 these categories. Do not use a degree, credentials, school attended, or a
 person's old crawl label as evidence.
 
+Each person also includes the printed position captured by the crawler. Treat
+that position as a consistency check, not a fact to blindly trust: confirm it
+against the person's local page text. When position and page context conflict,
+prefer the explicit current role on the page; when neither establishes a role,
+return unknown. Never promote a role merely because it would make the stored
+position look plausible.
+
 Return ONLY JSON, and nothing else - no notes, no explanation, no second
 attempt or correction after it, even if you change your mind partway through:
 decide each person's role first, then output the one JSON object below once.
