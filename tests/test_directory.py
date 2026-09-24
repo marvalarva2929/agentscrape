@@ -145,3 +145,67 @@ async def test_crawl_then_directory_in_one_run(session):
     assert people["Ann Riley"].email == "ann.riley@example.edu"
     site = await session.get(Site, site_id)
     assert site.directory_config is not None
+
+
+@pytest.mark.parametrize(('reason', 'code'), [
+    ('search failed (403)', 'DIRECTORY_BLOCKED'),
+    ('search failed (429)', 'DIRECTORY_RATE_LIMITED'),
+    ('search failed (TimeoutError)', 'DIRECTORY_TIMEOUT'),
+    ('directory requires signing in', 'DIRECTORY_LOGIN_REQUIRED'),
+    ('listed but not read', 'DIRECTORY_RESULTS_UNREADABLE'),
+])
+async def test_lookup_failures_persist_a_failed_run_and_reason(session, monkeypatch, reason, code):
+    from agentscrape.db.models import Run, SiteRun
+    from agentscrape.directory.lookup import LookupResult
+    from agentscrape.pipeline.nodes import directory
+
+    async def fail(*args):
+        return LookupResult(None, 'https://directory.edu', reason=reason)
+
+    monkeypatch.setattr(directory, 'lookup_person', fail)
+    with serve(hostname='failure.localhost') as fixture:
+        site = await _seed(session, fixture.base, '/directory')
+        site.directory_config = {'mode': 'get', 'template': f'{fixture.base}/directory?q={{query}}',
+                                 'directory_url': site.directory_url}
+        await session.commit()
+        run_id = await _run_once([fixture.base], session=session, modes=['directory'])
+    session.expire_all()
+    run = await session.get(Run, run_id)
+    site_run = await session.scalar(select(SiteRun).where(SiteRun.run_id == run_id))
+    assert run.status == 'failed'
+    assert site_run.status == 'failed'
+    assert site_run.error_code == code
+    assert '4 of 4 lookups failed' in site_run.error_message
+    assert run.error_message == site_run.error_message
+
+
+async def test_cached_unavailable_directory_is_retried(session):
+    from agentscrape.db.models import Run
+
+    with serve(hostname='retry-directory.localhost') as fixture:
+        site = await _seed(session, fixture.base, '/directory')
+        site.directory_config = {'mode': 'unavailable', 'reason': 'TimeoutError',
+                                 'directory_url': site.directory_url}
+        await session.commit()
+        run_id = await _run_once([fixture.base], session=session, modes=['directory'])
+    session.expire_all()
+    assert (await session.get(Run, run_id)).status == 'completed'
+
+
+async def test_no_matches_is_not_a_network_failure(session, monkeypatch):
+    from agentscrape.db.models import Run, SiteRun
+    from agentscrape.directory.lookup import LookupResult
+    from agentscrape.pipeline.nodes import directory
+
+    async def absent(*args):
+        return LookupResult(None, 'https://directory.edu', reason='not listed')
+
+    monkeypatch.setattr(directory, 'lookup_person', absent)
+    with serve(hostname='no-match.localhost') as fixture:
+        await _seed(session, fixture.base, '/directory')
+        run_id = await _run_once([fixture.base], session=session, modes=['directory'])
+    session.expire_all()
+    assert (await session.get(Run, run_id)).status == 'completed'
+    site_run = await session.scalar(select(SiteRun).where(SiteRun.run_id == run_id))
+    assert site_run.error_code == 'NO_DIRECTORY_MATCHES'
+    assert 'no unambiguous matches' in site_run.error_message

@@ -387,11 +387,22 @@ class RunOrchestrator:
             event = EventType.RUN_COMPLETED
 
         async with self.sessionmaker() as session:
+            run = await session.get(Run, self.run_id)
+            directory_failure = await session.scalar(select(SiteRun.error_message).where(
+                SiteRun.run_id == self.run_id,
+                SiteRun.error_code.startswith("DIRECTORY_"),
+            ).limit(1))
+            if status == RunStatus.COMPLETED and directory_failure:
+                status = RunStatus.FAILED
+                event = EventType.RUN_FAILED
+            if run is not None:
+                run.error_message = directory_failure
             await session.execute(
                 update(Run)
                 .where(Run.id == self.run_id)
                 .values(
                     status=status,
+                    error_message=directory_failure,
                     stop_reason=self.limits.stop_reason,
                     finished_at=datetime.now(UTC),
                     tokens_in=self.limits.tokens_in,
@@ -401,7 +412,7 @@ class RunOrchestrator:
             )
             await session.commit()
 
-        await self.emitter.emit(event, status=str(status), **self.limits.snapshot())
+        await self.emitter.emit(event, status=str(status), error=directory_failure, **self.limits.snapshot())
         log.info("run %s finished: %s (%s)", self.run_id, status, self.limits.snapshot())
 
 

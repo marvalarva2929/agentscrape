@@ -327,9 +327,13 @@ async def _update_record(
 
     changes = diff_fields(previous, _version_payload(fields))
 
-    record.last_seen_at = context.captured_at
-    record.last_run_id = context.run_id
-    record.missing_since = None
+    # Repeated identical sightings within a run add no durable information.
+    # Avoid another row/index/WAL write merely because a second page lists the
+    # same person. Still refresh on each new run and every real field change.
+    if not seen_earlier_in_run or changes:
+        record.last_seen_at = context.captured_at
+        record.last_run_id = context.run_id
+        record.missing_since = None
     if float(fields["confidence"]) > record.confidence:
         record.confidence = float(fields["confidence"])
 

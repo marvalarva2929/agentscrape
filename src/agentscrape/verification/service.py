@@ -328,31 +328,7 @@ async def promote_verified_roles(session: AsyncSession, *, site_id: str) -> dict
             continue
         previous = record.category
         new_category = roles[0]
-        current_version = (
-            await session.get(RecordVersion, record.current_version_id)
-            if record.current_version_id else None
-        )
-        record.category = new_category
-        fields = {field: getattr(record, field) for field in VERSIONED_FIELDS}
-        record.version_count += 1
-        record.last_changed_at = datetime.now(UTC)
-        record.status = RecordStatus.CHANGED
-        version = RecordVersion(
-            id=new_version_id(),
-            record_id=record.id,
-            version_no=record.version_count,
-            fields=fields,
-            changed_fields={"category": {"from": previous, "to": new_category}},
-            source_url=current_version.source_url if current_version else "",
-            page_title=current_version.page_title if current_version else None,
-            captured_at=datetime.now(UTC),
-            extraction_method=ExtractionMethod.VERIFY,
-            fetch_mode=current_version.fetch_mode if current_version else "html",
-            confidence=record.confidence,
-        )
-        session.add(version)
-        await session.flush()
-        record.current_version_id = version.id
+        await _promote_record(session, record, new_category)
         promoted.append(
             {"record_id": record.id, "full_name": record.full_name,
              "from": previous, "to": new_category}
@@ -360,6 +336,37 @@ async def promote_verified_roles(session: AsyncSession, *, site_id: str) -> dict
 
     await session.commit()
     return {"promoted": len(promoted), "details": promoted}
+
+
+async def _promote_record(session: AsyncSession, record: Record, new_category: str) -> None:
+    """Apply a single confirmed role in the same transaction as verification."""
+    previous = record.category
+    current_version = (
+        await session.get(RecordVersion, record.current_version_id)
+        if record.current_version_id else None
+    )
+    record.category = new_category
+    fields = {field: getattr(record, field) for field in VERSIONED_FIELDS}
+    record.version_count += 1
+    record.last_changed_at = datetime.now(UTC)
+    if record.status != RecordStatus.MISSING:
+        record.status = RecordStatus.CHANGED
+    version = RecordVersion(
+        id=new_version_id(),
+        record_id=record.id,
+        version_no=record.version_count,
+        fields=fields,
+        changed_fields={"category": {"from": previous, "to": new_category}},
+        source_url=current_version.source_url if current_version else "",
+        page_title=current_version.page_title if current_version else None,
+        captured_at=datetime.now(UTC),
+        extraction_method=ExtractionMethod.VERIFY,
+        fetch_mode=current_version.fetch_mode if current_version else "html",
+        confidence=record.confidence,
+    )
+    session.add(version)
+    await session.flush()
+    record.current_version_id = version.id
 
 
 class _Browser:
@@ -535,12 +542,14 @@ async def run_verification(
             page_checked = page_corrected = 0
             async with session_scope() as write_session:
                 for record_id, roles in roles_by_record.items():
-                    record = await write_session.get(Record, record_id)
+                    record = await write_session.get(Record, record_id, with_for_update=True)
                     if record is None:
                         continue
                     page_checked += 1
                     record.roles = roles
                     record.roles_checked_at = now
+                    if len(roles) == 1 and roles[0] != record.category:
+                        await _promote_record(write_session, record, roles[0])
                     if roles != [prior.get(record_id)]:
                         page_corrected += 1
                 # Added in SQL, so pages finishing out of order can't write

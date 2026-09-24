@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from sqlalchemy import select, update
@@ -47,9 +47,10 @@ async def sweep_expired_exports(*, now: datetime | None = None) -> dict[str, int
         for export_id, file_path in rows:
             if file_path:
                 try:
-                    Path(file_path).unlink(missing_ok=True)
+                    absolute_path(file_path).unlink(missing_ok=True)
                 except OSError:
-                    pass
+                    log.exception("export sweep: could not remove %s; will retry", export_id)
+                    continue
             await session.execute(
                 update(Export)
                 .where(Export.id == export_id)
@@ -58,4 +59,26 @@ async def sweep_expired_exports(*, now: datetime | None = None) -> dict[str, int
             removed += 1
     if removed:
         log.info("export sweep: expired %d", removed)
-    return {"expired": removed}
+    # Failed/interrupted jobs and old test runs can leave unreferenced CSVs.
+    # Only generated filenames older than the retention window qualify; keep
+    # every file belonging to a live or completed job, even while it is writing.
+    orphaned = 0
+    if settings.export_retention_days is not None:
+        cutoff = (now - timedelta(days=max(1, settings.export_retention_days))).timestamp()
+        async with session_scope() as session:
+            protected = set((await session.scalars(select(Export.id).where(
+                Export.status.in_([ExportStatus.PENDING, ExportStatus.RUNNING, ExportStatus.COMPLETED])
+            ))).all())
+            for path in settings.export_dir.glob("exp_*.csv"):
+                suffix = path.stem.removeprefix("exp_")
+                if len(suffix) != 32 or any(c not in "0123456789abcdef" for c in suffix):
+                    continue
+                if path.stem in protected or path.is_symlink():
+                    continue
+                try:
+                    if path.stat().st_mtime < cutoff:
+                        path.unlink()
+                        orphaned += 1
+                except OSError:
+                    log.exception("export sweep: could not remove orphan %s", path.name)
+    return {"expired": removed, "orphaned": orphaned}

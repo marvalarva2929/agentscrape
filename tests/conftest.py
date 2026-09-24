@@ -108,3 +108,11 @@ async def reset_global_engine():
     await session_module.dispose_engine()
     yield
     await session_module.dispose_engine()
+
+
+@pytest.fixture(autouse=True)
+def isolated_artifacts(tmp_path, monkeypatch):
+    """Test exports must never accumulate in the application's artifact folder."""
+    from agentscrape.config import settings
+
+    monkeypatch.setattr(settings, "artifact_dir", tmp_path / "artifacts")

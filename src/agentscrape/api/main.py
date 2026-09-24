@@ -34,17 +34,18 @@ async def lifespan(app: FastAPI):
     settings.ensure_dirs()
     log.info("agentscrape api starting (model=%s)", settings.llm_model)
 
-    # Retention is swept on startup rather than by cron: the box is stopped when
-    # idle, so a schedule would silently never fire.
+    # Sweep on startup and hourly while serving, including long-lived servers.
     import asyncio
 
     from ..storage.artifacts import sweep_expired_exports
 
     async def _sweep() -> None:
-        try:
-            await sweep_expired_exports()
-        except Exception:
-            log.exception("startup retention sweep failed")
+        while True:
+            try:
+                await sweep_expired_exports()
+            except Exception:
+                log.exception("retention sweep failed")
+            await asyncio.sleep(3600)
 
     sweep_task = asyncio.create_task(_sweep())
 

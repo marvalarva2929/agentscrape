@@ -362,3 +362,21 @@ class TestRemovedCsvValidate:
             headers=auth,
         )
         assert response.status_code in (404, 405)
+
+
+async def test_crawl_search_matches_any_school_and_literal_text(client, auth, session):
+    site = Site(root_domain="search.example.edu", canonical_url="https://search.example.edu", name="Search University")
+    session.add(site)
+    await session.flush()
+    matching = Run(status="completed", label="100% coverage", config={})
+    other = Run(status="completed", label="other", config={})
+    session.add_all([matching, other])
+    await session.flush()
+    session.add(SiteRun(run_id=matching.id, site_id=site.id, status="completed"))
+    await session.commit()
+    for query in ["SEARCH UNIVERSITY", "search.example.edu", "100%", matching.id]:
+        result = await client.get(f"{API}/runs", params={"q": query, "limit": 1}, headers=auth)
+        assert result.status_code == 200
+        assert [row["id"] for row in result.json()["items"]] == [matching.id]
+    result = await client.get(f"{API}/runs", params={"q": "absent"}, headers=auth)
+    assert result.json()["items"] == []

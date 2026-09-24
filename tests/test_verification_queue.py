@@ -257,6 +257,22 @@ class TestReadingPages:
         job = await self._run(session, ids)
         assert job.status == VerificationStatus.COMPLETED
         assert (job.records_checked, job.records_corrected) == (2, 2)
+        for record_id in ids:
+            record = await session.get(Record, record_id)
+            await session.refresh(record)
+            assert record.category == "fellow"
+            assert record.roles == ["fellow"]
+            assert record.version_count == 2
+            version = await session.get(RecordVersion, record.current_version_id)
+            assert version.fields["category"] == "fellow"
+            assert version.changed_fields["category"] == {"from": "resident", "to": "fellow"}
+            assert version.extraction_method == "verify"
+        # Re-verifying an unchanged label must not generate another version.
+        await self._run(session, ids)
+        for record_id in ids:
+            record = await session.get(Record, record_id)
+            await session.refresh(record)
+            assert record.version_count == 2
 
     async def test_a_page_nothing_can_read_fails_with_the_reason(
         self, session, monkeypatch, model_confirms, plain_http_refused

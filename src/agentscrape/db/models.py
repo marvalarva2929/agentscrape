@@ -17,6 +17,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     Numeric,
     String,
     Text,
@@ -245,6 +246,19 @@ class SiteRun(TimestampMixin, Base):
     )
 
 
+class SiteRunCheckpointPart(Base):
+    """Compressed resume chunks; unchanged chunks are never rewritten."""
+
+    __tablename__ = "site_run_checkpoint_parts"
+    site_run_id: Mapped[str] = mapped_column(
+        ForeignKey("site_runs.id", ondelete="CASCADE"), primary_key=True
+    )
+    field: Mapped[str] = mapped_column(String(64), primary_key=True)
+    chunk: Mapped[int] = mapped_column(Integer, primary_key=True)
+    digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    payload: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+
+
 class SiteRunVisit(Base):
     """Every URL touched during one SiteRun.
 
@@ -388,7 +402,8 @@ class Record(TimestampMixin, Base):
         Index("ix_records_class_of", "class_of"),
         Index("ix_records_category", "category"),
         Index("ix_records_last_changed", "last_changed_at"),
-        Index("ix_records_last_seen", "last_seen_at"),
+        # No index on last_seen_at: every re-crawl bumps it, and an indexed
+        # column turns each of those into a full-row, every-index rewrite.
         Index("ix_records_email", "email"),
     )
 
@@ -428,7 +443,6 @@ class RecordVersion(Base):
 
     __table_args__ = (
         UniqueConstraint("record_id", "version_no", name="uq_version_record_no"),
-        Index("ix_versions_record", "record_id", "version_no"),
         Index("ix_versions_captured", "captured_at"),
         CheckConstraint("version_no > 0", name="ck_version_no_positive"),
     )

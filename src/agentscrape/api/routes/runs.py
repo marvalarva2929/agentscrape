@@ -7,7 +7,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 from ...db.enums import RUN_KIND_CRAWL, TERMINAL_RUN_STATUSES, RunStatus, SiteRunStatus
 from ...db.models import Run, Site, SiteRun
@@ -113,11 +113,27 @@ async def list_runs(
     limit: int = 25,
     status: Annotated[list[str] | None, Query()] = None,
     kind: str = RUN_KIND_CRAWL,
+    q: str | None = None,
 ) -> Page[RunOut]:
     # Past crawls by default: verification passes share the queue, not the history.
     statement = select(Run).where(Run.kind == kind)
     if status:
         statement = statement.where(Run.status.in_(status))
+
+    if q and q.strip():
+        term = q.strip()
+        school_match = (
+            select(SiteRun.id).join(Site, Site.id == SiteRun.site_id)
+            .where(SiteRun.run_id == Run.id, or_(
+                Site.name.icontains(term, autoescape=True),
+                Site.hospital_name.icontains(term, autoescape=True),
+                Site.root_domain.icontains(term, autoescape=True),
+            )).exists()
+        )
+        statement = statement.where(or_(
+            Run.id.icontains(term, autoescape=True),
+            Run.label.icontains(term, autoescape=True), school_match,
+        ))
 
     decoded = Cursor.decode(cursor)
     if decoded is not None:

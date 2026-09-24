@@ -27,8 +27,9 @@ from ...config import settings
 from ...db.enums import ExtractionMethod, PersonCategory, RecordStatus
 from ...db.models import Record, Site
 from ...db.repositories.records import ExtractionContext, fill_record_blanks, lock_site
+from ...directory.errors import directory_error
 from ...directory.learn import BROWSER, UNAVAILABLE, learn_directory
-from ...directory.lookup import lookup_person
+from ...directory.lookup import LookupResult, lookup_person
 from ..checkpoint import save_checkpoint
 from ..deps import PipelineDeps
 from ..state import SiteState
@@ -71,7 +72,7 @@ async def _targets(deps: PipelineDeps, state: SiteState, limit: int) -> list[Rec
 async def directory_search(state: SiteState, deps: PipelineDeps) -> SiteState:
     state = {**state, "crawl_done": True}
     stats = dict(state.get("directory_stats") or {})
-    for key in ("looked_up", "matched", "filled", "emails", "years", "not_listed", "ambiguous"):
+    for key in ("looked_up", "matched", "filled", "emails", "years", "not_listed", "ambiguous", "failed"):
         stats.setdefault(key, 0)
 
     async with deps.sessionmaker() as session:
@@ -79,30 +80,33 @@ async def directory_search(state: SiteState, deps: PipelineDeps) -> SiteState:
         directory_url = site.directory_url if site else None
         config = dict(site.directory_config or {}) if site else {}
     if not directory_url:
-        await deps.note(state, "No directory link for this school; skipping directory search")
-        return {**state, "directory_stats": stats}
+        return await _fail(state, deps, stats, "DIRECTORY_LINK_MISSING",
+                           "No directory link is configured for this school.")
 
     targets = await _targets(deps, state, settings.directory_max_lookups)
     if not targets:
         await deps.note(state, "Directory search: nobody is missing an address or year")
         return {**state, "directory_stats": stats}
 
-    if config.get("directory_url") != directory_url or not config.get("mode"):
+    if config.get("directory_url") != directory_url or config.get("mode") in (None, UNAVAILABLE):
         await deps.note(state, f"Learning how to search the directory at {directory_url}")
-        config = await learn_directory(deps, directory_url, [t.full_name for t in targets[:5]])
+        try:
+            config = await learn_directory(deps, directory_url, [t.full_name for t in targets[:5]])
+        except Exception as exc:
+            log.exception("directory discovery failed for %s", directory_url)
+            return await _fail(state, deps, stats, *directory_error(str(exc)))
         async with deps.sessionmaker() as session:
             site = await session.get(Site, state["site_id"])
             if site is not None:
                 site.directory_config = config
             await session.commit()
     if config.get("mode") == UNAVAILABLE:
-        await deps.note(state, f"Directory search unavailable: {config.get('reason')}")
-        return {**state, "directory_stats": {**stats, "unavailable": 1}}
+        return await _fail(state, deps, {**stats, "unavailable": 1},
+                           *directory_error(config.get("reason", "")))
 
     if config.get("mode") == BROWSER:
         if not deps.can_render:
-            await deps.note(state, "Directory search needs a browser, which this run does not have")
-            return {**state, "directory_stats": stats}
+            return await _fail(state, deps, stats, *directory_error("browser unavailable"))
         targets = targets[: settings.directory_max_browser_lookups]
 
     await deps.note(
@@ -110,22 +114,35 @@ async def directory_search(state: SiteState, deps: PipelineDeps) -> SiteState:
     )
     done = list(state.get("directory_done", []))
     changed = 0
+    failures: list[str] = []
     for start in range(0, len(targets), LOOKUP_BATCH):
         if deps.stop_requested():
             log.info("stop requested; halting directory search for %s", state["root_domain"])
             break
         batch = targets[start : start + LOOKUP_BATCH]
-        results = await asyncio.gather(*(lookup_person(deps, config, r.full_name) for r in batch))
+        results = await asyncio.gather(*(lookup_person(deps, config, r.full_name) for r in batch),
+                                       return_exceptions=True)
         async with deps.sessionmaker() as session:
             await lock_site(session, state["site_id"])
             for record, result in zip(batch, results, strict=True):
                 stats["looked_up"] += 1
-                done.append(record.id)
+                if isinstance(result, BaseException):
+                    if isinstance(result, asyncio.CancelledError):
+                        raise result
+                    log.warning("directory lookup failed: %s", result)
+                    result = LookupResult(None, directory_url, reason=str(result))
+                # Failed requests remain eligible for a resumed pass.
+                if result.person is not None or result.reason in ("not listed", "ambiguous"):
+                    done.append(record.id)
                 if result.person is None:
                     if result.reason == "not listed":
                         stats["not_listed"] += 1
                     elif result.reason == "ambiguous":
                         stats["ambiguous"] += 1
+                    else:
+                        stats["failed"] += 1
+                        if len(failures) < 5:
+                            failures.append(result.reason)
                     continue
                 stats["matched"] += 1
                 current = await session.get(Record, record.id)
@@ -160,7 +177,23 @@ async def directory_search(state: SiteState, deps: PipelineDeps) -> SiteState:
 
     await deps.note(state, _summary(stats), directory=stats)
     log.info("directory search for %s: %s", state["root_domain"], stats)
+    if failures:
+        code, message = directory_error(failures[0])
+        message += f" {stats['failed']} of {stats['looked_up']} lookups failed; any successful updates were saved."
+        return await _fail(state, deps, stats, code, message)
+    if stats["looked_up"] and not stats["matched"]:
+        message = "Directory search finished, but no unambiguous matches were found. No records were changed."
+        await deps.note(state, message)
+        return {**state, "error_code": "NO_DIRECTORY_MATCHES", "error_message": message}
     return state
+
+
+async def _fail(state: SiteState, deps: PipelineDeps, stats: dict, code: str, message: str) -> SiteState:
+    if "crawl" in (state.get("modes") or []):
+        message += " Crawl results have been saved; the directory step failed."
+    await deps.note(state, message)
+    return {**state, "directory_stats": stats, "status": "failed",
+            "error_code": code, "error_message": message}
 
 
 def _summary(stats: dict[str, int]) -> str:

@@ -20,7 +20,7 @@ from ..extraction.person import ExtractedPerson
 from ..extraction.text import html_to_model_text
 from ..llm.reader import combine_with_regex, fold, read_page
 from ..pipeline.deps import PipelineDeps
-from .learn import BROWSER, GET, fill_template, names_the_person, split_name
+from .learn import BROWSER, GET, fill_template, looks_like_login, names_the_person, split_name
 
 log = logging.getLogger("agentscrape.directory.lookup")
 
@@ -103,6 +103,9 @@ async def lookup_person(deps: PipelineDeps, config: dict, full_name: str) -> Loo
         body, final, fetch_mode, is_html = rendered.html, rendered.final_url, FetchMode.RENDER, True
     else:
         return LookupResult(None, "", reason="directory cannot be searched")
+
+    if looks_like_login(final, body if is_html else ""):
+        return LookupResult(None, final, reason="directory requires signing in")
 
     if not names_the_person(body, full_name, int(config.get("echo", 0))):
         return LookupResult(None, final, reason="not listed")

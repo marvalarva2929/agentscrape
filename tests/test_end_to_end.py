@@ -307,7 +307,7 @@ class TestResume:
                     select(SiteRunVisit).where(SiteRunVisit.site_run_id == site_run.id)
                 )
             ).scalars().all()
-            assert first_visits, "the first attempt should have visited something"
+            assert not first_visits, "finalized runs release their scratch visit set"
 
             # Put the site back in the queue as a restart would, and make
             # discovery fail loudly if it is reached again.
