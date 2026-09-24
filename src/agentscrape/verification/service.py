@@ -489,6 +489,7 @@ async def run_verification(
 
         checked = 0
         corrected = 0
+        unresolved = 0
         fetch_failures = 0
         model_failures = 0
         fetch_errors: Counter = Counter()
@@ -506,7 +507,7 @@ async def run_verification(
             return {}
 
         async def _one(url: str, title: str | None, people: list[RoleCheckInput]) -> None:
-            nonlocal checked, corrected, fetch_failures, model_failures
+            nonlocal checked, corrected, unresolved, fetch_failures, model_failures
             # Held for the whole page - fetch, model call and any render - so
             # `concurrency` bounds concurrent model calls too, not just I/O.
             async with semaphore:
@@ -537,6 +538,10 @@ async def run_verification(
                     # anyone - not the same as "nothing needed correcting".
                     model_failures += len(people)
                     return
+                # The page was readable, but a person without a source-backed
+                # decision remains unverified rather than silently retaining
+                # a possibly wrong crawl label.
+                unresolved += len(people) - len(roles_by_record)
             prior = {p.record_id: p.category for p in people}
             now = datetime.now(UTC)
             page_checked = page_corrected = 0
@@ -583,6 +588,8 @@ async def run_verification(
         if model_failures:
             why = f"; last error: {meter.last_failure}" if meter.last_failure else ""
             reasons.append(f"{model_failures} got no usable answer from the model{why}")
+        if unresolved:
+            reasons.append(f"{unresolved} had no source-backed role decision")
         summary = "; ".join(reasons)
 
         # A pass that checked nobody is the checker never running, not a
