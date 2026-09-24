@@ -69,6 +69,10 @@ class RecordOut(ApiModel):
 
     status: str
     confidence: float
+    verification_confidence: float | None = None
+    verification_risk: str = "unverified"
+    verification_reason: str | None = None
+    verification_evidence: str | None = None
     version_count: int
     first_seen_at: datetime
     last_seen_at: datetime
@@ -449,6 +453,11 @@ class VerificationCreate(BaseModel):
 
     site_id: str | None = None
     record_ids: list[str] | None = None
+
+
+class VerificationResume(BaseModel):
+    """Resume only records that the original job did not prove."""
+    job_id: str
 
 
 class VerificationOut(ApiModel):

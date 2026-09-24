@@ -9,6 +9,7 @@ import pytest
 from agentscrape.llm.provider import ModelResponse, VisionProvider
 from agentscrape.llm.usage import Usage
 from agentscrape.llm.verify import RoleCheckInput, verify_page_roles
+from agentscrape.verification.service import _verification_quality
 
 
 class RoleProvider(VisionProvider):
@@ -89,3 +90,28 @@ async def test_resident_cannot_be_supported_by_former_resident_evidence() -> Non
         people=[RoleCheckInput("1", "Mina Shah", "resident")], provider=provider,
     )
     assert result == {}
+
+
+def test_article_and_conflicting_positions_cannot_auto_confirm_trainees() -> None:
+    score, risk, reason = _verification_quality(
+        role="resident", evidence="Current Residents", position=None,
+        url="https://med.example.edu/news/resident-award", title="Resident award",
+    )
+    assert (score, risk) == (0.35, "high")
+    assert "article" in reason
+
+    score, risk, reason = _verification_quality(
+        role="fellow", evidence="Fellows", position="Associate Professor",
+        url="https://med.example.edu/fellows", title="Current fellows",
+    )
+    assert (score, risk) == (0.20, "high")
+    assert "conflicts" in reason
+
+
+def test_duplicate_name_cannot_auto_confirm_until_disambiguated() -> None:
+    score, risk, reason = _verification_quality(
+        role="resident", evidence="Current Residents", position=None,
+        url="https://med.example.edu/residents", title="Current Residents", duplicate_name=True,
+    )
+    assert (score, risk) == (0.15, "high")
+    assert "Multiple records" in reason

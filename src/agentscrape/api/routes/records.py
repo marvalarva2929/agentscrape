@@ -24,6 +24,7 @@ from ...domain.schemas import (
     RecordVersionOut,
     SourceOut,
     VerificationCreate,
+    VerificationResume,
     VerificationOut,
 )
 from ...storage.artifacts import absolute_path
@@ -236,6 +237,22 @@ async def verification_status(
     job = await session.get(VerificationJob, job_id)
     if job is None:
         raise NotFoundError(f"No verification job with id {job_id!r}.")
+    return await _verification_out(session, job)
+
+
+@router.post("/people/verify/resume", response_model=VerificationOut, status_code=202)
+async def resume_verification(
+    body: VerificationResume, _: AuthedUser, session: DbSession
+) -> VerificationOut:
+    """Queue only records that remain unproven after a stopped pass."""
+    from ...orchestrator import scheduler
+    from ...verification.service import resume_verification_job
+    try:
+        job = await resume_verification_job(session, body.job_id)
+    except ValueError as exc:
+        raise AppError(str(exc), code=ErrorCode.VALIDATION_ERROR) from exc
+    await scheduler.start_next_if_idle()
+    await session.refresh(job)
     return await _verification_out(session, job)
 
 

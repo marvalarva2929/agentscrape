@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from collections import Counter
 from datetime import UTC, datetime
 
@@ -36,7 +37,7 @@ from ..db.enums import (
     VerificationStatus,
 )
 from ..db.ids import version_id as new_version_id
-from ..db.models import Record, RecordVersion, Run, Site, VerificationJob
+from ..db.models import Record, RecordVersion, Run, Site, VerificationAttempt, VerificationJob
 from ..db.session import session_scope
 from ..domain.matching import VERSIONED_FIELDS
 from ..domain.schemas import VerificationCreate
@@ -137,6 +138,22 @@ async def create_verification_job(
     await session.commit()
     log.info("queued verification %s as run %s (%s)", job.id, run.id, run.label)
     return job
+
+
+async def resume_verification_job(session: AsyncSession, previous_job_id: str) -> VerificationJob:
+    """Continue a stopped job without re-checking records already proven.
+
+    Per-record verification state lives on the record, so a resume remains safe
+    across a process restart and does not discard already captured evidence.
+    """
+    previous = await session.get(VerificationJob, previous_job_id)
+    if previous is None:
+        raise ValueError(f"No verification job with id {previous_job_id!r}.")
+    rows = await _targets(session, previous)
+    pending_ids = [row[0] for row in rows if (await session.get(Record, row[0])).verification_risk != "verified"]
+    if not pending_ids:
+        raise ValueError("Every record in that verification is already proven.")
+    return await create_verification_job(session, VerificationCreate(record_ids=pending_ids))
 
 
 async def end_unstarted_job(session: AsyncSession, run_id: str, reason: str) -> None:
@@ -431,8 +448,40 @@ async def _read_plain(fetcher: Fetcher, url: str) -> tuple[str | None, str | Non
     return (result.text if is_plain_text else html_to_model_text(result.text)), None
 
 
+def _verification_quality(
+    *, role: str, evidence: str, position: str | None, url: str, title: str,
+    duplicate_name: bool = False,
+) -> tuple[float, str, str]:
+    """Deterministic final gate: a model cannot certify a weak source."""
+    page = f"{url} {title}".casefold()
+    article = any(token in page for token in ("/news", "/blog", "/article", "press-release", "spotlight", "award"))
+    position_text = (position or "").casefold()
+    conflict = any(token in position_text for token in ("professor", "attending", "faculty", "director", "coordinator", "alumni", "former"))
+    if duplicate_name:
+        return 0.15, "high", "Multiple records at this school share this name; identity must be disambiguated before verification."
+    if role in ("resident", "fellow") and conflict:
+        return 0.20, "high", "Printed position conflicts with a current trainee role; deeper verification required."
+    if role in ("resident", "fellow") and article:
+        return 0.35, "high", "Source looks like an article or announcement, not a canonical roster; deeper verification required."
+    if role in ("resident", "fellow"):
+        return 0.96, "verified", "Exact name and current-training evidence were found on an institution source."
+    if role == "unknown":
+        return 0.30, "needs_review", "The page names this person but does not establish a current role."
+    return 0.90, "verified", "Exact name and role evidence were found on the source page."
+
+
 def _summarize(errors: Counter) -> str:
     return ", ".join(f"{reason} ×{count}" for reason, count in errors.most_common(3))
+
+
+async def _audit_attempt(job_id: str, people: list[RoleCheckInput], *, stage: str, outcome: str, url: str, detail: str | None = None) -> None:
+    """Persist enough context to reproduce a failed or risky decision later."""
+    matched = re.search(r"HTTP (\d{3})", detail or "")
+    async with session_scope() as session:
+        session.add_all(
+            VerificationAttempt(job_id=job_id, record_id=p.record_id, stage=stage, outcome=outcome, source_url=url, final_url=url, http_status=int(matched.group(1)) if matched else None, detail=(detail or None)[:500] if detail else None)
+            for p in people
+        )
 
 
 async def run_verification(
@@ -476,6 +525,15 @@ async def run_verification(
             )
 
         by_page: dict[tuple[str, str | None], list[RoleCheckInput]] = {}
+        # A role claim cannot be attached safely when the school has multiple
+        # active records with the same normalized name. Reconciliation already
+        # deduplicates extraction identities; this is a final verification gate
+        # for legacy or ambiguous records and intentionally never deletes data.
+        name_counts = Counter(str(full_name).casefold().strip() for _, full_name, *_ in rows)
+        duplicate_ids = {
+            record_id for record_id, full_name, *_ in rows
+            if name_counts[str(full_name).casefold().strip()] > 1
+        }
         needs_browser: set[str] = set()
         for record_id, full_name, category, position, source_url, page_title, mode in rows:
             by_page.setdefault((source_url, page_title), []).append(
@@ -532,11 +590,13 @@ async def run_verification(
                     fetch_failures += len(people)
                     fetch_errors[error or "unreadable"] += 1
                     log.info("verification %s: could not read %s: %s", job_id, url, error)
+                    await _audit_attempt(job_id, people, stage="fetch", outcome="unreadable", url=url, detail=error)
                     return
                 if not roles_by_record:
                     # Read, but the model never gave an answer that grounded
                     # anyone - not the same as "nothing needed correcting".
                     model_failures += len(people)
+                    await _audit_attempt(job_id, people, stage="model", outcome="no_decision", url=url, detail=meter.last_failure)
                     return
                 # The page was readable, but a person without a source-backed
                 # decision remains unverified rather than silently retaining
@@ -549,6 +609,18 @@ async def run_verification(
                 for record_id, decision in roles_by_record.items():
                     record = await write_session.get(Record, record_id, with_for_update=True)
                     if record is None:
+                        continue
+                    confidence, risk, reason = _verification_quality(
+                        role=decision.role, evidence=decision.evidence, position=record.position,
+                        url=url, title=title or page_title, duplicate_name=record_id in duplicate_ids,
+                    )
+                    record.verification_confidence = confidence
+                    record.verification_risk = risk
+                    record.verification_reason = reason
+                    record.verification_evidence = decision.evidence
+                    # High-risk trainee claims are deliberately not promoted.
+                    if risk != "verified" and decision.role in ("resident", "fellow"):
+                        page_checked += 1
                         continue
                     page_checked += 1
                     # `roles` remains an API-compatible stored field, but a
@@ -572,6 +644,7 @@ async def run_verification(
                 )
             checked += page_checked
             corrected += page_corrected
+            await _audit_attempt(job_id, people, stage="decision", outcome="verified" if all(p.record_id in roles_by_record for p in people) else "partial", url=url)
 
         try:
             async with Fetcher() as fetcher:

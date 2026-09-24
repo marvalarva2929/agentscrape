@@ -39,6 +39,7 @@ from .ids import (
     site_id,
     site_run_id,
     submission_id,
+    verification_attempt_id,
     verification_id,
     version_id,
 )
@@ -373,6 +374,12 @@ class Record(TimestampMixin, Base):
         _enum(e.RecordStatus, "record_status"), default=e.RecordStatus.NEW, nullable=False
     )
     confidence: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    # Independent of extraction confidence: verification may abstain when a
+    # source is weak, stale, article-like, or conflicts with the printed role.
+    verification_confidence: Mapped[float | None] = mapped_column(Float)
+    verification_risk: Mapped[str] = mapped_column(String(24), default="unverified", nullable=False)
+    verification_reason: Mapped[str | None] = mapped_column(Text)
+    verification_evidence: Mapped[str | None] = mapped_column(Text)
 
     current_version_id: Mapped[str | None] = mapped_column(String(64))
     version_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -566,3 +573,18 @@ class VerificationJob(TimestampMixin, Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (Index("ix_verification_jobs_status", "status", "created_at"),)
+
+
+class VerificationAttempt(TimestampMixin, Base):
+    """Immutable per-record audit trail for a verification pass."""
+    __tablename__ = "verification_attempts"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=verification_attempt_id)
+    job_id: Mapped[str] = mapped_column(ForeignKey("verification_jobs.id", ondelete="CASCADE"), nullable=False)
+    record_id: Mapped[str] = mapped_column(ForeignKey("records.id", ondelete="CASCADE"), nullable=False)
+    stage: Mapped[str] = mapped_column(String(32), nullable=False)
+    outcome: Mapped[str] = mapped_column(String(32), nullable=False)
+    source_url: Mapped[str | None] = mapped_column(Text)
+    final_url: Mapped[str | None] = mapped_column(Text)
+    http_status: Mapped[int | None] = mapped_column(Integer)
+    detail: Mapped[str | None] = mapped_column(Text)
+    __table_args__ = (Index("ix_verification_attempts_job_record", "job_id", "record_id"),)

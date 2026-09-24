@@ -51,3 +51,7 @@ def export_id() -> str:
 
 def verification_id() -> str:
     return new_id("ver_job")
+
+
+def verification_attempt_id() -> str:
+    return new_id("ver_attempt")
