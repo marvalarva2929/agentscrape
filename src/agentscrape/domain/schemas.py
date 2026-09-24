@@ -48,8 +48,8 @@ class RecordOut(ApiModel):
     role_account: bool = False
     roles: list[str] | None = Field(
         default=None,
-        description="Every role a verification job confirmed the source page "
-        "supports; null until one has run. `category` above is unaffected.",
+        description="A one-item list containing the role a verification job "
+        "confirmed from the source page; null until one has run.",
     )
     roles_checked_at: datetime | None = None
 

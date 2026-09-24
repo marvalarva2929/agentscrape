@@ -1,5 +1,5 @@
-"""Role verification: re-reads one already-scraped page and confirms every
-category it supports for the people the crawl found there.
+"""Role verification: re-reads one already-scraped page and chooses one
+grounded category for each person the crawl found there.
 
 Run only on demand against data already in the database (see
 `agentscrape.verification.service`), never as part of a crawl. The same
@@ -23,7 +23,7 @@ from .usage import LLMUnavailable, UsageMeter
 
 log = logging.getLogger("agentscrape.llm.verify")
 
-_ROLES = frozenset(c.value for c in PersonCategory if c != PersonCategory.UNKNOWN)
+_ROLES = frozenset(c.value for c in PersonCategory)
 
 
 def _is_answer(payload: object) -> bool:
@@ -77,8 +77,8 @@ async def verify_page_roles(
     people: list[RoleCheckInput],
     meter: UsageMeter | None = None,
     provider: VisionProvider | None = None,
-) -> dict[str, list[str]]:
-    """Roles per record id, grounded against the page text.
+) -> dict[str, str]:
+    """One role per record id, grounded against the page text.
 
     A record missing from the model's response, or whose response could not
     be grounded, is left out entirely - the caller keeps that record's
@@ -130,23 +130,21 @@ async def verify_page_roles(
     raw_people = payload.get("people")
 
     folded = fold(text)
-    out: dict[str, list[str]] = {}
+    out: dict[str, str] = {}
     for entry in raw_people:
         if not isinstance(entry, dict):
             continue
         name = entry.get("name")
         if not isinstance(name, str) or name not in by_name:
             continue
-        roles_raw = entry.get("roles")
-        if not isinstance(roles_raw, list):
+        role = entry.get("role")
+        if not isinstance(role, str):
             continue
-        roles = sorted({
-            str(r).strip().lower() for r in roles_raw if str(r).strip().lower() in _ROLES
-        })
-        if not roles:
+        role = role.strip().lower()
+        if role not in _ROLES:
             continue
         for candidate in by_name[name]:
             if not name_in_text(candidate.full_name, folded):
                 continue
-            out[candidate.record_id] = roles
+            out[candidate.record_id] = role
     return out

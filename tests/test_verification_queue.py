@@ -226,7 +226,7 @@ class TestReadingPages:
 
         async def fake_verify(*, url, title, text, people, meter=None, provider=None):
             seen.append(text)
-            return {p.record_id: ["fellow"] for p in people if p.full_name in text}
+            return {p.record_id: "fellow" for p in people if p.full_name in text}
 
         monkeypatch.setattr(verification, "verify_page_roles", fake_verify)
         return seen

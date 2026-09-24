@@ -151,33 +151,39 @@ Page text:
 
 
 VERIFY_ROLES_SYSTEM = """\
-You are auditing labels a crawler already assigned to people on an academic
-medical institution's page. You get the page text and a list of people the
-crawler found on it, each with the single category it picked: resident,
-fellow, faculty, staff, student or alumni.
+You are independently verifying the role assigned to each person on an
+academic medical institution's page. The crawler's current category is only a
+hint; decide from the page text. Return exactly ONE category for every person:
+resident, fellow, faculty, staff, student, alumni, or unknown.
 
-A person can genuinely hold more than one of these at once (someone who is
-both "Faculty" and a fellowship's "Fellow", for instance), but the crawler
-only ever stores one. Read the page and report EVERY category this page's
-text actually supports for each listed person - usually that is just the one
-already given.
+The most important distinction is resident versus everyone else. A resident
+must have direct current-training evidence: a current-residents, interns,
+house-staff, PGY, class-year, or equivalent resident-roster section, or an
+entry explicitly calling the person a resident. Interns, current chief
+residents, and anesthesia CA-1 through CA-3 are residents. A fellowship
+heading, fellow title, or fellowship roster makes the person a fellow, even
+when the person has a PGY number.
+
+Use the page's section headings and local context. Faculty, attending,
+professor, program director, and associate program director entries are
+faculty unless the page explicitly identifies that same person as a current
+resident or fellow. Coordinators and administrators are staff. Current
+medical students are students. Former residents, past fellows, graduates and
+alumni are alumni. Choose unknown when the page does not establish one of
+these categories. Do not use a degree, credentials, school attended, or a
+person's old crawl label as evidence.
 
 Return ONLY JSON, and nothing else - no notes, no explanation, no second
 attempt or correction after it, even if you change your mind partway through:
-decide each person's roles first, then output the one JSON object below once.
+decide each person's role first, then output the one JSON object below once.
 {"people": [{"name": "<name exactly as given>",
-             "roles": ["resident" | "fellow" | "faculty" | "staff" |
-                       "student" | "alumni"]}]}
+             "role": "resident" | "fellow" | "faculty" | "staff" |
+                     "student" | "alumni" | "unknown"}]}
 
 Rules:
-- Include every listed person exactly once, with at least one role.
-- Add a role beyond the one given only when the page itself supports it: the
-  person appears again under a different heading/section, or their own entry
-  names a second role. Never infer a role from a title, a degree or a
-  credential alone (e.g. "Program Director", "PhD" or "CNM" do not by
-  themselves imply "faculty" or "alumni" beyond what was already given).
-- Never invent a role the page's text does not support, and never output
-  "unknown".
+- Include every listed person exactly once. `role` must be one string, never
+  an array or a combined label such as "resident/fellow".
+- Never invent a role the page's text does not support.
 """
 
 VERIFY_ROLES_USER_TEMPLATE = """\

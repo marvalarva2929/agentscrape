@@ -495,7 +495,7 @@ async def run_verification(
         semaphore = asyncio.Semaphore(concurrency)
         browser = _Browser()
 
-        async def _ask(url: str, title: str, text: str, people: list[RoleCheckInput]) -> dict:
+        async def _ask(url: str, title: str, text: str, people: list[RoleCheckInput]) -> dict[str, str]:
             for attempt in range(page_attempts):
                 roles = await verify_page_roles(
                     url=url, title=title, text=text, people=people, meter=meter,
@@ -510,7 +510,7 @@ async def run_verification(
             # Held for the whole page - fetch, model call and any render - so
             # `concurrency` bounds concurrent model calls too, not just I/O.
             async with semaphore:
-                roles_by_record: dict[str, list[str]] = {}
+                roles_by_record: dict[str, str] = {}
                 text, page_title, error = None, title or "", None
                 if url not in needs_browser:
                     text, error = await _read_plain(fetcher, url)
@@ -541,16 +541,18 @@ async def run_verification(
             now = datetime.now(UTC)
             page_checked = page_corrected = 0
             async with session_scope() as write_session:
-                for record_id, roles in roles_by_record.items():
+                for record_id, role in roles_by_record.items():
                     record = await write_session.get(Record, record_id, with_for_update=True)
                     if record is None:
                         continue
                     page_checked += 1
-                    record.roles = roles
+                    # `roles` remains an API-compatible stored field, but a
+                    # verified record now has exactly one canonical role.
+                    record.roles = [role]
                     record.roles_checked_at = now
-                    if len(roles) == 1 and roles[0] != record.category:
-                        await _promote_record(write_session, record, roles[0])
-                    if roles != [prior.get(record_id)]:
+                    if role != record.category:
+                        await _promote_record(write_session, record, role)
+                    if role != prior.get(record_id):
                         page_corrected += 1
                 # Added in SQL, so pages finishing out of order can't write
                 # an older total over a newer one.

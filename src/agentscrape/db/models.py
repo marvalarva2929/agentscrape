@@ -353,11 +353,9 @@ class Record(TimestampMixin, Base):
     # The person's title exactly as the page printed it.
     position: Mapped[str | None] = mapped_column(Text)
 
-    # Every category the source page actually supports for this person, e.g.
-    # ["faculty", "fellow"] for someone the page lists as both. `category`
-    # above stays the single coarse bucket everything else filters on; this is
-    # only filled in once a verification job has read the source page. Null
-    # until then, never overwritten by the ordinary crawl.
+    # The one category a verification job confirmed from the source page.
+    # Kept as JSON for API compatibility with earlier multi-role responses.
+    # Null until verification has run; never overwritten by the ordinary crawl.
     roles: Mapped[list[str] | None] = mapped_column(JSONType)
     roles_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
