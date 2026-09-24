@@ -226,7 +226,8 @@ class TestReadingPages:
 
         async def fake_verify(*, url, title, text, people, meter=None, provider=None):
             seen.append(text)
-            return {p.record_id: "fellow" for p in people if p.full_name in text}
+            from agentscrape.llm.verify import RoleDecision
+            return {p.record_id: RoleDecision("fellow", "fellows") for p in people if p.full_name in text}
 
         monkeypatch.setattr(verification, "verify_page_roles", fake_verify)
         return seen

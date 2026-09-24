@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from dataclasses import dataclass
 
 from ..config import settings
@@ -69,6 +70,43 @@ class RoleCheckInput:
     position: str | None = None
 
 
+@dataclass(frozen=True)
+class RoleDecision:
+    role: str
+    evidence: str
+
+
+_EVIDENCE = {
+    "resident": re.compile(r"\b(residents?|interns?|house[- ]staff|pgy[- ]?\d|ca[- ]?[123]|chief residents?)\b", re.IGNORECASE),
+    "fellow": re.compile(r"\bfellows?(hip)?\b", re.IGNORECASE),
+    "faculty": re.compile(r"\b(faculty|attending|professor|program director)\b", re.IGNORECASE),
+    "staff": re.compile(r"\b(staff|coordinator|administrator)\b", re.IGNORECASE),
+    "student": re.compile(r"\b(students?|ms[1-4])\b", re.IGNORECASE),
+    "alumni": re.compile(r"\b(alumni|alumnus|alumna|graduates?|former|past)\b", re.IGNORECASE),
+}
+
+
+def _packets(text: str, people: list[RoleCheckInput]) -> dict[str, str]:
+    """Give the model each person's local heading and entry, never a truncated page."""
+    lines = text.splitlines()
+    folded_lines = [fold(line) for line in lines]
+    packets: dict[str, str] = {}
+    for person in people:
+        name_words = [word for word in fold(person.full_name).split() if len(word) > 1]
+        hits = [i for i, line in enumerate(folded_lines) if name_words and name_words[0] in line and name_words[-1] in line]
+        if not hits:
+            continue
+        i = hits[0]
+        heading = ""
+        for prior in range(i, max(-1, i - 25), -1):
+            if lines[prior].lstrip().startswith("#"):
+                heading = lines[prior].strip()
+                break
+        excerpt = "\n".join(lines[max(0, i - 3): min(len(lines), i + 7)])
+        packets[person.record_id] = f"Section: {heading or '(none)'}\nExcerpt:\n{excerpt}"[:1_500]
+    return packets
+
+
 async def verify_page_roles(
     *,
     url: str,
@@ -77,7 +115,7 @@ async def verify_page_roles(
     people: list[RoleCheckInput],
     meter: UsageMeter | None = None,
     provider: VisionProvider | None = None,
-) -> dict[str, str]:
+) -> dict[str, RoleDecision]:
     """One role per record id, grounded against the page text.
 
     A record missing from the model's response, or whose response could not
@@ -91,12 +129,14 @@ async def verify_page_roles(
     for person in people:
         by_name.setdefault(person.full_name, []).append(person)
 
+    packets = _packets(text, people)
     prompt = verify_roles_user_prompt(
         url=url,
         title=title,
         text=text,
         people=[
-            {"name": p.full_name, "category": p.category, "position": p.position}
+            {"name": p.full_name, "category": p.category, "position": p.position,
+             "packet": packets.get(p.record_id, "not found in readable source")}
             for p in people
         ],
     )
@@ -129,8 +169,7 @@ async def verify_page_roles(
 
     raw_people = payload.get("people")
 
-    folded = fold(text)
-    out: dict[str, str] = {}
+    out: dict[str, RoleDecision] = {}
     for entry in raw_people:
         if not isinstance(entry, dict):
             continue
@@ -143,8 +182,21 @@ async def verify_page_roles(
         role = role.strip().lower()
         if role not in _ROLES:
             continue
+        evidence = entry.get("evidence")
+        if not isinstance(evidence, str) or not evidence.strip():
+            continue
+        evidence = evidence.strip()[:300]
         for candidate in by_name[name]:
-            if not name_in_text(candidate.full_name, folded):
+            packet = packets.get(candidate.record_id, "")
+            if not name_in_text(candidate.full_name, fold(packet)):
                 continue
-            out[candidate.record_id] = role
+            if evidence.casefold() not in packet.casefold():
+                continue
+            if role != "unknown" and not _EVIDENCE[role].search(evidence):
+                continue
+            # A former resident is alumni, never a current resident merely
+            # because its evidence contains the word "resident".
+            if role == "resident" and _EVIDENCE["alumni"].search(evidence):
+                continue
+            out[candidate.record_id] = RoleDecision(role, evidence)
     return out
