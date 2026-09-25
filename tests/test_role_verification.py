@@ -9,7 +9,7 @@ import pytest
 from agentscrape.llm.provider import ModelResponse, VisionProvider
 from agentscrape.llm.usage import Usage
 from agentscrape.llm.verify import RoleCheckInput, verify_page_roles
-from agentscrape.verification.service import _verification_quality
+from agentscrape.verification.service import _deterministic_current_role, _verification_quality
 
 
 class RoleProvider(VisionProvider):
@@ -42,6 +42,7 @@ async def test_verification_keeps_one_grounded_role_and_allows_alumni() -> None:
     assert {record_id: decision.role for record_id, decision in result.items()} == {
         "resident": "resident", "alumnus": "alumni",
     }
+    assert len(provider.calls) == 1
     assert '"role"' in provider.calls[0]["system"]
     assert "fellowship roster makes the person a fellow" in provider.calls[0]["system"]
 
@@ -137,3 +138,29 @@ def test_duplicate_name_cannot_auto_confirm_until_disambiguated() -> None:
     )
     assert (score, risk) == (0.15, "high")
     assert "Multiple records" in reason
+
+
+@pytest.mark.parametrize(
+    ("category", "text", "expected"),
+    [
+        ("resident", "## Current Residents\nMina Shah — Internal Medicine Resident", "resident"),
+        ("resident", "## PGY-2\nMina Shah", "resident"),
+        ("fellow", "## Current Cardiology Fellows\nMina Shah", "fellow"),
+    ],
+)
+def test_matching_current_roster_evidence_is_deterministic(category, text, expected) -> None:
+    decision = _deterministic_current_role(RoleCheckInput("1", "Mina Shah", category), text)
+    assert decision is not None
+    assert decision.role == expected
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Mina Shah was nominated for Resident of the Year.",
+        "## Alumni\nMina Shah, former resident",
+        "## Residents 2021\nMina Shah completed residency here in 2022",
+    ],
+)
+def test_articles_alumni_and_historical_pages_never_auto_confirm(text) -> None:
+    assert _deterministic_current_role(RoleCheckInput("1", "Mina Shah", "resident"), text) is None

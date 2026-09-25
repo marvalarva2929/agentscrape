@@ -30,6 +30,8 @@ from ...db.repositories.records import ExtractionContext, fill_record_blanks, lo
 from ...directory.errors import directory_error
 from ...directory.learn import BROWSER, UNAVAILABLE, learn_directory
 from ...directory.lookup import LookupResult, lookup_person
+from ...domain.schemas import VerificationCreate
+from ...verification.service import create_verification_job
 from ..checkpoint import save_checkpoint
 from ..deps import PipelineDeps
 from ..state import SiteState
@@ -71,6 +73,16 @@ async def _targets(deps: PipelineDeps, state: SiteState, limit: int) -> list[Rec
 
 async def directory_search(state: SiteState, deps: PipelineDeps) -> SiteState:
     state = {**state, "crawl_done": True}
+    # Crawl extraction writes records before this optional enrichment stage.
+    # Queue verification now, rather than making it contingent on the directory
+    # finishing successfully.  The finalizer repeats this safely for crawl-only
+    # runs; create_verification_job de-duplicates a pending whole-site pass.
+    if "crawl" in (state.get("modes") or []) and settings.auto_verify_after_crawl:
+        async with deps.sessionmaker() as session:
+            try:
+                await create_verification_job(session, VerificationCreate(site_id=state["site_id"]))
+            except Exception:
+                log.exception("could not queue verification before directory search for %s", state["root_domain"])
     stats = dict(state.get("directory_stats") or {})
     for key in ("looked_up", "matched", "filled", "emails", "years", "not_listed", "ambiguous", "failed"):
         stats.setdefault(key, 0)
@@ -191,6 +203,16 @@ async def directory_search(state: SiteState, deps: PipelineDeps) -> SiteState:
 async def _fail(state: SiteState, deps: PipelineDeps, stats: dict, code: str, message: str) -> SiteState:
     if "crawl" in (state.get("modes") or []):
         message += " Crawl results have been saved; the directory step failed."
+        # A directory is enrichment, not the crawl's source of truth.  Do not
+        # turn a completed crawl into a failed SiteRun: finalize will retain
+        # this separately on the SiteRun and still enqueue verification.
+        await deps.note(state, message)
+        return {
+            **state,
+            "directory_stats": stats,
+            "directory_error_code": code,
+            "directory_error_message": message,
+        }
     await deps.note(state, message)
     return {**state, "directory_stats": stats, "status": "failed",
             "error_code": code, "error_message": message}

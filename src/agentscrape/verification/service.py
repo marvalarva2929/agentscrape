@@ -1,10 +1,11 @@
 """Verification of already-scraped role labels, run as an item in the queue.
 
 Started by the "Verify" action in the UI, and automatically once a crawl
-finishes a school. Either way it never starts on its own: it becomes a
-queued run of kind `verify` and waits its turn behind whatever crawl holds
-the model budget, exactly like a crawl. When its turn comes it re-reads each
-record's stored source page and asks the model which roles the page supports.
+finishes a school. Either way it becomes a queued run of kind `verify` and
+waits its turn behind whatever crawl holds the model budget. When its turn
+comes it re-reads each record's stored source page, first applying a
+conservative deterministic current-role check; it asks the model only for
+ambiguous evidence.
 
 A page is read with a plain HTTP GET first. When that is turned away (many
 hospital sites refuse a script - more so from a cloud server's address than
@@ -20,7 +21,7 @@ import asyncio
 import logging
 import re
 from collections import Counter
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -44,7 +45,7 @@ from ..domain.matching import VERSIONED_FIELDS
 from ..domain.schemas import VerificationCreate
 from ..extraction.text import html_to_model_text
 from ..llm.usage import UsageMeter
-from ..llm.verify import RoleCheckInput, verify_page_roles
+from ..llm.verify import RoleCheckInput, RoleDecision, verify_page_roles
 
 log = logging.getLogger("agentscrape.verification")
 
@@ -56,6 +57,10 @@ _RENDER_CONCURRENCY = 2
 # How often a running verification tells the queue it is still alive. Well
 # inside the scheduler's RUN_STALE_SECONDS.
 _HEARTBEAT_SECONDS = 5.0
+# This clock is deliberately created in run_verification, after the queued
+# worker has actually begun.  Crawl, directory work, and queue waiting never
+# consume this budget.
+_VERIFICATION_LIMIT = timedelta(hours=4)
 
 # A verification job in either of these states has not finished.
 _ACTIVE_VERIFICATION = (VerificationStatus.PENDING, VerificationStatus.RUNNING)
@@ -485,6 +490,12 @@ def _verification_quality(
         return 0.20, "high", "Printed position conflicts with a current trainee role; deeper verification required."
     if role in ("resident", "fellow") and article:
         return 0.35, "high", "Source looks like an article or announcement, not a canonical roster; deeper verification required."
+    if role in ("resident", "fellow") and _SUSPICIOUS_CONTEXT.search(evidence):
+        return 0.25, "high", "Evidence is historical, article-like, or otherwise does not establish a current trainee role."
+    if role == "resident" and not _CURRENT_ROLE.search(evidence):
+        return 0.30, "high", "Evidence does not explicitly establish a current resident role."
+    if role == "fellow" and not re.search(r"\b(current\s+)?fellows?\b", evidence, re.IGNORECASE):
+        return 0.30, "high", "Evidence does not explicitly establish a current fellow role."
     if role in ("resident", "fellow"):
         return 0.96, "verified", "Exact name and current-training evidence were found on an institution source."
     if role == "unknown":
@@ -517,6 +528,65 @@ async def _write_outcome(record_ids: list[str], outcome: RecordVerificationOutco
         )
 
 
+_CURRENT_ROLE = re.compile(
+    r"\b(current\s+(?:residents?|fellows?|house\s*staff)|our\s+residents?|residents?|house\s*staff|"
+    r"pgy\s*[- ]?[1-9]|resident\s+physician|chief\s+resident|current\s+fellows?)\b",
+    re.IGNORECASE,
+)
+_SUSPICIOUS_CONTEXT = re.compile(
+    r"\b(nominat(?:ed|ion)|award|alumni|former\s+resident|graduat(?:ed|e)|completed\s+residency|"
+    r"past\s+resident|faculty|medical\s+student|matched|incoming\s+resident|news|article|historical)\b",
+    re.IGNORECASE,
+)
+
+
+def _local_evidence(text: str, name: str) -> str:
+    """Return the small, name-local source packet used for deterministic checks.
+
+    The stored record is the first crawl result; this is its one source re-read.
+    Restricting the packet makes both the check and the rare adjudication cheap.
+    """
+    lines = text.splitlines()
+    needle = name.casefold().strip()
+    for index, line in enumerate(lines):
+        if needle and needle in line.casefold():
+            start = max(0, index - 4)
+            # Preserve a nearby markdown heading, which usually carries roster status.
+            for prior in range(index - 1, max(-1, index - 25), -1):
+                if lines[prior].lstrip().startswith("#"):
+                    start = prior
+                    break
+            return "\n".join(lines[start:min(len(lines), index + 5)])[:1_500]
+    return ""
+
+
+def _deterministic_current_role(person: RoleCheckInput, text: str) -> RoleDecision | None:
+    """Confirm only an unambiguous current trainee claim, never a name hit."""
+    evidence = _local_evidence(text, person.full_name)
+    if not evidence:
+        return None
+    # Negative/historical language wins even if a page also happens to contain
+    # "resident" in an article title or biography.
+    if _SUSPICIOUS_CONTEXT.search(evidence):
+        return None
+    expected = (person.category or "unknown").casefold()
+    if expected not in ("resident", "fellow"):
+        return None
+    # PGY labels are meaningful stored crawl evidence.  A re-read with a
+    # different PGY is a disagreement, not a cheap confirmation.
+    stored_pgy = re.search(r"\bpgy\s*[- ]?([1-9])\b", person.position or "", re.IGNORECASE)
+    reread_pgy = re.search(r"\bpgy\s*[- ]?([1-9])\b", evidence, re.IGNORECASE)
+    if stored_pgy and (not reread_pgy or stored_pgy.group(1) != reread_pgy.group(1)):
+        return None
+    if expected == "fellow":
+        if re.search(r"\b(current\s+)?fellows?\b", evidence, re.IGNORECASE):
+            return RoleDecision("fellow", evidence)
+        return None
+    if _CURRENT_ROLE.search(evidence):
+        return RoleDecision("resident", evidence)
+    return None
+
+
 async def run_verification(
     job_id: str,
     *,
@@ -536,8 +606,8 @@ async def run_verification(
     a page that plain HTTP read but that grounded nobody - off by default:
     it is much slower and rarely changes the answer.
 
-    `page_attempts` re-tries a page that came back with nothing before
-    giving up on it.
+    `page_attempts` is retained for API compatibility; verification deliberately
+    does not retry model adjudication or re-read a source repeatedly.
     """
     meter = meter or UsageMeter(scope=f"verify:{job_id}")
     try:
@@ -584,14 +654,9 @@ async def run_verification(
         browser = _Browser()
 
         async def _ask(url: str, title: str, text: str, people: list[RoleCheckInput]) -> dict | None:
-            for attempt in range(page_attempts):
-                roles = await verify_page_roles(
-                    url=url, title=title, text=text, people=people, meter=meter,
-                )
-                if roles or attempt + 1 == page_attempts:
-                    return roles
-                await asyncio.sleep(1.5 * (attempt + 1))
-            return {}
+            # Verification gets exactly one adjudication, not a retry loop.
+            # The normal path never reaches here at all.
+            return await verify_page_roles(url=url, title=title, text=text, people=people, meter=meter)
 
         async def _one(url: str, title: str | None, people: list[RoleCheckInput]) -> None:
             nonlocal checked, corrected
@@ -602,17 +667,14 @@ async def run_verification(
                 text, page_title, error = None, title or "", None
                 if url not in needs_browser:
                     text, error = await _read_plain(fetcher, url)
-                    if text is not None:
-                        roles_by_record = await _ask(url, page_title, text, people)
                 # Plain HTTP was refused, or the crawl only ever read this page
-                # in a browser, or (with use_browser) plain HTML grounded nobody.
-                if text is None or (use_browser and not roles_by_record):
+                # in a browser.  A source is re-read only once per verification
+                # job; the browser is a fallback for an unreadable HTTP result.
+                if text is None:
                     rendered, rendered_title, render_error = await browser.read(url)
                     if rendered is not None:
                         text = rendered
-                        roles_by_record = await _ask(
-                            url, title or rendered_title, rendered, people,
-                        )
+                        page_title = title or rendered_title
                     elif text is None:
                         error = f"{error}; {render_error}" if error else render_error
                 if text is None:
@@ -622,28 +684,48 @@ async def run_verification(
                     log.info("verification %s: could not read %s: %s", job_id, url, error)
                     await _audit_attempt(job_id, people, stage="fetch", outcome="unreadable", url=url, detail=error)
                     return
-                if roles_by_record is None:
+                # Matching a stored crawl label and a re-read is enough only
+                # with local, current-role evidence.  A nominee/article/alumni
+                # name match is deliberately ambiguous, never auto-confirmed.
+                deterministic = {
+                    p.record_id: decision
+                    for p in people
+                    if (decision := _deterministic_current_role(p, text)) is not None
+                }
+                ambiguous = [p for p in people if p.record_id not in deterministic]
+                adjudicated: dict | None = {}
+                if ambiguous:
+                    adjudicated = await _ask(url, page_title, text, ambiguous)
+                model_failed = adjudicated is None
+                if model_failed:
                     # The call itself never produced a usable response - a
                     # hard provider/model failure. Distinct from "answered but
                     # grounded nobody" below: that is insufficient evidence,
                     # this is a technical failure to even get an answer.
                     await _write_outcome(
-                        [p.record_id for p in people], RecordVerificationOutcome.VERIFICATION_ERROR,
+                        [p.record_id for p in ambiguous], RecordVerificationOutcome.VERIFICATION_ERROR,
                     )
-                    await _audit_attempt(job_id, people, stage="model", outcome="error", url=url, detail=meter.last_failure)
-                    return
+                    await _audit_attempt(job_id, ambiguous, stage="model", outcome="error", url=url, detail=meter.last_failure)
+                    roles_by_record = deterministic
+                else:
+                    roles_by_record = {**deterministic, **adjudicated}
                 if not roles_by_record:
+                    if model_failed:
+                        # The technical error above is the outcome; do not
+                        # overwrite it with an evidence judgement.
+                        return
                     # Read, and the model answered, but grounded nobody on
                     # this page - not the same as "nothing needed correcting".
-                    await _write_outcome(
-                        [p.record_id for p in people], RecordVerificationOutcome.INSUFFICIENT_EVIDENCE,
-                    )
+                    await _write_outcome([p.record_id for p in people], RecordVerificationOutcome.INSUFFICIENT_EVIDENCE)
                     await _audit_attempt(job_id, people, stage="model", outcome="no_decision", url=url, detail=meter.last_failure)
                     return
                 # The page was readable, but a person without a source-backed
                 # decision remains unverified rather than silently retaining
                 # a possibly wrong crawl label.
-                ungrounded_ids = [p.record_id for p in people if p.record_id not in roles_by_record]
+                ungrounded_ids = [
+                    p.record_id for p in people
+                    if p.record_id not in roles_by_record and not (model_failed and p in ambiguous)
+                ]
             if ungrounded_ids:
                 await _write_outcome(ungrounded_ids, RecordVerificationOutcome.INSUFFICIENT_EVIDENCE)
             prior = {p.record_id: p.category for p in people}
@@ -698,11 +780,19 @@ async def run_verification(
             corrected += page_corrected
             await _audit_attempt(job_id, people, stage="decision", outcome="verified" if all(p.record_id in roles_by_record for p in people) else "partial", url=url)
 
+        timed_out = False
         try:
-            async with Fetcher() as fetcher:
-                await asyncio.gather(*(
-                    _one(url, title, people) for (url, title), people in by_page.items()
-                ))
+            # This starts here, inside the worker, not at crawl creation or
+            # queueing.  Cancelling unfinished page tasks leaves their records
+            # untouched (null outcome), so a resume can pick them up.
+            async with asyncio.timeout(_VERIFICATION_LIMIT.total_seconds()):
+                async with Fetcher() as fetcher:
+                    await asyncio.gather(*(
+                        _one(url, title, people) for (url, title), people in by_page.items()
+                    ))
+        except TimeoutError:
+            timed_out = True
+            log.warning("verification %s reached its active four-hour limit", job_id)
         finally:
             await browser.stop()
 
@@ -743,11 +833,14 @@ async def run_verification(
                 update(VerificationJob)
                 .where(VerificationJob.id == job_id)
                 .values(
-                    status=VerificationStatus.FAILED if total_failure else VerificationStatus.COMPLETED,
+                    status=(VerificationStatus.FAILED if (timed_out or total_failure)
+                            else VerificationStatus.COMPLETED),
                     records_checked=checked,
                     records_corrected=corrected,
                     error=(
-                        f"reached 0 of {len(rows)} targeted records: {summary or 'nothing attempted'}"[:500]
+                        ("active verification limit reached; completed decisions were saved and "
+                         "remaining records are pending and may be resumed")[:500]
+                        if timed_out else f"reached 0 of {len(rows)} targeted records: {summary or 'nothing attempted'}"[:500]
                         if total_failure
                         else (
                             f"{summary} (of {len(rows)} targeted)"[:500]

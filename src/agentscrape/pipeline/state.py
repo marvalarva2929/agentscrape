@@ -40,6 +40,10 @@ class SiteState(TypedDict, total=False):
     resumed: bool
     error_code: str | None
     error_message: str | None
+    # Directory enrichment is optional after a crawl.  Keep its failure
+    # separate so a saved crawl remains a successful source for verification.
+    directory_error_code: str | None
+    directory_error_message: str | None
 
     # --- work list ---
     # {url, score (heuristic), priority (model), program, is_known_path}
@@ -117,6 +121,8 @@ def initial_state(
         resumed=False,
         error_code=None,
         error_message=None,
+        directory_error_code=None,
+        directory_error_message=None,
         candidates=[],
         cursor=0,
         steps_taken=0,

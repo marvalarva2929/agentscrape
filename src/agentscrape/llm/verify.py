@@ -124,38 +124,38 @@ async def verify_page_roles(
         by_name.setdefault(person.full_name, []).append(person)
 
     packets = _packets(text, people)
+    # Verification has already re-read the source.  The adjudicator only needs
+    # the name-local packets, not a second copy of a large page for every row.
+    compact_text = "\n\n".join(
+        f"{person.full_name}:\n{packets.get(person.record_id, 'not found in readable source')}"
+        for person in people
+    )[:6_000]
     prompt = verify_roles_user_prompt(
         url=url,
         title=title,
-        text=text,
+        text=compact_text,
         people=[
             {"name": p.full_name, "category": p.category, "position": p.position,
              "packet": packets.get(p.record_id, "not found in readable source")}
             for p in people
         ],
     )
-    # One retry on an unparseable response: usually the JSON was cut off or the
-    # model added prose, not a reason to give up on the whole page.
+    # One request only: ambiguous verification is deliberately bounded.
     payload = None
-    for attempt in range(2):
-        try:
-            response = await provider.complete(
-                system=VERIFY_ROLES_SYSTEM, user=prompt, meter=meter, model=settings.text_model,
-            )
-            payload = response.json()
-            if not _is_answer(payload):
-                payload = _last_json_object(response.text)
-        except LLMUnavailable:
-            raise
-        except Exception as exc:
-            log.warning("role verification failed for %s: %s", url, exc)
-            if meter is not None:
-                meter.note_failure("verify_roles", exc)
-            return None
-        if _is_answer(payload):
-            break
-        log.warning("role verification for %s returned unparseable output (attempt %d)", url, attempt + 1)
-        payload = None
+    try:
+        response = await provider.complete(
+            system=VERIFY_ROLES_SYSTEM, user=prompt, meter=meter, model=settings.text_model,
+        )
+        payload = response.json()
+        if not _is_answer(payload):
+            payload = _last_json_object(response.text)
+    except LLMUnavailable:
+        raise
+    except Exception as exc:
+        log.warning("role verification failed for %s: %s", url, exc)
+        if meter is not None:
+            meter.note_failure("verify_roles", exc)
+        return None
     if payload is None:
         if meter is not None:
             meter.note_failure("verify_roles", "unparseable output")

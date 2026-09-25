@@ -77,8 +77,13 @@ async def finalize(state: SiteState, deps: PipelineDeps) -> SiteState:
                 # A school that finished with nobody says why, instead of reading
                 # as a clean "completed". Recorded here only: the pipeline's own
                 # `error_code` decides routing and must stay unset.
-                error_code=state.get("error_code") or (reason[0] if reason else None),
-                error_message=state.get("error_message") or (reason[1] if reason else None),
+                # A crawl can complete even when optional directory enrichment
+                # failed.  Its error remains visible without poisoning the
+                # crawl result or its independent verification job.
+                error_code=(state.get("error_code") or state.get("directory_error_code")
+                            or (reason[0] if reason else None)),
+                error_message=(state.get("error_message") or state.get("directory_error_message")
+                               or (reason[1] if reason else None)),
                 coverage=_coverage(state),
                 tokens_in=deps.meter.total.input_tokens,
                 tokens_out=deps.meter.total.output_tokens,
