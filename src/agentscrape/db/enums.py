@@ -61,6 +61,30 @@ class RecordStatus(StrEnum):
     MISSING = "missing"
 
 
+class RecordVerificationOutcome(StrEnum):
+    """The result of the most recent verification attempt on a record.
+
+    Absent (null on the record) means verification has never been attempted.
+    Distinct from `VerificationStatus`, which is the job's own lifecycle, and
+    from the risk fields on `Record` (`verification_risk` etc.), which grade
+    the trustworthiness of an already-grounded decision rather than say
+    whether one was reached at all.
+    """
+
+    VERIFIED_RESIDENT = "verified_resident"
+    VERIFIED_FELLOW = "verified_fellow"
+    # Grounded, but the source establishes the person is not a current
+    # resident or fellow (faculty, staff, student, alumni, or an explicit
+    # "unknown" role the page does not support).
+    VERIFIED_NON_TRAINEE = "verified_non_trainee"
+    # The page was read (or answered) but no decision could be grounded for
+    # this person - including a grounded-but-high-risk resident/fellow claim
+    # that verification_risk marks for deeper review rather than promoting.
+    INSUFFICIENT_EVIDENCE = "insufficient_evidence"
+    SOURCE_UNAVAILABLE = "source_unavailable"
+    VERIFICATION_ERROR = "verification_error"
+
+
 class PersonCategory(StrEnum):
     """Coarse bucket for filtering. The person's printed title is kept verbatim
     alongside this in `Record.position`.

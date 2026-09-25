@@ -30,6 +30,9 @@ class SiteState(TypedDict, total=False):
     crawl_strategy: str
     # What this run does: "crawl", "directory", or both.
     modes: list[str]
+    # Client-supplied URLs to examine first (a hint, never a boundary); already
+    # scoped to this site by the orchestrator before it ever reaches here.
+    priority_urls: list[str]
 
     # --- control flow ---
     status: str
@@ -93,6 +96,7 @@ def initial_state(
     step_budget: int = 40,
     crawl_strategy: str | None = None,
     modes: list[str] | None = None,
+    priority_urls: list[str] | None = None,
 ) -> SiteState:
     return SiteState(
         site_id=site_id,
@@ -107,6 +111,7 @@ def initial_state(
         step_budget=step_budget,
         crawl_strategy=crawl_strategy or settings.crawl_strategy,
         modes=list(modes or ["crawl"]),
+        priority_urls=list(priority_urls or []),
         status="running",
         terminated=False,
         resumed=False,

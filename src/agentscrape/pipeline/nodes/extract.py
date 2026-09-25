@@ -670,7 +670,12 @@ def program_first(pending: dict[str, int] | set[str]):
     def key(candidate: dict) -> tuple:
         priority = float(candidate.get("priority", 0.0))
         rank = 0
-        if priority < _READ_FLOOR:
+        if candidate.get("is_priority_input"):
+            # A client-supplied link: examined first regardless of program
+            # attribution, but still ranked and read like any other
+            # candidate - a hint about order, not a different code path.
+            tier = -1
+        elif priority < _READ_FLOOR:
             tier = 2
         elif candidate.get("program") in order:
             tier, rank = 0, order[candidate["program"]]

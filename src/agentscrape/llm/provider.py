@@ -272,3 +272,53 @@ def set_provider(provider: VisionProvider) -> None:
     """Injection point for tests and for swapping providers at runtime."""
     global _provider
     _provider = provider
+
+
+class ModelConfigError(RuntimeError):
+    """The configured model id is permanently rejected by the provider
+    (e.g. "model not supported"), not a transient timeout or rate limit."""
+
+
+# Cached per resolved model string, for the life of the process: env vars
+# don't change without a restart, so a config error stays a config error and
+# a verified-good model stays good - either way, one paid probe call is enough.
+_model_checks: dict[str, ModelConfigError | None] = {}
+
+
+async def check_model_configured() -> None:
+    """Probe `settings.text_model` once; raise only for a permanent rejection.
+
+    Reuses the same classification `OpenAICompatibleProvider._complete` already
+    applies: an `APIStatusError` outside the retryable timeout/5xx statuses is
+    the provider refusing the model itself, not an infra hiccup. Anything else
+    (timeout, rate limit, connection error, retries exhausted) is left alone -
+    those are transient and the ordinary per-call retry/circuit-breaker path
+    already handles them; this check must never mistake one for a permanent
+    config error.
+    """
+    model = settings.text_model
+    if model in _model_checks:
+        cached = _model_checks[model]
+        if cached is not None:
+            raise cached
+        return
+    try:
+        await get_provider().complete(
+            system="You answer with strict JSON only.",
+            user='Return ONLY this JSON: {"ok": true}',
+            model=model,
+            max_tokens=20,
+        )
+    except APIStatusError as exc:
+        if exc.status_code not in _TIMEOUT_STATUSES and exc.status_code < 500:
+            err = ModelConfigError(
+                f"The configured model {model!r} (LLM_TEXT_MODEL, or LLM_MODEL if "
+                f"LLM_TEXT_MODEL is unset) was rejected by the provider and cannot "
+                f"be used: {exc}"
+            )
+            _model_checks[model] = err
+            raise err from exc
+        return  # 5xx/timeout status: transient, not a config problem.
+    except Exception:
+        return  # Any other failure here is inconclusive; don't block on it.
+    _model_checks[model] = None

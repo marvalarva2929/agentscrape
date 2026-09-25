@@ -33,6 +33,7 @@ from ..db.enums import (
     ExtractionMethod,
     FetchMode,
     RecordStatus,
+    RecordVerificationOutcome,
     RunStatus,
     VerificationStatus,
 )
@@ -141,8 +142,20 @@ async def create_verification_job(
     return job
 
 
+# The only outcomes a resume should treat as already settled. Null (never
+# attempted) and every other outcome (insufficient evidence, source
+# unavailable, verification error) remain eligible for another attempt.
+_CONFIRMED_OUTCOMES = (
+    RecordVerificationOutcome.VERIFIED_RESIDENT,
+    RecordVerificationOutcome.VERIFIED_FELLOW,
+    RecordVerificationOutcome.VERIFIED_NON_TRAINEE,
+)
+
+
 async def resume_verification_job(session: AsyncSession, previous_job_id: str) -> VerificationJob:
-    """Continue a stopped job without re-checking records already proven.
+    """Continue a stopped job, re-checking only records with no confirmed
+    outcome yet (never attempted, insufficient evidence, unavailable source,
+    or a verification error).
 
     Per-record verification state lives on the record, so a resume remains safe
     across a process restart and does not discard already captured evidence.
@@ -151,7 +164,16 @@ async def resume_verification_job(session: AsyncSession, previous_job_id: str) -
     if previous is None:
         raise ValueError(f"No verification job with id {previous_job_id!r}.")
     rows = await _targets(session, previous)
-    pending_ids = [row[0] for row in rows if (await session.get(Record, row[0])).verification_risk != "verified"]
+    target_ids = [row[0] for row in rows]
+    confirmed = set(
+        await session.scalars(
+            select(Record.id).where(
+                Record.id.in_(target_ids),
+                Record.verification_outcome.in_(_CONFIRMED_OUTCOMES),
+            )
+        )
+    )
+    pending_ids = [record_id for record_id in target_ids if record_id not in confirmed]
     if not pending_ids:
         raise ValueError("Every record in that verification is already proven.")
     return await create_verification_job(session, VerificationCreate(record_ids=pending_ids))
@@ -506,10 +528,6 @@ def _verification_quality(
     return 0.90, "verified", "Exact name and role evidence were found on the source page."
 
 
-def _summarize(errors: Counter) -> str:
-    return ", ".join(f"{reason} ×{count}" for reason, count in errors.most_common(3))
-
-
 async def _audit_attempt(job_id: str, people: list[RoleCheckInput], *, stage: str, outcome: str, url: str, detail: str | None = None) -> None:
     """Persist enough context to reproduce a failed or risky decision later."""
     matched = re.search(r"HTTP (\d{3})", detail or "")
@@ -517,6 +535,21 @@ async def _audit_attempt(job_id: str, people: list[RoleCheckInput], *, stage: st
         session.add_all(
             VerificationAttempt(job_id=job_id, record_id=p.record_id, stage=stage, outcome=outcome, source_url=url, final_url=url, http_status=int(matched.group(1)) if matched else None, detail=(detail or None)[:500] if detail else None)
             for p in people
+        )
+
+
+async def _write_outcome(record_ids: list[str], outcome: RecordVerificationOutcome) -> None:
+    """Stamp every targeted record's verification_outcome for this attempt.
+
+    Called for every record this run reaches, whatever the result, so a
+    completed job's outcome counts always sum to the number of records it
+    actually processed - nobody disappears into an unexplained remainder.
+    """
+    if not record_ids:
+        return
+    async with session_scope() as session:
+        await session.execute(
+            update(Record).where(Record.id.in_(record_ids)).values(verification_outcome=outcome)
         )
 
 
@@ -583,14 +616,10 @@ async def run_verification(
 
         checked = 0
         corrected = 0
-        unresolved = 0
-        fetch_failures = 0
-        model_failures = 0
-        fetch_errors: Counter = Counter()
         semaphore = asyncio.Semaphore(concurrency)
         browser = _Browser()
 
-        async def _ask(url: str, title: str, text: str, people: list[RoleCheckInput]) -> dict:
+        async def _ask(url: str, title: str, text: str, people: list[RoleCheckInput]) -> dict | None:
             for attempt in range(page_attempts):
                 roles = await verify_page_roles(
                     url=url, title=title, text=text, people=people, meter=meter,
@@ -601,11 +630,11 @@ async def run_verification(
             return {}
 
         async def _one(site_id: str, url: str, title: str | None, people: list[RoleCheckInput]) -> None:
-            nonlocal checked, corrected, unresolved, fetch_failures, model_failures
+            nonlocal checked, corrected
             # Held for the whole page - fetch, model call and any render - so
             # `concurrency` bounds concurrent model calls too, not just I/O.
             async with semaphore:
-                roles_by_record: dict = {}
+                roles_by_record: dict | None = {}
                 text, page_title, error = None, title or "", None
                 if url not in needs_browser:
                     text, error = await _read_plain(fetcher, url)
@@ -623,10 +652,21 @@ async def run_verification(
                     elif text is None:
                         error = f"{error}; {render_error}" if error else render_error
                 if text is None:
-                    fetch_failures += len(people)
-                    fetch_errors[error or "unreadable"] += 1
+                    await _write_outcome(
+                        [p.record_id for p in people], RecordVerificationOutcome.SOURCE_UNAVAILABLE,
+                    )
                     log.info("verification %s: could not read %s: %s", job_id, url, error)
                     await _audit_attempt(job_id, people, stage="fetch", outcome="unreadable", url=url, detail=error)
+                    return
+                if roles_by_record is None:
+                    # The call itself never produced a usable response - a
+                    # hard provider/model failure. Distinct from "answered but
+                    # grounded nobody" below: that is insufficient evidence,
+                    # this is a technical failure to even get an answer.
+                    await _write_outcome(
+                        [p.record_id for p in people], RecordVerificationOutcome.VERIFICATION_ERROR,
+                    )
+                    await _audit_attempt(job_id, people, stage="model", outcome="error", url=url, detail=meter.last_failure)
                     return
                 if not roles_by_record:
                     # Revisit this exact source link with the normal crawler
@@ -642,13 +682,17 @@ async def run_verification(
                 if not roles_by_record:
                     # Read, but the model never gave an answer that grounded
                     # anyone - not the same as "nothing needed correcting".
-                    model_failures += len(people)
+                    await _write_outcome(
+                        [p.record_id for p in people], RecordVerificationOutcome.INSUFFICIENT_EVIDENCE,
+                    )
                     await _audit_attempt(job_id, people, stage="model", outcome="no_decision", url=url, detail=meter.last_failure)
                     return
                 # The page was readable, but a person without a source-backed
                 # decision remains unverified rather than silently retaining
                 # a possibly wrong crawl label.
-                unresolved += len(people) - len(roles_by_record)
+                ungrounded_ids = [p.record_id for p in people if p.record_id not in roles_by_record]
+            if ungrounded_ids:
+                await _write_outcome(ungrounded_ids, RecordVerificationOutcome.INSUFFICIENT_EVIDENCE)
             prior = {p.record_id: p.category for p in people}
             now = datetime.now(UTC)
             page_checked = page_corrected = 0
@@ -665,8 +709,12 @@ async def run_verification(
                     record.verification_risk = risk
                     record.verification_reason = reason
                     record.verification_evidence = decision.evidence
-                    # High-risk trainee claims are deliberately not promoted.
+                    # High-risk trainee claims are deliberately not promoted:
+                    # grounded, but not trustworthy enough to confirm. Treated
+                    # as insufficient evidence for accounting purposes, with
+                    # the risk detail above kept for whoever reviews it.
                     if risk != "verified" and decision.role in ("resident", "fellow"):
+                        record.verification_outcome = RecordVerificationOutcome.INSUFFICIENT_EVIDENCE
                         page_checked += 1
                         continue
                     page_checked += 1
@@ -674,6 +722,10 @@ async def run_verification(
                     # verified record now has exactly one canonical role.
                     record.roles = [decision.role]
                     record.roles_checked_at = now
+                    record.verification_outcome = {
+                        "resident": RecordVerificationOutcome.VERIFIED_RESIDENT,
+                        "fellow": RecordVerificationOutcome.VERIFIED_FELLOW,
+                    }.get(decision.role, RecordVerificationOutcome.VERIFIED_NON_TRAINEE)
                     if decision.role != record.category:
                         await _promote_record(write_session, record, decision.role)
                     if decision.role != prior.get(record_id):
@@ -702,20 +754,38 @@ async def run_verification(
         finally:
             await browser.stop()
 
-        failed = len(rows) - checked
-        reasons = []
-        if fetch_failures:
-            reasons.append(f"{fetch_failures} couldn't be read ({_summarize(fetch_errors)})")
-        if model_failures:
-            why = f"; last error: {meter.last_failure}" if meter.last_failure else ""
-            reasons.append(f"{model_failures} got no usable answer from the model{why}")
-        if unresolved:
-            reasons.append(f"{unresolved} had no source-backed role decision")
-        summary = "; ".join(reasons)
+        # Complete accounting: every targeted record's *current*
+        # verification_outcome, tallied fresh rather than from in-process
+        # counters, so it reflects exactly what is on the records regardless
+        # of how far this pass got. Null (never attempted) is reported as
+        # NOT_ATTEMPTED without being a stored enum value.
+        target_ids = [row[0] for row in rows]
+        async with session_scope() as session:
+            outcome_counts: dict[str | None, int] = (
+                dict(
+                    (
+                        await session.execute(
+                            select(Record.verification_outcome, func.count())
+                            .where(Record.id.in_(target_ids))
+                            .group_by(Record.verification_outcome)
+                        )
+                    ).all()
+                )
+                if target_ids
+                else {}
+            )
+        not_attempted = outcome_counts.pop(None, 0)
+        attempted = sum(outcome_counts.values())
+        confirmed = sum(outcome_counts.get(o, 0) for o in _CONFIRMED_OUTCOMES)
+        unresolved_total = attempted - confirmed
+        parts = [f"{count} {outcome}" for outcome, count in sorted(outcome_counts.items())]
+        if not_attempted:
+            parts.append(f"{not_attempted} NOT_ATTEMPTED")
+        summary = ", ".join(parts)
 
-        # A pass that checked nobody is the checker never running, not a
+        # A pass that reached nobody is the checker never running, not a
         # clean bill of health: report it as a failure with the reason.
-        total_failure = checked == 0 and bool(rows)
+        total_failure = attempted == 0 and bool(rows)
         async with session_scope() as session:
             await session.execute(
                 update(VerificationJob)
@@ -725,16 +795,20 @@ async def run_verification(
                     records_checked=checked,
                     records_corrected=corrected,
                     error=(
-                        f"checked 0 of {len(rows)} records: {summary or 'no page could be checked'}"[:500]
+                        f"reached 0 of {len(rows)} targeted records: {summary or 'nothing attempted'}"[:500]
                         if total_failure
-                        else (f"{failed} of {len(rows)} not checked: {summary}"[:500] if failed and summary else None)
+                        else (
+                            f"{summary} (of {len(rows)} targeted)"[:500]
+                            if (unresolved_total or not_attempted)
+                            else None
+                        )
                     ),
                     finished_at=datetime.now(UTC),
                 )
             )
         log.info(
-            "verification %s: %d/%d records checked, %d corrected, %d pages rendered (%s)",
-            job_id, checked, len(rows), corrected, browser.rendered, summary or "no failures",
+            "verification %s: %d/%d records checked, %d corrected, %d pages rendered; outcomes: %s",
+            job_id, checked, len(rows), corrected, browser.rendered, summary or "none",
         )
     except Exception as exc:
         log.exception("verification %s failed", job_id)

@@ -84,6 +84,7 @@ async def run_site(
     fetcher: Fetcher | None = None,
     crawl_strategy: str | None = None,
     modes: list[str] | None = None,
+    priority_urls: list[str] | None = None,
 ) -> SiteState:
     """Run one site end to end. Never raises: failures are recorded and returned."""
     emitter = emitter or NullEmitter()
@@ -127,6 +128,7 @@ async def run_site(
         step_budget=budget,
         crawl_strategy=crawl_strategy,
         modes=modes,
+        priority_urls=priority_urls,
     )
 
     # Keep the run-wide spend meter current after every model call, so both

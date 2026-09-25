@@ -73,6 +73,12 @@ class RecordOut(ApiModel):
     verification_risk: str = "unverified"
     verification_reason: str | None = None
     verification_evidence: str | None = None
+    verification_outcome: str | None = Field(
+        default=None,
+        description="VERIFIED_RESIDENT | VERIFIED_FELLOW | VERIFIED_NON_TRAINEE | "
+        "INSUFFICIENT_EVIDENCE | SOURCE_UNAVAILABLE | VERIFICATION_ERROR | null "
+        "(never attempted)",
+    )
     version_count: int
     first_seen_at: datetime
     last_seen_at: datetime
@@ -164,6 +170,12 @@ class RunConfigIn(BaseModel):
     # instead of competing with them for the one process-wide model budget.
     # Blank means the QUEUE_RUNS setting.
     queued: bool = Field(default_factory=lambda: settings.queue_runs)
+    # Client-supplied URLs to examine first, keyed by the exact site string the
+    # client sent in `sites` (not yet a resolved site id). A hint, never a
+    # crawl boundary: normal discovery still covers the whole site afterward.
+    # Re-keyed onto each site's canonical root_domain in `create_run`, so one
+    # school's links are never handed to another site in the same run.
+    priority_urls: dict[str, list[str]] | None = None
 
     @field_validator("modes")
     @classmethod
@@ -174,6 +186,18 @@ class RunConfigIn(BaseModel):
 class RunCreate(BaseModel):
     sites: list[str] = Field(min_length=1, description="Root URLs or domains")
     config: RunConfigIn = Field(default_factory=RunConfigIn)
+
+
+class PriorityUrlsPreview(BaseModel):
+    """What a spreadsheet or Google Sheet upload produced, for the client to
+    review (and prune) before starting a crawl. Extraction only; no crawl
+    side effect."""
+
+    urls: list[str] = Field(default_factory=list)
+
+
+class GoogleSheetPriorityUrlsRequest(BaseModel):
+    sheet_url: str
 
 
 class RunOut(ApiModel):

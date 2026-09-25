@@ -318,6 +318,19 @@ async def discover_links(state: SiteState, deps: PipelineDeps) -> SiteState:
     for url in known_urls:
         discovered.setdefault(url, None)
 
+    # Client-supplied priority links, already scoped to this site by the
+    # orchestrator. A hint, not a boundary: they enter the same triage and
+    # candidate pipeline as everything else, merely marked so they sort ahead
+    # of ordinary candidates (see extract.program_first). Never a substitute
+    # for the site-wide discovery above, which runs exactly as it already did.
+    priority_urls = {
+        canonical
+        for canonical in (canonicalize(u) or u for u in state.get("priority_urls") or [])
+        if canonical
+    }
+    for url in priority_urls:
+        discovered.setdefault(url, None)
+
     # The model triages everything found, in batches. Nothing is dropped for
     # lacking a keyword; only what the model calls obviously useless, pages on
     # hosts it ruled out, and non-HTML files.
@@ -355,9 +368,14 @@ async def discover_links(state: SiteState, deps: PipelineDeps) -> SiteState:
             "url": d.url, "score": d.heuristic,
             # Proven yield is a strong hint, but no longer a +100 pin that
             # freezes the ranking to whatever the last run happened to find.
-            "priority": max(d.priority, 90.0) if d.url in known_urls else d.priority,
+            "priority": (
+                max(d.priority, 98.0) if d.url in priority_urls
+                else max(d.priority, 90.0) if d.url in known_urls
+                else d.priority
+            ),
             "program": d.program,
             "is_known_path": d.url in known_urls,
+            "is_priority_input": d.url in priority_urls,
         }
         for d in decisions
         if not d.skipped and d.heuristic > -100
@@ -365,8 +383,10 @@ async def discover_links(state: SiteState, deps: PipelineDeps) -> SiteState:
     candidates = merge_frontier([], 0, additions)
 
     log.info(
-        "discovery for %s: %d urls found, %d candidates kept (%d known paths, %d hosts skipped)",
-        root_domain, len(discovered), len(candidates), len(known_urls), len(skipped_hosts),
+        "discovery for %s: %d urls found, %d candidates kept "
+        "(%d known paths, %d priority links, %d hosts skipped)",
+        root_domain, len(discovered), len(candidates),
+        len(known_urls), len(priority_urls), len(skipped_hosts),
     )
 
     if state.get("crawl_strategy") == "hybrid":

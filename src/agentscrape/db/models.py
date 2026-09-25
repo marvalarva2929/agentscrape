@@ -380,6 +380,11 @@ class Record(TimestampMixin, Base):
     verification_risk: Mapped[str] = mapped_column(String(24), default="unverified", nullable=False)
     verification_reason: Mapped[str | None] = mapped_column(Text)
     verification_evidence: Mapped[str | None] = mapped_column(Text)
+    # The result of the most recent verification attempt. Null means never
+    # attempted - distinct from `roles`/`roles_checked_at`, which only carry
+    # a confirmed role, and from `verification_risk`, which grades a
+    # decision's trustworthiness rather than whether one was reached.
+    verification_outcome: Mapped[str | None] = mapped_column(String(24))
 
     current_version_id: Mapped[str | None] = mapped_column(String(64))
     version_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

@@ -108,6 +108,28 @@ def test_article_and_conflicting_positions_cannot_auto_confirm_trainees() -> Non
     assert "conflicts" in reason
 
 
+class _RaisingProvider(VisionProvider):
+    """A hard provider/model failure - never a usable response at all."""
+
+    async def complete(self, **kwargs):
+        raise RuntimeError("model not supported by any provider you have enabled")
+
+
+@pytest.mark.asyncio
+async def test_hard_provider_failure_returns_none_not_empty_dict() -> None:
+    """A call that never produced a response must be distinguishable from one
+    that answered but grounded nobody: the caller maps `None` to
+    VERIFICATION_ERROR and `{}` to INSUFFICIENT_EVIDENCE - conflating them was
+    exactly what hid the Qwen model_not_supported failures as ordinary
+    "no source-backed role decision" results."""
+    result = await verify_page_roles(
+        url="https://med.example.edu/people", title="People", text="Mina Shah",
+        people=[RoleCheckInput("1", "Mina Shah", "resident")],
+        provider=_RaisingProvider(),
+    )
+    assert result is None
+
+
 def test_duplicate_name_cannot_auto_confirm_until_disambiguated() -> None:
     score, risk, reason = _verification_quality(
         role="resident", evidence="Current Residents", position=None,

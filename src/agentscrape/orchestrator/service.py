@@ -241,6 +241,12 @@ async def create_run(session: AsyncSession, body: RunCreate) -> Run:
     # without collapsing them the unique constraint would fail the whole run.
     seen_site_ids: set[str] = set()
     school_names: list[str] = []
+    # `config.priority_urls` arrives keyed by the client's raw site string (the
+    # exact entry in `body.sites`), not yet a resolved site. Re-key it onto
+    # each site's canonical root_domain here - the one place raw input is
+    # already reconciled against site identity - so a multi-school run can
+    # never hand one school's priority links to another site's crawl.
+    priority_by_domain: dict[str, list[str]] = {}
 
     for raw in body.sites:
         url = normalize_site_input(raw)
@@ -254,6 +260,10 @@ async def create_run(session: AsyncSession, body: RunCreate) -> Run:
             continue
         seen_site_ids.add(site.id)
         school_names.append(site.name or site.hospital_name or site.root_domain)
+        if config.priority_urls and config.priority_urls.get(raw):
+            priority_by_domain.setdefault(site.root_domain, []).extend(
+                config.priority_urls[raw]
+            )
 
         session.add(
             SiteRun(
@@ -270,6 +280,9 @@ async def create_run(session: AsyncSession, body: RunCreate) -> Run:
     run.sites_total = created
     if not (run.label or "").strip() and school_names:
         run.label = default_label(school_names, datetime.now(UTC))
+    # Reassign (not mutate in place) so SQLAlchemy marks the JSON column dirty.
+    run_config["priority_urls"] = priority_by_domain
+    run.config = run_config
     await session.commit()
     log.info(
         "created run %s with %d sites (%d duplicate inputs collapsed)",
@@ -330,11 +343,39 @@ async def resume_interrupted_runs() -> list[str]:
 
 async def launch_run(run_id: str, *, use_browser: bool = True) -> RunOrchestrator | None:
     """Start the orchestrator for a run as a background task. A verification
-    run has no orchestrator: it starts its own task and returns None."""
+    run has no orchestrator: it starts its own task and returns None.
+
+    A permanently misconfigured model (e.g. an unsupported model id) is
+    checked for here, once, before any page-level crawling or verification
+    work begins - not discovered 20 doomed calls into the run."""
+    from ..llm.provider import ModelConfigError, check_model_configured
+
     async with get_sessionmaker()() as session:
         run = await session.get(Run, run_id)
         if run is None:
             raise ValueError(f"no run {run_id}")
+
+        try:
+            await check_model_configured()
+        except ModelConfigError as exc:
+            message = str(exc)
+            log.error("run %s refused: %s", run_id, message)
+            await session.execute(
+                update(Run)
+                .where(Run.id == run_id)
+                .values(
+                    status=RunStatus.FAILED, error_message=message,
+                    finished_at=datetime.now(UTC),
+                )
+            )
+            if run.kind == RUN_KIND_VERIFY:
+                from ..verification.service import end_unstarted_job
+
+                await end_unstarted_job(session, run_id, message)
+            await session.commit()
+            await EventEmitter(run_id).emit(EventType.RUN_FAILED, status="failed", error=message)
+            return None
+
         if run.kind == RUN_KIND_VERIFY:
             from ..verification.service import launch_verification_run
 
@@ -368,6 +409,7 @@ async def launch_run(run_id: str, *, use_browser: bool = True) -> RunOrchestrato
         use_browser=use_browser,
         crawl_strategy=config.get("crawl_strategy"),
         modes=config.get("modes"),
+        priority_urls=config.get("priority_urls"),
     )
     register(orchestrator)
 

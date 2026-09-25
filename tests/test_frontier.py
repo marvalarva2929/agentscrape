@@ -148,6 +148,35 @@ class TestProgramFirst:
         covered = [{**p, "status": "roster_found"} for p in self.PROGRAMS]
         assert merge_frontier(tail, 0, [], pending_names(covered))[0]["url"].endswith("/directory")
 
+    def test_priority_input_sorts_ahead_of_a_pending_program_page(self):
+        """A client-supplied link is examined first, however the planner has
+        organized the program list - it is a hint about order, not a program."""
+        from agentscrape.pipeline.nodes.extract import merge_frontier, pending_names
+
+        additions = [
+            {"url": "https://med.example.edu/im/residency/current-residents",
+             "priority": 60.0, "program": "Internal Medicine Residency"},
+            {"url": "https://med.example.edu/client-list/a-page",
+             "priority": 98.0, "is_priority_input": True},
+        ]
+        ordered = merge_frontier([], 0, additions, pending_names(self.PROGRAMS))
+        assert ordered[0]["url"].endswith("/a-page")
+        assert ordered[1]["url"].endswith("/current-residents")
+
+
+def test_a_priority_url_rediscovered_by_normal_discovery_is_not_duplicated():
+    """A link supplied up front and later found again by ordinary discovery
+    collapses to the one candidate - it is never queued or read twice."""
+    from agentscrape.pipeline.nodes.extract import merge_frontier
+
+    additions = [
+        {"url": "https://med.example.edu/residents/pgy2", "priority": 98.0, "is_priority_input": True},
+        {"url": "https://med.example.edu/residents/pgy2", "priority": 55.0},
+    ]
+    ordered = merge_frontier([], 0, additions)
+    assert len(ordered) == 1
+    assert ordered[0]["is_priority_input"] is True
+
 
 def test_residency_pages_come_before_fellowship_pages():
     from agentscrape.pipeline.nodes.extract import merge_frontier, pending_order
