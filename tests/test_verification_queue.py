@@ -349,6 +349,9 @@ class TestReadingPages:
         self, session, monkeypatch
     ):
         ids = await _seed_people(session)
+        record = await session.get(Record, ids[0])
+        record.position = "A consequentialist ethical analysis of federal funding of elective abortions"
+        await session.commit()
 
         async def page(fetcher, url):
             return "Naomi Goldrich, Chad Caraway", None
@@ -359,6 +362,8 @@ class TestReadingPages:
         assert job.status == VerificationStatus.COMPLETED
         assert job.records_checked == 2
         assert "verification_error" in job.error
+        await session.refresh(record)
+        assert record.position is None
 
     async def test_a_slow_page_is_skipped_at_the_verification_deadline(self, session, monkeypatch):
         ids = await _seed_people(session)

@@ -618,6 +618,28 @@ async def run_verification(
             if name_counts[str(full_name).casefold().strip()] > 1
         }
         needs_browser: set[str] = set()
+        # Clean deterministic position noise before asking the model.  A
+        # source can be slow or unavailable, but a stored paper title is never
+        # a job title and should not survive merely because verification could
+        # not complete that page today.
+        position_repairs = {
+            record_id: sanitize_position(position)
+            for _, record_id, _, _, position, *_ in rows
+            if sanitize_position(position) != position
+        }
+        if position_repairs:
+            async with session_scope() as repair_session:
+                for record_id, clean_position in position_repairs.items():
+                    await repair_session.execute(
+                        update(Record)
+                        .where(Record.id == record_id)
+                        .values(position=clean_position)
+                    )
+                await repair_session.execute(
+                    update(VerificationJob)
+                    .where(VerificationJob.id == job_id)
+                    .values(records_corrected=len(position_repairs), updated_at=func.now())
+                )
         for site_id, record_id, full_name, category, position, source_url, page_title, mode in rows:
             by_page.setdefault((site_id, source_url, page_title), []).append(
                 RoleCheckInput(
@@ -629,7 +651,7 @@ async def run_verification(
                 needs_browser.add(source_url)
 
         checked = 0
-        corrected = 0
+        corrected = len(position_repairs)
         semaphore = asyncio.Semaphore(concurrency)
         browser = _Browser()
 
