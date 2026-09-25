@@ -22,11 +22,32 @@ ROLE_EVIDENCE: dict[str, re.Pattern[str]] = {
     "alumni": re.compile(r"\b(alumni|alumnus|alumna|graduates?|former|past)\b", re.IGNORECASE),
 }
 
+# These headings often live on residency/fellowship sites and frequently use
+# the word "resident" or "fellow" in the name of the group.  Membership is
+# not proof that a person currently holds the trainee role.
+_COMMITTEE_CONTEXT = re.compile(
+    r"\b(committee|advisory|board|council|member(?:ship)?|leadership)\b",
+    re.IGNORECASE,
+)
+_DIRECT_TRAINEE_EVIDENCE = re.compile(
+    r"\b(pgy[- ]?\d|ca[- ]?[123]|resident physician|chief resident|"
+    r"(?:clinical|research) fellow)\b",
+    re.IGNORECASE,
+)
+
 
 def is_grounded(role: str, evidence: str) -> bool:
     """Whether `evidence` actually supports `role` under its regex."""
     pattern = ROLE_EVIDENCE.get(role)
-    return bool(pattern and evidence and pattern.search(evidence))
+    if not (pattern and evidence and pattern.search(evidence)):
+        return False
+    # "Resident Advisory Committee" and "Fellowship Board" identify a
+    # group, not its members' current role.  Preserve a direct title/PGY on
+    # the same evidence line: committee membership and trainee status can
+    # both be true, but the latter must be explicit.
+    if role in ("resident", "fellow") and _COMMITTEE_CONTEXT.search(evidence):
+        return bool(_DIRECT_TRAINEE_EVIDENCE.search(evidence))
+    return True
 
 
 def is_alumni_flagged(evidence: str) -> bool:

@@ -43,9 +43,10 @@ async def test_invented_people_and_addresses_are_dropped() -> None:
         "expected_people_count": 2,
         "people": [
             {"full_name": "Lorenzo Canseco, MD", "email": "lcanseco@bswhealth.org",
-             "category": "resident", "pgy": "2"},
-            {"full_name": "JANE ROE", "email": "jane.roe@bswhealth.org", "category": "resident"},
-            {"full_name": "Invented Person", "category": "resident"},
+             "category": "resident", "pgy": "2", "evidence": "PGY-2"},
+            {"full_name": "JANE ROE", "email": "jane.roe@bswhealth.org", "category": "resident",
+             "evidence": "PGY-2"},
+            {"full_name": "Invented Person", "category": "resident", "evidence": "PGY-2"},
         ],
     })
     reading = await read_page(url="https://x.org/r", title="Residents", text=ROSTER_TEXT, provider=provider)
@@ -190,3 +191,247 @@ async def test_a_name_printed_with_an_initial_is_kept_when_its_surname_is_on_the
         url="https://x.org/r", title="Residents", text="PGY-1\nJ. Smith, MD\nMedicine", provider=provider
     )
     assert [p.full_name for p in reading.people] == ["J. Smith"]
+
+
+# -- resident/fellow evidence-grounding --------------------------------------
+#
+# System-wide fix: a resident/fellow category is only kept when the model's
+# quoted `evidence` actually appears on the page and supports that role,
+# either from the person's own line or a governing roster heading. Page/site
+# context (being on a residency program's website) is never enough on its
+# own - the regression case below (generalized, not institution-specific)
+# is exactly the failure class this guards against: a committee/membership
+# list on a residency page where no one has trainee-specific evidence.
+
+
+async def _read(text: str, people: list[dict], **extra) -> list:
+    provider = ReaderProvider({"page_type": "roster", "expected_people_count": len(people),
+                                "people": people, **extra})
+    reading = await read_page(url="https://school.edu/program", title="Program", text=text, provider=provider)
+    return reading.people
+
+
+def _by_name(people: list) -> dict:
+    return {p.full_name: p for p in people}
+
+
+@pytest.mark.asyncio
+async def test_explicit_resident_label_beside_name_is_kept() -> None:
+    people = await _read(
+        "Jane Doe, Resident\nMedicine",
+        [{"full_name": "Jane Doe", "category": "resident", "evidence": "Resident"}],
+    )
+    assert _by_name(people)["Jane Doe"].category == PersonCategory.RESIDENT
+
+
+@pytest.mark.asyncio
+async def test_explicit_fellow_label_beside_name_is_kept() -> None:
+    people = await _read(
+        "John Smith, Fellow\nCardiology",
+        [{"full_name": "John Smith", "category": "fellow", "evidence": "Fellow"}],
+    )
+    assert _by_name(people)["John Smith"].category == PersonCategory.FELLOW
+
+
+@pytest.mark.asyncio
+async def test_pgy_evidence_establishes_resident() -> None:
+    people = await _read(
+        "Ann Lee, PGY-3\nSurgery",
+        [{"full_name": "Ann Lee", "category": "resident", "pgy": 3, "evidence": "PGY-3"}],
+    )
+    assert _by_name(people)["Ann Lee"].category == PersonCategory.RESIDENT
+
+
+@pytest.mark.asyncio
+async def test_current_residents_heading_governs_multiple_names() -> None:
+    """A roster heading is evidence for everyone under it - the literal word
+    "resident" need not repeat beside each name."""
+    text = "## Current Residents\nJane Doe\nJohn Smith"
+    people = await _read(text, [
+        {"full_name": "Jane Doe", "category": "resident", "evidence": "Current Residents"},
+        {"full_name": "John Smith", "category": "resident", "evidence": "Current Residents"},
+    ])
+    by_name = _by_name(people)
+    assert by_name["Jane Doe"].category == PersonCategory.RESIDENT
+    assert by_name["John Smith"].category == PersonCategory.RESIDENT
+
+
+@pytest.mark.asyncio
+async def test_current_fellows_heading_governs_multiple_names() -> None:
+    text = "## 2026-2027 Fellows\nJane Doe\nJohn Smith"
+    people = await _read(text, [
+        {"full_name": "Jane Doe", "category": "fellow", "evidence": "2026-2027 Fellows"},
+        {"full_name": "John Smith", "category": "fellow", "evidence": "2026-2027 Fellows"},
+    ])
+    by_name = _by_name(people)
+    assert by_name["Jane Doe"].category == PersonCategory.FELLOW
+    assert by_name["John Smith"].category == PersonCategory.FELLOW
+
+
+@pytest.mark.asyncio
+async def test_committee_member_on_residency_page_has_no_trainee_evidence() -> None:
+    """The generalized regression fixture: a committee/membership list on a
+    residency program's page, with a title but no trainee-specific evidence
+    for the person the model (incorrectly) called a resident. Represents the
+    failure class exposed by a real Baylor psychiatry page - not that page,
+    not that person, and not specific to any institution or specialty."""
+    text = (
+        "## Clinician Educator Track Committee Members\n"
+        "Faculty:\nJohn Chairperson, M.D.\n"
+        "Members:\nPat Physician, M.D."
+    )
+    people = await _read(text, [
+        # The model wrongly guesses "resident" from page context, with
+        # nothing but the committee-membership text as its "evidence".
+        {"full_name": "Pat Physician", "category": "resident", "position": "Member",
+         "evidence": "Members"},
+    ])
+    assert _by_name(people)["Pat Physician"].category == PersonCategory.UNKNOWN
+
+
+@pytest.mark.asyncio
+async def test_resident_committee_heading_is_not_a_resident_roster() -> None:
+    """A label such as "Resident Advisory Committee" names the committee,
+    not the role of every person under it. This is the strictness boundary
+    that prevents committee members from becoming false-positive residents."""
+    people = await _read(
+        "## Resident Advisory Committee\nPat Physician, M.D.",
+        [{"full_name": "Pat Physician", "category": "resident",
+          "evidence": "Resident Advisory Committee"}],
+    )
+    assert _by_name(people)["Pat Physician"].category == PersonCategory.UNKNOWN
+
+
+@pytest.mark.asyncio
+async def test_faculty_on_residency_page_is_not_resident() -> None:
+    text = "## Faculty\nJane Doe, Associate Professor"
+    people = await _read(text, [
+        {"full_name": "Jane Doe", "category": "faculty", "position": "Associate Professor"},
+    ])
+    assert _by_name(people)["Jane Doe"].category == PersonCategory.FACULTY
+
+
+@pytest.mark.asyncio
+async def test_program_director_is_not_resident() -> None:
+    text = "## Leadership\nJane Doe, Program Director\nJohn Smith, Associate Program Director"
+    people = await _read(text, [
+        {"full_name": "Jane Doe", "category": "faculty", "position": "Program Director"},
+        {"full_name": "John Smith", "category": "faculty", "position": "Associate Program Director"},
+    ])
+    by_name = _by_name(people)
+    assert by_name["Jane Doe"].category == PersonCategory.FACULTY
+    assert by_name["John Smith"].category == PersonCategory.FACULTY
+
+
+@pytest.mark.asyncio
+async def test_coordinator_is_not_resident() -> None:
+    text = "## Program Staff\nJane Doe, Program Coordinator"
+    people = await _read(text, [
+        {"full_name": "Jane Doe", "category": "staff", "position": "Program Coordinator"},
+    ])
+    assert _by_name(people)["Jane Doe"].category == PersonCategory.STAFF
+
+
+@pytest.mark.asyncio
+async def test_former_resident_is_alumni_not_resident() -> None:
+    """The model's own category guess of "resident" (a stale label, or a
+    model slip) is overridden the moment its evidence reads as alumni."""
+    text = "## Alumni\nJane Doe, former resident"
+    people = await _read(text, [
+        {"full_name": "Jane Doe", "category": "resident", "evidence": "former resident"},
+    ])
+    assert _by_name(people)["Jane Doe"].category == PersonCategory.ALUMNI
+
+
+@pytest.mark.asyncio
+async def test_resident_alumni_heading_is_not_current_resident() -> None:
+    text = "## Resident Alumni\nJane Doe"
+    people = await _read(text, [
+        {"full_name": "Jane Doe", "category": "resident", "evidence": "Resident Alumni"},
+    ])
+    assert _by_name(people)["Jane Doe"].category == PersonCategory.ALUMNI
+
+
+@pytest.mark.asyncio
+async def test_former_fellow_is_not_current_fellow() -> None:
+    text = "## Former Fellows\nJohn Smith"
+    people = await _read(text, [
+        {"full_name": "John Smith", "category": "fellow", "evidence": "Former Fellows"},
+    ])
+    assert _by_name(people)["John Smith"].category == PersonCategory.ALUMNI
+
+
+@pytest.mark.asyncio
+async def test_mixed_page_leadership_residents_and_committee_members() -> None:
+    text = (
+        "## Program Leadership\nJane Doe, Program Director\n"
+        "## Current Residents\nJohn Smith, PGY-2\nSarah Jones, PGY-3\n"
+        "## Committee Members\nRobert Brown\nEmily White"
+    )
+    people = await _read(text, [
+        {"full_name": "Jane Doe", "category": "faculty", "position": "Program Director"},
+        {"full_name": "John Smith", "category": "resident", "pgy": 2, "evidence": "PGY-2"},
+        {"full_name": "Sarah Jones", "category": "resident", "pgy": 3, "evidence": "PGY-3"},
+        # The model (incorrectly) guesses resident for both committee members.
+        {"full_name": "Robert Brown", "category": "resident", "evidence": "Committee Members"},
+        {"full_name": "Emily White", "category": "resident", "evidence": "Committee Members"},
+    ])
+    by_name = _by_name(people)
+    assert by_name["Jane Doe"].category == PersonCategory.FACULTY
+    assert by_name["John Smith"].category == PersonCategory.RESIDENT
+    assert by_name["Sarah Jones"].category == PersonCategory.RESIDENT
+    assert by_name["Robert Brown"].category == PersonCategory.UNKNOWN
+    assert by_name["Emily White"].category == PersonCategory.UNKNOWN
+
+
+@pytest.mark.asyncio
+async def test_ambiguous_member_with_no_heading_is_unknown() -> None:
+    text = "Pat Physician, Member"
+    people = await _read(text, [
+        {"full_name": "Pat Physician", "category": "resident", "position": "Member",
+         "evidence": "Member"},
+    ])
+    assert _by_name(people)["Pat Physician"].category == PersonCategory.UNKNOWN
+
+
+@pytest.mark.asyncio
+async def test_committee_member_with_independent_pgy_evidence_is_resident() -> None:
+    """Conflicting local context does not block a genuinely grounded claim:
+    committee membership and trainee status can both be true of one person."""
+    text = "## Committee Members\nJohn Smith, PGY-3"
+    people = await _read(text, [
+        {"full_name": "John Smith", "category": "resident", "pgy": 3, "evidence": "PGY-3"},
+    ])
+    assert _by_name(people)["John Smith"].category == PersonCategory.RESIDENT
+
+
+@pytest.mark.asyncio
+async def test_residency_title_alone_does_not_establish_resident() -> None:
+    """The page/URL being about a residency program is not, by itself,
+    evidence. The model's cited "evidence" here is the page's title/URL
+    context, which never appears in the page's own visible body text - so it
+    cannot ground a claim, exactly as an invented quote could not."""
+    provider = ReaderProvider({
+        "page_type": "program", "expected_people_count": 1,
+        "people": [{"full_name": "Pat Physician", "category": "resident",
+                    "evidence": "General Surgery Residency"}],
+    })
+    reading = await read_page(
+        url="https://school.edu/surgery/residency", title="General Surgery Residency",
+        text="Pat Physician\nGeneral Surgery", provider=provider,
+    )
+    assert _by_name(reading.people)["Pat Physician"].category == PersonCategory.UNKNOWN
+
+
+@pytest.mark.asyncio
+async def test_fellowship_title_alone_does_not_establish_fellow() -> None:
+    provider = ReaderProvider({
+        "page_type": "program", "expected_people_count": 1,
+        "people": [{"full_name": "Pat Physician", "category": "fellow",
+                    "evidence": "Cardiology Fellowship"}],
+    })
+    reading = await read_page(
+        url="https://school.edu/cardiology/fellowship", title="Cardiology Fellowship",
+        text="Pat Physician\nCardiology", provider=provider,
+    )
+    assert _by_name(reading.people)["Pat Physician"].category == PersonCategory.UNKNOWN

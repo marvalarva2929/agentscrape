@@ -308,9 +308,20 @@ async def _update_record(
     ):
         fields = {**fields, "category": record.category}
     # Within one run, a program roster naming someone a resident or fellow
-    # outranks a generic directory or alumni page that files them otherwise:
-    # the trainee label is the product, and whichever page is read last used to
-    # decide it. Across runs the category may still change (graduation).
+    # outranks a generic directory page that files them otherwise: the trainee
+    # label is the product, and whichever page is read last used to decide it.
+    # Across runs the category may still change (graduation).
+    #
+    # "alumni" is the one exception: since `coerce_person` now requires
+    # grounded evidence for every resident/fellow label, an alumni reading is
+    # not a vaguer competing guess, it is the current-vs-former distinction
+    # this same evidence system is meant to catch (a later page correctly
+    # reading "Resident Alumni" for someone an earlier page misread). Letting
+    # it through here is the smallest change consistent with that: a fuller
+    # comparison for the general faculty/staff/student case would need those
+    # categories to carry the same kind of grounded evidence resident/fellow
+    # now does, which is a larger change than this task covers.
+    #
     # Whether this run has already recorded a sighting of this person. Read it
     # before `last_run_id` is reassigned below.
     seen_earlier_in_run = (
@@ -321,6 +332,7 @@ async def _update_record(
     if (
         record.category in trainees
         and fields.get("category") not in trainees
+        and fields.get("category") != str(PersonCategory.ALUMNI)
         and seen_earlier_in_run
     ):
         fields = {**fields, "category": record.category}

@@ -476,6 +476,70 @@ class TestUnknownNeverOverwritesAKnownCategory:
         assert record.category == str(PersonCategory.FELLOW)
 
 
+class TestATraineeLabelIsNoLongerSpeciallyProtectedFromCorrection:
+    """A resident/fellow category used to resist any later, same-run reading
+    that disagreed - even a correct one. Since a resident/fellow category now
+    requires grounded evidence to be assigned at all (reader.py), a later page
+    correctly reading someone as alumni is a genuine current-vs-former
+    correction, not a vaguer competing guess, and must be allowed through.
+
+    A later non-alumni, non-unknown reading (faculty/staff/student) still
+    keeps the earlier protection - narrower categories were not given the
+    same grounded-evidence treatment in this change, so a fuller comparison
+    there is left as a separate, larger piece of work.
+    """
+
+    async def test_a_later_alumni_reading_corrects_a_stale_trainee_label(self, session):
+        site = await _make_site(session)
+        await lock_site(session, site.id)
+
+        await reconcile_people(
+            session,
+            [_person(name="Jordan Lee", email="jl@med.example.edu", category=PersonCategory.RESIDENT)],
+            _context(site, source_url="https://med.example.edu/psychiatry/committee"),
+        )
+        await reconcile_people(
+            session,
+            [_person(
+                name="Jordan Lee", email="jl@med.example.edu",
+                category=PersonCategory.ALUMNI, position="Alumnus", pgy=None,
+            )],
+            _context(site, source_url="https://med.example.edu/psychiatry/alumni",
+                      page_title="Alumni"),
+        )
+        await session.commit()
+
+        record = (
+            await session.execute(select(Record).where(Record.email == "jl@med.example.edu"))
+        ).scalar_one()
+        assert record.category == str(PersonCategory.ALUMNI)
+
+    async def test_a_later_faculty_reading_still_does_not_override_within_a_run(self, session):
+        site = await _make_site(session)
+        await lock_site(session, site.id)
+
+        await reconcile_people(
+            session,
+            [_person(name="Casey Kim", email="ck@med.example.edu", category=PersonCategory.RESIDENT)],
+            _context(site, source_url="https://med.example.edu/psychiatry/committee"),
+        )
+        await reconcile_people(
+            session,
+            [_person(
+                name="Casey Kim", email="ck@med.example.edu",
+                category=PersonCategory.FACULTY, position="Faculty", pgy=None,
+            )],
+            _context(site, source_url="https://med.example.edu/psychiatry/directory",
+                      page_title="Directory"),
+        )
+        await session.commit()
+
+        record = (
+            await session.execute(select(Record).where(Record.email == "ck@med.example.edu"))
+        ).scalar_one()
+        assert record.category == str(PersonCategory.RESIDENT)
+
+
 class TestAnAddressAdoptsTheRecordBuiltWithoutOne:
     """Rosters and directories disagree about addresses.
 

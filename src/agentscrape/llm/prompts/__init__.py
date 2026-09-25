@@ -110,6 +110,13 @@ Return ONLY one JSON object, no prose, no markdown fences:
                                      // "Program Director", "Associate Professor"
       "category":   "resident" | "fellow" | "faculty" | "staff" |
                     "student" | "alumni" | "unknown",
+      "evidence":   string | null,    // REQUIRED, verbatim, when category is "resident"
+                                      // or "fellow" - copy exactly either text on the
+                                      // person's own line (a title, "PGY-3", a current
+                                      // class year) or the exact governing heading/
+                                      // section above them ("Current Residents", "Our
+                                      // Fellows", "PGY-3", "2026-2027 Fellows"). Null
+                                      // for every other category.
       "pgy":        integer | null,  // 1-9, only if stated (PGY-2 -> 2; CA-1 -> 2, CA-2 -> 3, CA-3 -> 4)
       "class_of":   integer | null,  // 4-digit graduation year, only if stated
       "specialty":  string | null    // the program or department, as printed
@@ -121,6 +128,14 @@ How to categorise (use the page's headings and context, not just each line):
 - A person listed under a current residents / interns / PGY / class-year /
   house-staff heading or page is a "resident"; under current fellows, a "fellow".
   Interns, chief residents and CA-1..CA-3 anesthesia residents are residents.
+- Being on a residency or fellowship program's page or site is NOT itself
+  evidence that a person is a resident or fellow - it only tells you which
+  program/specialty they may belong to. "resident"/"fellow" additionally needs
+  evidence, from either the person's own line (a title, "PGY-3", a current
+  class year) or the exact heading/section they are listed under ("Current
+  Residents", "Our Fellows", "PGY-3", "2026-2027 Fellows"). A committee,
+  advisory board, leadership list, or plain membership roster on a residency
+  page is not a trainee roster merely for appearing on that page.
 - A line such as "Medical School: University of X" or a school name under a
   resident's name is where they trained. It does NOT make them a student.
 - Faculty, attendings, program directors and associate program directors are
@@ -128,7 +143,11 @@ How to categorise (use the page's headings and context, not just each line):
 - "Alumni", "graduates", "former residents", "past fellows" and prior class
   years are "alumni". A "Class of <year>" heading for a class that has not yet
   graduated is current residents.
-- Use "unknown" only when nothing on the page indicates the role.
+- Use "unknown" when nothing on the page indicates the role, or when a
+  person's only connection to a program is a committee, board, or generic
+  membership listing with no trainee-specific evidence. Do not guess "resident"
+  or "fellow" from page or site context alone - an unsupported guess is worse
+  than leaving the role unknown.
 
 Rules:
 - Include EVERY person listed, even if there are hundreds. Do not summarise or

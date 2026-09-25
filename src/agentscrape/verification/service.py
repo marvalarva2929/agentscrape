@@ -33,6 +33,7 @@ from ..db.enums import (
     TERMINAL_RUN_STATUSES,
     ExtractionMethod,
     FetchMode,
+    PersonCategory,
     RecordStatus,
     RecordVerificationOutcome,
     RunStatus,
@@ -528,6 +529,37 @@ async def _write_outcome(record_ids: list[str], outcome: RecordVerificationOutco
         )
 
 
+_TRAINEE_CATEGORIES = (str(PersonCategory.RESIDENT), str(PersonCategory.FELLOW))
+
+
+async def _downgrade_ungrounded_trainees(record_ids: list[str]) -> int:
+    """A stored resident/fellow claim verification could not ground is not
+    left standing merely because nothing better came along: false positives
+    are worse than an unknown role. Downgrades to "unknown" - the same
+    fallback crawl-time extraction now uses for the identical reason - with
+    the same versioned provenance (`_promote_record`) as any other
+    correction. Only ever touches records currently labelled resident/fellow;
+    every other category is left to the ordinary INSUFFICIENT_EVIDENCE flag.
+    Returns how many records were actually changed.
+    """
+    if not record_ids:
+        return 0
+    changed = 0
+    async with session_scope() as session:
+        records = (
+            await session.execute(
+                select(Record)
+                .where(Record.id.in_(record_ids), Record.category.in_(_TRAINEE_CATEGORIES))
+                .with_for_update()
+            )
+        ).scalars().all()
+        for record in records:
+            await _promote_record(session, record, str(PersonCategory.UNKNOWN))
+            changed += 1
+        await session.commit()
+    return changed
+
+
 _CURRENT_ROLE = re.compile(
     r"\b(current\s+(?:residents?|fellows?|house\s*staff)|our\s+residents?|residents?|house\s*staff|"
     r"pgy\s*[- ]?[1-9]|resident\s+physician|chief\s+resident|current\s+fellows?)\b",
@@ -535,7 +567,8 @@ _CURRENT_ROLE = re.compile(
 )
 _SUSPICIOUS_CONTEXT = re.compile(
     r"\b(nominat(?:ed|ion)|award|alumni|former\s+resident|graduat(?:ed|e)|completed\s+residency|"
-    r"past\s+resident|faculty|medical\s+student|matched|incoming\s+resident|news|article|historical)\b",
+    r"past\s+resident|faculty|medical\s+student|matched|incoming\s+resident|news|article|historical|"
+    r"committee|advisory|board|council|membership)\b",
     re.IGNORECASE,
 )
 
@@ -717,6 +750,20 @@ async def run_verification(
                     # Read, and the model answered, but grounded nobody on
                     # this page - not the same as "nothing needed correcting".
                     await _write_outcome([p.record_id for p in people], RecordVerificationOutcome.INSUFFICIENT_EVIDENCE)
+                    downgraded = await _downgrade_ungrounded_trainees([p.record_id for p in people])
+                    if downgraded:
+                        async with session_scope() as job_session:
+                            await job_session.execute(
+                                update(VerificationJob)
+                                .where(VerificationJob.id == job_id)
+                                .values(
+                                    records_checked=VerificationJob.records_checked + downgraded,
+                                    records_corrected=VerificationJob.records_corrected + downgraded,
+                                    updated_at=func.now(),
+                                )
+                            )
+                        checked += downgraded
+                        corrected += downgraded
                     await _audit_attempt(job_id, people, stage="model", outcome="no_decision", url=url, detail=meter.last_failure)
                     return
                 # The page was readable, but a person without a source-backed
@@ -726,11 +773,13 @@ async def run_verification(
                     p.record_id for p in people
                     if p.record_id not in roles_by_record and not (model_failed and p in ambiguous)
                 ]
+            downgraded_ungrounded = 0
             if ungrounded_ids:
                 await _write_outcome(ungrounded_ids, RecordVerificationOutcome.INSUFFICIENT_EVIDENCE)
+                downgraded_ungrounded = await _downgrade_ungrounded_trainees(ungrounded_ids)
             prior = {p.record_id: p.category for p in people}
             now = datetime.now(UTC)
-            page_checked = page_corrected = 0
+            page_checked = page_corrected = downgraded_ungrounded
             async with session_scope() as write_session:
                 for record_id, decision in roles_by_record.items():
                     record = await write_session.get(Record, record_id, with_for_update=True)

@@ -5,9 +5,13 @@ the primary path. The regex extractor still runs, but only to fill in addresses
 and on-screen locations, and as the fallback when the model call fails.
 
 Deterministic guardrails stay on the model's output: an email must appear in the
-page text, and so must the person's first and last name. A dropped value is
-recoverable on the next run; an invented person or address is what the client
-would actually send mail to.
+page text, and so must the person's first and last name. A resident/fellow
+category additionally needs a verbatim, role-appropriate evidence quote from
+the page (see `role_evidence.py`) - being on a residency/fellowship program's
+page is not itself evidence, so an ungrounded trainee guess is downgraded to
+"unknown" rather than kept. A dropped value is recoverable on the next run; an
+invented person, address, or trainee status is what the client would actually
+act on.
 """
 
 from __future__ import annotations
@@ -28,6 +32,7 @@ from ..extraction.text import chunk_text
 from ..validation.email import is_plausible
 from .prompts import READER_SYSTEM, reader_user_prompt
 from .provider import ModelTimeout, VisionProvider, get_provider
+from .role_evidence import is_alumni_flagged, is_grounded
 from .usage import LLMUnavailable, UsageMeter
 
 log = logging.getLogger("agentscrape.llm.reader")
@@ -127,6 +132,23 @@ def coerce_person(
         return None
 
     category = _CATEGORY.get(str(raw.get("category", "")).strip().lower(), PersonCategory.UNKNOWN)
+    if category in (PersonCategory.RESIDENT, PersonCategory.FELLOW):
+        evidence = raw.get("evidence")
+        evidence = _WS.sub(" ", evidence).strip() if isinstance(evidence, str) else None
+        # A resident/fellow claim needs a verbatim quote from the page that
+        # actually supports it - either the person's own line (a title, a PGY
+        # level, a class year) or the governing roster heading above them
+        # ("Current Residents", "Our Fellows"). Page/site context alone (this
+        # being a residency program's website) is not evidence. Ungrounded, the
+        # person is kept but the trainee label is not: being on this page is
+        # not proof of being a resident or fellow.
+        grounded = bool(evidence) and fold(evidence) in folded_text and is_grounded(category.value, evidence)
+        if not grounded:
+            category = PersonCategory.UNKNOWN
+        elif is_alumni_flagged(evidence):
+            # A former resident/fellow is alumni, never current, however the
+            # evidence otherwise reads (e.g. "former resident").
+            category = PersonCategory.ALUMNI
     position = raw.get("position")
     position = _WS.sub(" ", position).strip()[:200] if isinstance(position, str) and position.strip() else None
 

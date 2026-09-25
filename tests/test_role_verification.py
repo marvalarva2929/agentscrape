@@ -164,3 +164,10 @@ def test_matching_current_roster_evidence_is_deterministic(category, text, expec
 )
 def test_articles_alumni_and_historical_pages_never_auto_confirm(text) -> None:
     assert _deterministic_current_role(RoleCheckInput("1", "Mina Shah", "resident"), text) is None
+
+
+def test_committee_heading_never_auto_confirms_a_resident() -> None:
+    assert _deterministic_current_role(
+        RoleCheckInput("1", "Mina Shah", "resident"),
+        "## Resident Advisory Committee\nMina Shah",
+    ) is None
