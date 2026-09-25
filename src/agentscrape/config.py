@@ -164,10 +164,12 @@ class Settings(BaseSettings):
     # one department's run of brochure pages, or the crawl stops between two
     # departments that both have rosters.
     stop_after_barren_pages: int = 150
-    run_timeout_seconds: int = 86_400
-    # A large institution at the raised step budget runs for well over half
-    # an hour, and longer again when pages have to be rendered.
-    site_timeout_seconds: int = 14_400
+    # A crawl must produce a useful result within two hours.  Leaving it alive
+    # for a day turns a provider or site failure into an invisible queue block.
+    run_timeout_seconds: int = 7_200
+    # A one-school run has the same hard ceiling.  It may finish much sooner
+    # once useful leads end, but it is never allowed to monopolize the queue.
+    site_timeout_seconds: int = 7_200
     max_concurrent_contexts: int = 8
     estimated_mb_per_context: int = 350
     memory_safety_factor: float = 0.75

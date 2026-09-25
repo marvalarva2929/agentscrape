@@ -99,10 +99,31 @@ async def event_stream(run_id: str) -> AsyncIterator[str]:
             try:
                 event = await asyncio.wait_for(queue.get(), timeout=IDLE_PING_SECONDS)
             except TimeoutError:
-                # Comment frame: keeps the connection alive, ignored by EventSource.
-                yield ": ping\n\n"
+                # Use a real named event, not an SSE comment.  Comments keep a
+                # proxy connection open but EventSource never exposes them to
+                # JavaScript, so the monitor falsely said "No updates" after
+                # 25 seconds during a long verification call.
                 async with sessionmaker() as session:
                     run = await session.get(Run, run_id)
+                if run is not None:
+                    yield format_event(
+                        Event(
+                            type=EventType.HEARTBEAT,
+                            run_id=run_id,
+                            data={
+                                "status": run.status,
+                                "sites_total": run.sites_total,
+                                "sites_completed": run.sites_completed,
+                                "sites_skipped": run.sites_skipped,
+                                "sites_failed": run.sites_failed,
+                                "sites_rejected": run.sites_rejected,
+                                "records_found": run.records_found,
+                                **_live_figures(run),
+                                "active_agents": 0,
+                                "agents": [],
+                            },
+                        )
+                    )
                 if run is not None and run.status in TERMINAL_RUN_STATUSES:
                     return
                 continue

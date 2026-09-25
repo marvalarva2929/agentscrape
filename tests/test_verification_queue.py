@@ -138,9 +138,12 @@ class TestQueued:
             assert queue["waiting"][0]["label"] == "Verify 2 rows — Example Medical Center"
             assert queue["waiting"][0]["records_total"] == 0
 
-            # Verification runs are not past crawls.
+            # Verification passes appear in history too, so unresolved rows
+            # can be resumed from the same screen as their original crawl.
             history = (await client.get(f"{API}/runs", headers=auth)).json()
-            assert [r["id"] for r in history["items"]] == [crawl.id]
+            assert [r["id"] for r in history["items"]] == [body["run_id"], crawl.id]
+            assert history["items"][0]["kind"] == RUN_KIND_VERIFY
+            assert history["items"][0]["verification_job_id"] == body["id"]
         finally:
             unregister(crawl.id)
 
@@ -277,7 +280,7 @@ class TestReadingPages:
 
         monkeypatch.setattr(verification._Browser, "read", rendered)
         job = await self._run(session, ids)
-        assert job.status == VerificationStatus.COMPLETED
+        assert job.status == VerificationStatus.COMPLETED, job.error
         assert (job.records_checked, job.records_corrected) == (2, 2)
         for record_id in ids:
             record = await session.get(Record, record_id)
@@ -296,7 +299,7 @@ class TestReadingPages:
             await session.refresh(record)
             assert record.version_count == 2
 
-    async def test_a_page_nothing_can_read_fails_with_the_reason(
+    async def test_a_page_nothing_can_read_is_counted_and_kept_for_retry(
         self, session, monkeypatch, model_confirms, plain_http_refused
     ):
         ids = await _seed_people(session)
@@ -306,10 +309,9 @@ class TestReadingPages:
 
         monkeypatch.setattr(verification._Browser, "read", no_browser)
         job = await self._run(session, ids)
-        assert job.status == VerificationStatus.FAILED
-        assert job.records_checked == 0
-        assert "HTTP 403" in job.error
-        assert "checked 0 of 2" in job.error
+        assert job.status == VerificationStatus.COMPLETED, job.error
+        assert job.records_checked == 2
+        assert "source_unavailable" in job.error
 
     async def test_an_unreadable_page_never_queues_a_site_wide_crawl(
         self, session, monkeypatch, model_confirms, plain_http_refused
@@ -321,7 +323,8 @@ class TestReadingPages:
 
         monkeypatch.setattr(verification._Browser, "read", no_browser)
         job = await self._run(session, ids)
-        assert job.status == VerificationStatus.FAILED
+        assert job.status == VerificationStatus.COMPLETED
+        assert job.records_checked == 2
         crawls = await session.execute(Run.__table__.select().where(Run.kind == "crawl"))
         assert crawls.first() is None
 
@@ -342,7 +345,7 @@ class TestReadingPages:
         assert job.status == VerificationStatus.COMPLETED
         assert job.records_checked == 2
 
-    async def test_a_model_that_never_answers_is_a_failure_not_a_clean_pass(
+    async def test_a_model_that_never_answers_is_counted_and_kept_for_retry(
         self, session, monkeypatch
     ):
         ids = await _seed_people(session)
@@ -353,9 +356,23 @@ class TestReadingPages:
         monkeypatch.setattr(verification, "_read_plain", page)
         # The conftest's offline provider fails every model call.
         job = await self._run(session, ids)
-        assert job.status == VerificationStatus.FAILED
-        assert "no usable answer from the model" in job.error
-        assert "offline" in job.error
+        assert job.status == VerificationStatus.COMPLETED
+        assert job.records_checked == 2
+        assert "verification_error" in job.error
+
+    async def test_a_slow_page_is_skipped_at_the_verification_deadline(self, session, monkeypatch):
+        ids = await _seed_people(session)
+
+        async def slow_page(fetcher, url):
+            await asyncio.sleep(1)
+            return "too late", None
+
+        monkeypatch.setattr(verification, "_PAGE_DEADLINE_SECONDS", 0.01)
+        monkeypatch.setattr(verification, "_read_plain", slow_page)
+        job = await self._run(session, ids)
+        assert job.status == VerificationStatus.COMPLETED
+        assert job.records_checked == 2
+        assert "verification_error" in job.error
 
     async def test_a_no_decision_revisits_only_that_link_with_crawl_reader(
         self, session, monkeypatch

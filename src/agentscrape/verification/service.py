@@ -43,7 +43,7 @@ from ..db.session import session_scope
 from ..domain.matching import VERSIONED_FIELDS
 from ..domain.schemas import VerificationCreate
 from ..extraction.text import html_to_model_text
-from ..llm.usage import UsageMeter
+from ..llm.usage import LLMUnavailable, UsageMeter
 from ..llm.verify import RoleCheckInput, verify_page_roles
 from ..llm.reader import fold, read_page
 
@@ -53,6 +53,11 @@ log = logging.getLogger("agentscrape.verification")
 _PAGE_CONCURRENCY = 8
 # Browser renders at once: each is a real page in Chromium, far heavier than a GET.
 _RENDER_CONCURRENCY = 2
+# A verification pass must never let one slow source or model request hold a
+# queue worker indefinitely.  This covers the whole page path (HTTP, optional
+# browser render, verification and the crawler-reader fallback), not just one
+# network request.  The affected records are audited and the next page runs.
+_PAGE_DEADLINE_SECONDS = 120
 
 # How often a running verification tells the queue it is still alive. Well
 # inside the scheduler's RUN_STALE_SECONDS.
@@ -164,7 +169,10 @@ async def resume_verification_job(session: AsyncSession, previous_job_id: str) -
     if previous is None:
         raise ValueError(f"No verification job with id {previous_job_id!r}.")
     rows = await _targets(session, previous)
-    target_ids = [row[0] for row in rows]
+    # `_targets` yields (site_id, record_id, ...), so the second column is
+    # the record to resume.  Using the site id made completed checks appear as
+    # if they had reached zero people.
+    target_ids = [row[1] for row in rows]
     confirmed = set(
         await session.scalars(
             select(Record.id).where(
@@ -619,6 +627,27 @@ async def run_verification(
         semaphore = asyncio.Semaphore(concurrency)
         browser = _Browser()
 
+        async def _advance_progress(attempted: int, corrected_count: int = 0) -> None:
+            """Persist progress for every completed page attempt, including skips.
+
+            Previously the visible counter advanced only for records with a
+            grounded model decision.  A batch of unreadable or timed-out pages
+            therefore looked frozen even though it was being handled safely.
+            """
+            nonlocal checked, corrected
+            async with session_scope() as progress_session:
+                await progress_session.execute(
+                    update(VerificationJob)
+                    .where(VerificationJob.id == job_id)
+                    .values(
+                        records_checked=VerificationJob.records_checked + attempted,
+                        records_corrected=VerificationJob.records_corrected + corrected_count,
+                        updated_at=func.now(),
+                    )
+                )
+            checked += attempted
+            corrected += corrected_count
+
         async def _ask(url: str, title: str, text: str, people: list[RoleCheckInput]) -> dict | None:
             for attempt in range(page_attempts):
                 roles = await verify_page_roles(
@@ -629,8 +658,7 @@ async def run_verification(
                 await asyncio.sleep(1.5 * (attempt + 1))
             return {}
 
-        async def _one(site_id: str, url: str, title: str | None, people: list[RoleCheckInput]) -> None:
-            nonlocal checked, corrected
+        async def _one_inner(site_id: str, url: str, title: str | None, people: list[RoleCheckInput]) -> None:
             # Held for the whole page - fetch, model call and any render - so
             # `concurrency` bounds concurrent model calls too, not just I/O.
             async with semaphore:
@@ -657,6 +685,7 @@ async def run_verification(
                     )
                     log.info("verification %s: could not read %s: %s", job_id, url, error)
                     await _audit_attempt(job_id, people, stage="fetch", outcome="unreadable", url=url, detail=error)
+                    await _advance_progress(len(people))
                     return
                 if roles_by_record is None:
                     # The call itself never produced a usable response - a
@@ -667,6 +696,7 @@ async def run_verification(
                         [p.record_id for p in people], RecordVerificationOutcome.VERIFICATION_ERROR,
                     )
                     await _audit_attempt(job_id, people, stage="model", outcome="error", url=url, detail=meter.last_failure)
+                    await _advance_progress(len(people))
                     return
                 if not roles_by_record:
                     # Revisit this exact source link with the normal crawler
@@ -686,6 +716,7 @@ async def run_verification(
                         [p.record_id for p in people], RecordVerificationOutcome.INSUFFICIENT_EVIDENCE,
                     )
                     await _audit_attempt(job_id, people, stage="model", outcome="no_decision", url=url, detail=meter.last_failure)
+                    await _advance_progress(len(people))
                     return
                 # The page was readable, but a person without a source-backed
                 # decision remains unverified rather than silently retaining
@@ -732,18 +763,40 @@ async def run_verification(
                         page_corrected += 1
                 # Added in SQL, so pages finishing out of order can't write
                 # an older total over a newer one.
-                await write_session.execute(
-                    update(VerificationJob)
-                    .where(VerificationJob.id == job_id)
-                    .values(
-                        records_checked=VerificationJob.records_checked + page_checked,
-                        records_corrected=VerificationJob.records_corrected + page_corrected,
-                        updated_at=func.now(),
-                    )
-                )
-            checked += page_checked
-            corrected += page_corrected
+            # Every selected record on this source was attempted.  Some may
+            # deliberately be unresolved, but none should disappear from the
+            # live progress counter merely because the evidence was weak.
+            await _advance_progress(len(people), page_corrected)
             await _audit_attempt(job_id, people, stage="decision", outcome="verified" if all(p.record_id in roles_by_record for p in people) else "partial", url=url)
+
+        async def _one(site_id: str, url: str, title: str | None, people: list[RoleCheckInput]) -> None:
+            try:
+                await asyncio.wait_for(
+                    _one_inner(site_id, url, title, people), timeout=_PAGE_DEADLINE_SECONDS,
+                )
+            except asyncio.TimeoutError:
+                detail = f"page exceeded {_PAGE_DEADLINE_SECONDS}-second verification deadline"
+                log.warning("verification %s: %s: %s", job_id, detail, url)
+                await _write_outcome(
+                    [p.record_id for p in people], RecordVerificationOutcome.VERIFICATION_ERROR,
+                )
+                await _audit_attempt(job_id, people, stage="timeout", outcome="skipped", url=url, detail=detail)
+                await _advance_progress(len(people))
+            except LLMUnavailable:
+                # A sustained provider outage is not an isolated bad page;
+                # retain the existing circuit breaker rather than reporting a
+                # misleadingly successful pass.
+                raise
+            except Exception as exc:
+                # One malformed page, render failure or database race must not
+                # abort the remaining selected people.
+                log.exception("verification %s: page failed for %s", job_id, url)
+                detail = f"{type(exc).__name__}: {exc}"[:500]
+                await _write_outcome(
+                    [p.record_id for p in people], RecordVerificationOutcome.VERIFICATION_ERROR,
+                )
+                await _audit_attempt(job_id, people, stage="page", outcome="error", url=url, detail=detail)
+                await _advance_progress(len(people))
 
         try:
             async with Fetcher() as fetcher:
@@ -759,7 +812,7 @@ async def run_verification(
         # counters, so it reflects exactly what is on the records regardless
         # of how far this pass got. Null (never attempted) is reported as
         # NOT_ATTEMPTED without being a stored enum value.
-        target_ids = [row[0] for row in rows]
+        target_ids = [row[1] for row in rows]
         async with session_scope() as session:
             outcome_counts: dict[str | None, int] = (
                 dict(

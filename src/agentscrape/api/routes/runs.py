@@ -9,8 +9,8 @@ from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, or_, select
 
-from ...db.enums import RUN_KIND_CRAWL, TERMINAL_RUN_STATUSES, RunStatus, SiteRunStatus
-from ...db.models import Run, Site, SiteRun
+from ...db.enums import TERMINAL_RUN_STATUSES, RunStatus, SiteRunStatus
+from ...db.models import Run, Site, SiteRun, VerificationJob
 from ...domain.schemas import (
     MoveRunRequest,
     Page,
@@ -50,6 +50,7 @@ def _run_out(
     pending: int = 0,
     queue_position: int | None = None,
     school_name: str | None = None,
+    verification_job_id: str | None = None,
 ) -> RunOut:
     config = dict(run.config or {})
     return RunOut(
@@ -69,7 +70,17 @@ def _run_out(
         created_at=run.created_at, started_at=run.started_at,
         finished_at=run.finished_at,
         queued=run.queued, queue_position=queue_position,
+        verification_job_id=verification_job_id,
     )
+
+
+async def _verification_job_ids(session, run_ids: list[str]) -> dict[str, str]:
+    if not run_ids:
+        return {}
+    return dict((await session.execute(
+        select(VerificationJob.run_id, VerificationJob.id)
+        .where(VerificationJob.run_id.in_(run_ids))
+    )).all())
 
 
 @router.post("", response_model=RunOut, status_code=201)
@@ -112,11 +123,14 @@ async def list_runs(
     cursor: str | None = None,
     limit: int = 25,
     status: Annotated[list[str] | None, Query()] = None,
-    kind: str = RUN_KIND_CRAWL,
+    kind: str | None = None,
     q: str | None = None,
 ) -> Page[RunOut]:
-    # Past crawls by default: verification passes share the queue, not the history.
-    statement = select(Run).where(Run.kind == kind)
+    # History includes verification passes too: they are real queued work and
+    # their unresolved records can be resumed from the same place.
+    statement = select(Run)
+    if kind:
+        statement = statement.where(Run.kind == kind)
     if status:
         statement = statement.where(Run.status.in_(status))
 
@@ -163,8 +177,9 @@ async def list_runs(
         else None
     )
     names = await _school_names(session, [r.id for r in rows])
+    verification_jobs = await _verification_job_ids(session, [r.id for r in rows])
     return Page[RunOut](
-        items=[_run_out(r, school_name=names.get(r.id)) for r in rows],
+        items=[_run_out(r, school_name=names.get(r.id), verification_job_id=verification_jobs.get(r.id)) for r in rows],
         next_cursor=next_cursor, has_more=has_more,
     )
 
@@ -198,8 +213,10 @@ async def run_detail(run_id: str, _: AuthedUser, session: DbSession) -> RunOut:
     )
     position = await scheduler.queue_position(session, run_id)
     names = await _school_names(session, [run_id])
+    verification_jobs = await _verification_job_ids(session, [run_id])
     return _run_out(
-        run, pending=pending, queue_position=position, school_name=names.get(run_id)
+        run, pending=pending, queue_position=position, school_name=names.get(run_id),
+        verification_job_id=verification_jobs.get(run_id),
     )
 
 

@@ -233,6 +233,9 @@ class RunOut(ApiModel):
     # run that goes next, and None once it is no longer waiting.
     queued: bool = False
     queue_position: int | None = None
+    # Present for a verification run so history can safely resume only its
+    # unresolved records, rather than making the user select them again.
+    verification_job_id: str | None = None
 
 
 class MoveRunRequest(BaseModel):
