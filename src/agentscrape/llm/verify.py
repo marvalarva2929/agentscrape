@@ -105,12 +105,16 @@ async def verify_page_roles(
     people: list[RoleCheckInput],
     meter: UsageMeter | None = None,
     provider: VisionProvider | None = None,
-) -> dict[str, RoleDecision]:
+) -> dict[str, RoleDecision] | None:
     """One role per record id, grounded against the page text.
 
     A record missing from the model's response, or whose response could not
-    be grounded, is left out entirely - the caller keeps that record's
-    existing category rather than treating "not returned" as "no roles".
+    be grounded, is left out of the returned dict entirely - the caller keeps
+    that record's existing category rather than treating "not returned" as
+    "no roles". Returns `None`, not `{}`, when the call itself never produced
+    a usable response (a hard provider/model failure, or unparseable output
+    even after a retry) - the caller must be able to tell that apart from "the
+    model answered but grounded nobody", which returns `{}`/a partial dict.
     """
     if not people:
         return {}
@@ -147,7 +151,7 @@ async def verify_page_roles(
             log.warning("role verification failed for %s: %s", url, exc)
             if meter is not None:
                 meter.note_failure("verify_roles", exc)
-            return {}
+            return None
         if _is_answer(payload):
             break
         log.warning("role verification for %s returned unparseable output (attempt %d)", url, attempt + 1)
@@ -155,7 +159,7 @@ async def verify_page_roles(
     if payload is None:
         if meter is not None:
             meter.note_failure("verify_roles", "unparseable output")
-        return {}
+        return None
 
     raw_people = payload.get("people")
 

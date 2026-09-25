@@ -260,6 +260,7 @@ def _to_dict(record: Record, hospital: str | None, domain: str, today: date) -> 
         "verification_risk": record.verification_risk,
         "verification_reason": record.verification_reason,
         "verification_evidence": record.verification_evidence,
+        "verification_outcome": record.verification_outcome,
         "version_count": record.version_count,
         "first_seen_at": record.first_seen_at,
         "last_seen_at": record.last_seen_at,

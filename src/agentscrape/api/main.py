@@ -15,6 +15,7 @@ from .routes import (
     admin,
     auth,
     health,
+    priority_urls,
     records,
     runs,
     schools,
@@ -130,6 +131,7 @@ def create_app() -> FastAPI:
         sites.router,
         sites.meta_router,
         admin.router,
+        priority_urls.router,
     ):
         app.include_router(router, prefix=API_PREFIX)
     return app

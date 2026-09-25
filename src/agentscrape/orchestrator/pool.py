@@ -24,6 +24,7 @@ from ..db.models import Run, SiteRun
 from ..db.session import get_sessionmaker
 from ..llm.usage import Usage
 from ..pipeline.runner import run_site
+from ..urls import canonicalize, host_of
 from .events import EventEmitter, EventType, get_event_bus
 from .limits import RunLimits, SiteCounts, check_memory_ceiling
 from .queue import claim_next_site, heartbeat, reset_running_for_resume
@@ -46,10 +47,15 @@ class RunOrchestrator:
         use_browser: bool = True,
         crawl_strategy: str | None = None,
         modes: list[str] | None = None,
+        priority_urls: dict[str, list[str]] | None = None,
     ) -> None:
         self.run_id = run_id
         self.crawl_strategy = crawl_strategy
         self.modes = modes
+        # Keyed by each site's root_domain (see orchestrator/service.py
+        # create_run), so a lookup by the claimed site's own domain never
+        # returns another school's links.
+        self.priority_urls = priority_urls or {}
         self.concurrency = max(1, min(concurrency, settings.max_concurrency))
         self.step_budget = step_budget
         self.limits = limits
@@ -166,6 +172,7 @@ class RunOrchestrator:
 
                 site_run_id, site_id, url, budget = claim
                 self._active_sites[agent_id] = site_run_id
+                domain = host_of(canonicalize(url) or url)
 
                 meter_hook = self._usage_hook()
                 try:
@@ -185,6 +192,7 @@ class RunOrchestrator:
                         fetcher=fetcher,
                         crawl_strategy=self.crawl_strategy,
                         modes=self.modes,
+                        priority_urls=self.priority_urls.get(domain),
                     )
                 except asyncio.CancelledError:
                     await self._mark_cancelled(site_run_id)
