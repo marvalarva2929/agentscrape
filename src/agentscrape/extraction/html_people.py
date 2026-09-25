@@ -24,6 +24,7 @@ from ..db.enums import PersonCategory
 from ..domain.matching import EMAIL_RE, normalize_email, normalize_name
 from ..domain.pgy import parse_class_of, parse_pgy
 from ..domain.specialty import normalize_specialty
+from ..llm.role_evidence import has_direct_current_trainee_evidence, is_non_roster_context
 from ..validation.email import deobfuscate, extract_emails, is_plausible
 from .person import ExtractedPerson
 
@@ -411,6 +412,12 @@ def classify_person(
     blob = strip_history_labels(text or "")
 
     headings = [section] if isinstance(section, str) else list(section)
+    # Residency/fellowship sites often put committee, advisory, faculty,
+    # alumni, recruitment, or research groups beside real rosters.  A heading
+    # such as "Resident Advisory Council" describes the group, not the GME
+    # status of everyone it names.  Preserve an explicit person-level PGY or
+    # current clinical trainee title, but never infer from that heading/page.
+    governance_context = any(is_non_roster_context(heading) for heading in headings)
     if any(section_is_alumni(heading) for heading in headings):
         return PersonCategory.ALUMNI
     if _ALUMNI_HINT.search(blob):
@@ -438,9 +445,13 @@ def classify_person(
     # residents relabelled a whole cardiology fellowship. Neither is a claim.
     says_resident = bool(_RESIDENT_NOUN.search(blob))
     says_fellow = bool(_FELLOW_HINT.search(blob))
-    if says_resident and not says_fellow:
+    if says_resident and not says_fellow and (
+        not governance_context or has_direct_current_trainee_evidence(blob)
+    ):
         return PersonCategory.RESIDENT
-    if says_fellow and not says_resident:
+    if says_fellow and not says_resident and (
+        not governance_context or has_direct_current_trainee_evidence(blob)
+    ):
         return PersonCategory.FELLOW
 
     # The section is asked on its own first. "Residents & Fellows" is the
@@ -454,7 +465,11 @@ def classify_person(
     if says_resident and says_fellow:
         # Both named and the page does not disambiguate: say so rather than
         # guess, because the R/F split is a field the client sorts on.
-        return resolved if resolved is not None else PersonCategory.UNKNOWN
+        return (
+            resolved
+            if resolved is not None and not governance_context
+            else PersonCategory.UNKNOWN
+        )
 
     # No role noun at all. A bare PGY is a training year and nothing else
     # carries one, so it means resident unless the roster says fellowship.
@@ -464,7 +479,11 @@ def classify_person(
     # Nothing person-level; fall back to what the page is about.
     if _FACULTY_HINT.search(page_context):
         return PersonCategory.FACULTY
-    return resolved if resolved is not None else PersonCategory.UNKNOWN
+    return (
+        resolved
+        if resolved is not None and not governance_context
+        else PersonCategory.UNKNOWN
+    )
 
 
 def _trainee_from_context(context: str) -> PersonCategory | None:
@@ -488,7 +507,7 @@ def _trainee_from_context(context: str) -> PersonCategory | None:
 # Deliberately not applied to the page title, where "Current and Past Residents"
 # describes the whole page and says nothing about one person.
 _ALUMNI_SECTION = re.compile(
-    r"\b(alumni|alumnae|graduates?|past|former|previous)\b", re.IGNORECASE
+    r"\b(alumni|alumnae|graduates|graduated|past|former|previous)\b", re.IGNORECASE
 )
 # Headings that name people who are here now. They override a page-level
 # alumni flag, because a page titled "Current Residents and Alumni" carries both

@@ -303,6 +303,15 @@ async def test_resident_committee_heading_is_not_a_resident_roster() -> None:
 
 
 @pytest.mark.asyncio
+async def test_non_gme_research_fellow_is_not_classified_as_a_gme_fellow() -> None:
+    people = await _read(
+        "## Research Fellows\nPat Physician, PhD",
+        [{"full_name": "Pat Physician", "category": "fellow", "evidence": "Research Fellows"}],
+    )
+    assert _by_name(people)["Pat Physician"].category == PersonCategory.UNKNOWN
+
+
+@pytest.mark.asyncio
 async def test_faculty_on_residency_page_is_not_resident() -> None:
     text = "## Faculty\nJane Doe, Associate Professor"
     people = await _read(text, [

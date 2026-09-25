@@ -45,6 +45,10 @@ from ..db.session import session_scope
 from ..domain.matching import VERSIONED_FIELDS
 from ..domain.schemas import VerificationCreate
 from ..extraction.text import html_to_model_text
+from ..llm.role_evidence import (
+    has_direct_current_trainee_evidence,
+    is_governance_or_non_gme_context,
+)
 from ..llm.usage import UsageMeter
 from ..llm.verify import RoleCheckInput, RoleDecision, verify_page_roles
 
@@ -598,6 +602,14 @@ def _deterministic_current_role(person: RoleCheckInput, text: str) -> RoleDecisi
     evidence = _local_evidence(text, person.full_name)
     if not evidence:
         return None
+    # A governance, faculty, historical, recruitment, or non-GME fellow
+    # packet is affirmative evidence that this is not a current GME roster
+    # entry when it lacks a direct current trainee title/level.  Returning an
+    # explicit unknown lets verification correct a legacy false positive to
+    # `verified_non_trainee`, instead of misleadingly reporting only
+    # `insufficient_evidence`.
+    if is_governance_or_non_gme_context(evidence) and not has_direct_current_trainee_evidence(evidence):
+        return RoleDecision("unknown", evidence)
     # Negative/historical language wins even if a page also happens to contain
     # "resident" in an article title or biography.
     if _SUSPICIOUS_CONTEXT.search(evidence):

@@ -134,8 +134,13 @@ How to categorise (use the page's headings and context, not just each line):
   evidence, from either the person's own line (a title, "PGY-3", a current
   class year) or the exact heading/section they are listed under ("Current
   Residents", "Our Fellows", "PGY-3", "2026-2027 Fellows"). A committee,
-  advisory board, leadership list, or plain membership roster on a residency
-  page is not a trainee roster merely for appearing on that page.
+  advisory board, task force, council, working group, leadership list,
+  representative/liaison list, faculty/staff directory, alumni archive,
+  news/award story, applicant/match/incoming list, or plain membership roster
+  on a residency page is not a trainee roster merely for appearing on that
+  page. "Research fellow", "postdoctoral fellow", "teaching fellow", and
+  "visiting fellow" are not GME fellows unless the person is also explicitly
+  identified as a current clinical/GME fellow.
 - A line such as "Medical School: University of X" or a school name under a
   resident's name is where they trained. It does NOT make them a student.
 - Faculty, attendings, program directors and associate program directors are
@@ -189,8 +194,11 @@ faculty unless the page explicitly identifies that same person as a current
 resident or fellow. Coordinators and administrators are staff. Current
 medical students are students. Former residents, past fellows, graduates and
 alumni are alumni. Choose unknown when the page does not establish one of
-these categories. Do not use a degree, credentials, school attended, or a
-person's old crawl label as evidence.
+these categories. Do not treat committee/board/advisory/task-force/council
+membership, leadership, faculty or staff lists, alumni/history, news, awards,
+applicant/match/incoming material, or research/postdoctoral/teaching/visiting
+fellow labels as current GME evidence. Do not use a degree, credentials,
+school attended, or a person's old crawl label as evidence.
 
 Return ONLY JSON, and nothing else - no notes, no explanation, no second
 attempt or correction after it, even if you change your mind partway through:

@@ -93,6 +93,19 @@ async def test_resident_cannot_be_supported_by_former_resident_evidence() -> Non
     assert result == {}
 
 
+@pytest.mark.asyncio
+async def test_research_fellow_evidence_cannot_verify_a_gme_fellow() -> None:
+    provider = RoleProvider({"people": [{
+        "name": "Mina Shah", "role": "fellow", "evidence": "Research Fellow",
+    }]})
+    result = await verify_page_roles(
+        url="https://med.example.edu/people", title="People",
+        text="## Research Fellows\nMina Shah, Research Fellow",
+        people=[RoleCheckInput("1", "Mina Shah", "fellow")], provider=provider,
+    )
+    assert result == {}
+
+
 def test_article_and_conflicting_positions_cannot_auto_confirm_trainees() -> None:
     score, risk, reason = _verification_quality(
         role="resident", evidence="Current Residents", position=None,
@@ -167,7 +180,34 @@ def test_articles_alumni_and_historical_pages_never_auto_confirm(text) -> None:
 
 
 def test_committee_heading_never_auto_confirms_a_resident() -> None:
-    assert _deterministic_current_role(
+    decision = _deterministic_current_role(
         RoleCheckInput("1", "Mina Shah", "resident"),
         "## Resident Advisory Committee\nMina Shah",
+    )
+    assert decision is not None
+    assert decision.role == "unknown"
+
+
+@pytest.mark.parametrize(
+    "heading",
+    [
+        "Resident Advisory Council",
+        "GME Quality Improvement Task Force",
+        "Fellowship Steering Committee",
+        "Resident Representative Working Group",
+        "Research Fellows",
+    ],
+)
+def test_non_roster_context_corrects_a_legacy_trainee_label_to_unknown(heading) -> None:
+    decision = _deterministic_current_role(
+        RoleCheckInput("1", "Mina Shah", "resident"), f"## {heading}\nMina Shah",
+    )
+    assert decision is not None
+    assert decision.role == "unknown"
+
+
+def test_governance_context_preserves_explicit_current_gme_evidence() -> None:
+    assert _deterministic_current_role(
+        RoleCheckInput("1", "Mina Shah", "resident"),
+        "## Resident Advisory Council\nMina Shah, PGY-3 Resident Physician",
     ) is None

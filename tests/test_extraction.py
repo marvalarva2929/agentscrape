@@ -764,6 +764,27 @@ class TestAnaesthesiologyTrainingYears:
         )
 
 
+class TestGovernanceAndNonGMESections:
+    @pytest.mark.parametrize(
+        "section",
+        [
+            "Resident Advisory Council",
+            "Graduate Medical Education Quality Committee",
+            "Fellowship Steering Group",
+            "Resident Representative Task Force",
+            "Research Fellows",
+        ],
+    )
+    def test_non_roster_sections_do_not_classify_members_as_trainees(self, section):
+        assert classify_person("Mina Shah, MD", "Residency Program", section=section) is PersonCategory.UNKNOWN
+
+    def test_governance_member_with_explicit_pgy_stays_a_resident(self):
+        assert (
+            classify_person("Mina Shah, PGY-3 Resident Physician", "Residency Program", section="Resident Advisory Council")
+            is PersonCategory.RESIDENT
+        )
+
+
 class TestEducationHistoryIsNotACurrentRole:
     """A profile card introduces where someone has been with a labelled field.
 

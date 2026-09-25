@@ -142,13 +142,12 @@ def coerce_person(
         # being a residency program's website) is not evidence. Ungrounded, the
         # person is kept but the trainee label is not: being on this page is
         # not proof of being a resident or fellow.
-        grounded = bool(evidence) and fold(evidence) in folded_text and is_grounded(category.value, evidence)
-        if not grounded:
-            category = PersonCategory.UNKNOWN
-        elif is_alumni_flagged(evidence):
+        if evidence and fold(evidence) in folded_text and is_alumni_flagged(evidence):
             # A former resident/fellow is alumni, never current, however the
             # evidence otherwise reads (e.g. "former resident").
             category = PersonCategory.ALUMNI
+        elif not (bool(evidence) and fold(evidence) in folded_text and is_grounded(category.value, evidence)):
+            category = PersonCategory.UNKNOWN
     position = raw.get("position")
     position = _WS.sub(" ", position).strip()[:200] if isinstance(position, str) and position.strip() else None
 
