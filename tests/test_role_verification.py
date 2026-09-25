@@ -92,6 +92,35 @@ async def test_resident_cannot_be_supported_by_former_resident_evidence() -> Non
     assert result == {}
 
 
+@pytest.mark.asyncio
+async def test_verification_keeps_only_a_source_quoted_sane_position() -> None:
+    provider = RoleProvider({"people": [{
+        "name": "Mina Shah", "role": "resident", "evidence": "PGY-2 Resident",
+        "position": "PGY-2 Resident", "position_evidence": "Mina Shah, PGY-2 Resident",
+    }]})
+    result = await verify_page_roles(
+        url="https://med.example.edu/people", title="Residents",
+        text="## Current Residents\nMina Shah, PGY-2 Resident",
+        people=[RoleCheckInput("1", "Mina Shah", "resident")], provider=provider,
+    )
+    assert result["1"].position == "PGY-2 Resident"
+
+
+@pytest.mark.asyncio
+async def test_verification_rejects_a_paper_title_as_position() -> None:
+    paper = "A consequentialist ethical analysis of federal funding of elective abortions"
+    provider = RoleProvider({"people": [{
+        "name": "Emile I Gleeson", "role": "student", "evidence": "Student",
+        "position": paper, "position_evidence": paper,
+    }]})
+    result = await verify_page_roles(
+        url="https://med.example.edu/profile", title="Profile",
+        text=f"Emile I Gleeson, Student\n{paper}",
+        people=[RoleCheckInput("1", "Emile I Gleeson", "student")], provider=provider,
+    )
+    assert result["1"].position is None
+
+
 def test_article_and_conflicting_positions_cannot_auto_confirm_trainees() -> None:
     score, risk, reason = _verification_quality(
         role="resident", evidence="Current Residents", position=None,

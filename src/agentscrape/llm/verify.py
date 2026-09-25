@@ -16,6 +16,7 @@ from dataclasses import dataclass
 
 from ..config import settings
 from ..db.enums import PersonCategory
+from ..extraction.person import sanitize_position
 from .prompts import VERIFY_ROLES_SYSTEM, verify_roles_user_prompt
 from .provider import VisionProvider, get_provider
 from .reader import fold, name_in_text
@@ -25,6 +26,11 @@ from .usage import LLMUnavailable, UsageMeter
 log = logging.getLogger("agentscrape.llm.verify")
 
 _ROLES = frozenset(c.value for c in PersonCategory)
+# A large roster used to place every person and every local excerpt in one
+# request.  That routinely exceeded provider/gateway limits and made an entire
+# page look like a technical verification failure.  Small batches preserve
+# grounded evidence while keeping each request predictable.
+_VERIFY_BATCH_SIZE = 12
 
 
 def _is_answer(payload: object) -> bool:
@@ -74,6 +80,7 @@ class RoleCheckInput:
 class RoleDecision:
     role: str
     evidence: str
+    position: str | None = None
 
 
 def _packets(text: str, people: list[RoleCheckInput]) -> dict[str, str]:
@@ -124,73 +131,83 @@ async def verify_page_roles(
         by_name.setdefault(person.full_name, []).append(person)
 
     packets = _packets(text, people)
-    prompt = verify_roles_user_prompt(
-        url=url,
-        title=title,
-        text=text,
-        people=[
-            {"name": p.full_name, "category": p.category, "position": p.position,
-             "packet": packets.get(p.record_id, "not found in readable source")}
-            for p in people
-        ],
-    )
-    # One retry on an unparseable response: usually the JSON was cut off or the
-    # model added prose, not a reason to give up on the whole page.
-    payload = None
-    for attempt in range(2):
-        try:
-            response = await provider.complete(
-                system=VERIFY_ROLES_SYSTEM, user=prompt, meter=meter, model=settings.text_model,
-            )
-            payload = response.json()
-            if not _is_answer(payload):
-                payload = _last_json_object(response.text)
-        except LLMUnavailable:
-            raise
-        except Exception as exc:
-            log.warning("role verification failed for %s: %s", url, exc)
-            if meter is not None:
-                meter.note_failure("verify_roles", exc)
-            return None
-        if _is_answer(payload):
-            break
-        log.warning("role verification for %s returned unparseable output (attempt %d)", url, attempt + 1)
-        payload = None
-    if payload is None:
-        if meter is not None:
-            meter.note_failure("verify_roles", "unparseable output")
-        return None
-
-    raw_people = payload.get("people")
-
     out: dict[str, RoleDecision] = {}
-    for entry in raw_people:
-        if not isinstance(entry, dict):
+    successful_batches = 0
+    for start in range(0, len(people), _VERIFY_BATCH_SIZE):
+        batch = people[start : start + _VERIFY_BATCH_SIZE]
+        batch_names = {person.full_name for person in batch}
+        prompt = verify_roles_user_prompt(
+            url=url, title=title, text=text,
+            people=[
+                {"name": p.full_name, "category": p.category, "position": p.position,
+                 "packet": packets.get(p.record_id, "not found in readable source")}
+                for p in batch
+            ],
+        )
+        payload = None
+        failure_recorded = False
+        for attempt in range(2):
+            try:
+                response = await provider.complete(
+                    system=VERIFY_ROLES_SYSTEM, user=prompt, meter=meter, model=settings.text_model,
+                )
+                payload = response.json()
+                if not _is_answer(payload):
+                    payload = _last_json_object(response.text)
+            except LLMUnavailable:
+                raise
+            except Exception as exc:
+                log.warning("role verification failed for %s batch %d: %s", url, start // _VERIFY_BATCH_SIZE + 1, exc)
+                if meter is not None:
+                    meter.note_failure("verify_roles", exc)
+                failure_recorded = True
+                payload = None
+                break
+            if _is_answer(payload):
+                break
+            log.warning("role verification for %s batch %d returned unparseable output (attempt %d)", url, start // _VERIFY_BATCH_SIZE + 1, attempt + 1)
+            payload = None
+        if payload is None:
+            if meter is not None and not failure_recorded:
+                meter.note_failure("verify_roles", "unparseable output")
             continue
-        name = entry.get("name")
-        if not isinstance(name, str) or name not in by_name:
-            continue
-        role = entry.get("role")
-        if not isinstance(role, str):
-            continue
-        role = role.strip().lower()
-        if role not in _ROLES:
-            continue
-        evidence = entry.get("evidence")
-        if not isinstance(evidence, str) or not evidence.strip():
-            continue
-        evidence = evidence.strip()[:300]
-        for candidate in by_name[name]:
-            packet = packets.get(candidate.record_id, "")
-            if not name_in_text(candidate.full_name, fold(packet)):
+        successful_batches += 1
+        for entry in payload.get("people", []):
+            if not isinstance(entry, dict):
                 continue
-            if evidence.casefold() not in packet.casefold():
+            name = entry.get("name")
+            if not isinstance(name, str) or name not in batch_names:
                 continue
-            if role != "unknown" and not is_grounded(role, evidence):
+            role = entry.get("role")
+            if not isinstance(role, str):
                 continue
-            # A former resident is alumni, never a current resident merely
-            # because its evidence contains the word "resident".
-            if role == "resident" and is_alumni_flagged(evidence):
+            role = role.strip().lower()
+            if role not in _ROLES:
                 continue
-            out[candidate.record_id] = RoleDecision(role, evidence)
-    return out
+            evidence = entry.get("evidence")
+            if not isinstance(evidence, str) or not evidence.strip():
+                continue
+            evidence = evidence.strip()[:300]
+            position = sanitize_position(entry.get("position"))
+            position_evidence = entry.get("position_evidence")
+            if not isinstance(position_evidence, str) or not position_evidence.strip():
+                position = None
+            else:
+                position_evidence = position_evidence.strip()[:300]
+            for candidate in by_name[name]:
+                packet = packets.get(candidate.record_id, "")
+                if not name_in_text(candidate.full_name, fold(packet)) or evidence.casefold() not in packet.casefold():
+                    continue
+                if position is not None and (
+                    position.casefold() not in packet.casefold()
+                    or position_evidence.casefold() not in packet.casefold()
+                ):
+                    position = None
+                if role != "unknown" and not is_grounded(role, evidence):
+                    continue
+                if role == "resident" and is_alumni_flagged(evidence):
+                    continue
+                out[candidate.record_id] = RoleDecision(role, evidence, position)
+    # A partial response is still valuable.  Only report a technical page
+    # failure when every bounded request failed.
+    return out if successful_batches else None

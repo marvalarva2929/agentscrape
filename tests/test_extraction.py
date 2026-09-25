@@ -13,6 +13,7 @@ from agentscrape.extraction.html_people import (
     page_is_alumni_listing,
     page_looks_thin,
 )
+from agentscrape.extraction.person import sanitize_position
 from agentscrape.validation.email import extract_emails, is_plausible
 
 from .fixtures import (
@@ -25,6 +26,24 @@ from .fixtures import (
     TABLE_ROSTER,
     large_card_roster,
 )
+
+
+class TestPositionSanity:
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "A consequentialist ethical analysis of federal funding of elective abortions",
+            "Impact of vaccination on rural health outcomes",
+            "Class of 2020",
+            "Medical School: Example University",
+        ],
+    )
+    def test_prose_and_history_are_not_positions(self, value):
+        assert sanitize_position(value) is None
+
+    @pytest.mark.parametrize("value", ["PGY-2 Resident", "Chief Resident", "Assistant Professor of Medicine"])
+    def test_real_titles_are_preserved(self, value):
+        assert sanitize_position(value) == value
 
 
 class TestNameExtraction:

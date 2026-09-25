@@ -29,7 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ...domain.confidence import score_record
 from ...domain.matching import IdentityKind, build_identity, diff_fields
 from ...domain.specialty import infer_specialty
-from ...extraction.person import ExtractedPerson
+from ...extraction.person import ExtractedPerson, sanitize_position
 from ...urls import host_of, url_hash
 from ..enums import ExtractionMethod, FetchMode, PersonCategory, RecordStatus
 from ..ids import version_id as new_version_id
@@ -84,6 +84,9 @@ def _build_fields(
     person: ExtractedPerson, context: ExtractionContext
 ) -> dict[str, object] | None:
     """Normalize one extracted person into the stored field shape."""
+    # Do this at the persistence boundary so HTML, directory and model readers
+    # all receive the same protection against prose being stored as a title.
+    person.position = sanitize_position(person.position)
     identity = build_identity(email=person.email, full_name=person.full_name)
     if identity is None:
         return None

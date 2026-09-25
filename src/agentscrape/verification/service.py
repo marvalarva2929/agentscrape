@@ -42,6 +42,7 @@ from ..db.models import Record, RecordVersion, Run, Site, VerificationAttempt, V
 from ..db.session import session_scope
 from ..domain.matching import VERSIONED_FIELDS
 from ..domain.schemas import VerificationCreate
+from ..extraction.person import sanitize_position
 from ..extraction.text import html_to_model_text
 from ..llm.usage import LLMUnavailable, UsageMeter
 from ..llm.verify import RoleCheckInput, verify_page_roles
@@ -50,14 +51,19 @@ from ..llm.reader import fold, read_page
 log = logging.getLogger("agentscrape.verification")
 
 # Distinct source pages fetched and read at once.
-_PAGE_CONCURRENCY = 8
+# Verification is accuracy-first.  A small number of model calls prevents a
+# provider queue/rate-limit from turning a whole pass into technical errors.
+_PAGE_CONCURRENCY = 2
 # Browser renders at once: each is a real page in Chromium, far heavier than a GET.
 _RENDER_CONCURRENCY = 2
 # A verification pass must never let one slow source or model request hold a
 # queue worker indefinitely.  This covers the whole page path (HTTP, optional
 # browser render, verification and the crawler-reader fallback), not just one
 # network request.  The affected records are audited and the next page runs.
-_PAGE_DEADLINE_SECONDS = 120
+# A page may retry a questionable source-grounded decision, but cannot block
+# the rest of the selected people forever.  Bounded model batches keep normal
+# calls well below this three-minute end-to-end budget.
+_PAGE_DEADLINE_SECONDS = 180
 
 # How often a running verification tells the queue it is still alive. Well
 # inside the scheduler's RUN_STALE_SECONDS.
@@ -565,7 +571,7 @@ async def run_verification(
     job_id: str,
     *,
     concurrency: int = _PAGE_CONCURRENCY,
-    page_attempts: int = 1,
+    page_attempts: int = 2,
     use_browser: bool = False,
     meter: UsageMeter | None = None,
 ) -> None:
@@ -616,7 +622,7 @@ async def run_verification(
             by_page.setdefault((site_id, source_url, page_title), []).append(
                 RoleCheckInput(
                     record_id=record_id, full_name=full_name,
-                    category=category, position=position,
+                    category=category, position=sanitize_position(position),
                 )
             )
             if mode in (FetchMode.RENDER, FetchMode.BOTH):
@@ -732,8 +738,16 @@ async def run_verification(
                     record = await write_session.get(Record, record_id, with_for_update=True)
                     if record is None:
                         continue
+                    # Prefer a fresh, source-quoted title from the verifier.
+                    # If the verifier cannot prove one, retain only a stored
+                    # value that passes the deterministic title sanity check.
+                    clean_position = decision.position or sanitize_position(record.position)
+                    # Re-checking a row is also the safe repair path for old
+                    # bad data: keep valid titles, clear article prose and
+                    # never let it influence the verification decision.
+                    record.position = clean_position
                     confidence, risk, reason = _verification_quality(
-                        role=decision.role, evidence=decision.evidence, position=record.position,
+                        role=decision.role, evidence=decision.evidence, position=clean_position,
                         url=url, title=title or page_title, duplicate_name=record_id in duplicate_ids,
                     )
                     record.verification_confidence = confidence

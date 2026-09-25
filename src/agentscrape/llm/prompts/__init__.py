@@ -180,13 +180,22 @@ prefer the explicit current role on the page; when neither establishes a role,
 return unknown. Never promote a role merely because it would make the stored
 position look plausible.
 
+For every person, separately verify the printed position. Return a position
+only when it is an exact, short job/training title in that person's local
+source text (for example "PGY-2 Resident" or "Program Director"). Return
+null when the page does not establish a position. Never use a paper title,
+publication, course title, class year, degree, school attended, sentence, or
+biography as a position.
+
 Return ONLY JSON, and nothing else - no notes, no explanation, no second
 attempt or correction after it, even if you change your mind partway through:
 decide each person's role first, then output the one JSON object below once.
 {"people": [{"name": "<name exactly as given>",
              "role": "resident" | "fellow" | "faculty" | "staff" |
                      "student" | "alumni" | "unknown",
-             "evidence": "<exact supporting words from that person's packet>"}]}
+             "evidence": "<exact supporting words from that person's packet>",
+             "position": "<exact short title>" | null,
+             "position_evidence": "<exact quote containing that title>" | null}]}
 
 Rules:
 - Include every listed person exactly once. `role` must be one string, never
@@ -194,6 +203,7 @@ Rules:
 - `evidence` must be an exact short quote from that person's packet and must
   establish the role. A person's name alone is not evidence.
 - Never invent a role the page's text does not support.
+- A position is optional; when unsure, return null rather than guessing.
 """
 
 VERIFY_ROLES_USER_TEMPLATE = """\
