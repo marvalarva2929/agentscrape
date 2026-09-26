@@ -542,9 +542,15 @@ async def _downgrade_ungrounded_trainees(record_ids: list[str]) -> int:
     are worse than an unknown role. Downgrades to "unknown" - the same
     fallback crawl-time extraction now uses for the identical reason - with
     the same versioned provenance (`_promote_record`) as any other
-    correction. Only ever touches records currently labelled resident/fellow;
-    every other category is left to the ordinary INSUFFICIENT_EVIDENCE flag.
-    Returns how many records were actually changed.
+    correction. The completed correction is `verified_non_trainee`: that enum
+    deliberately includes an explicit unknown role where the source does not
+    support a current GME claim. Previously this helper changed the category
+    but left the preliminary `insufficient_evidence` outcome in place, making
+    a successful correction look like a verification failure in the UI.
+
+    Only ever touches records currently labelled resident/fellow; every other
+    category is left to the ordinary INSUFFICIENT_EVIDENCE outcome. Returns
+    how many records were actually changed.
     """
     if not record_ids:
         return 0
@@ -559,6 +565,7 @@ async def _downgrade_ungrounded_trainees(record_ids: list[str]) -> int:
         ).scalars().all()
         for record in records:
             await _promote_record(session, record, str(PersonCategory.UNKNOWN))
+            record.verification_outcome = RecordVerificationOutcome.VERIFIED_NON_TRAINEE
             changed += 1
         await session.commit()
     return changed
