@@ -536,7 +536,7 @@ async def _write_outcome(record_ids: list[str], outcome: RecordVerificationOutco
 _TRAINEE_CATEGORIES = (str(PersonCategory.RESIDENT), str(PersonCategory.FELLOW))
 
 
-async def _downgrade_ungrounded_trainees(record_ids: list[str]) -> int:
+async def _downgrade_ungrounded_trainees(record_ids: list[str]) -> tuple[int, int]:
     """A stored resident/fellow claim verification could not ground is not
     left standing merely because nothing better came along: false positives
     are worse than an unknown role. Downgrades to "unknown" - the same
@@ -548,27 +548,40 @@ async def _downgrade_ungrounded_trainees(record_ids: list[str]) -> int:
     but left the preliminary `insufficient_evidence` outcome in place, making
     a successful correction look like a verification failure in the UI.
 
-    Only ever touches records currently labelled resident/fellow; every other
-    category is left to the ordinary INSUFFICIENT_EVIDENCE outcome. Returns
-    how many records were actually changed.
+    A previous verification version may already have changed the category to
+    `unknown` while incorrectly retaining `insufficient_evidence`. A retry
+    must finalize that same record too, otherwise it is permanently stuck
+    displaying the stale outcome. Thus, this also resolves current `unknown`
+    records; categories with an affirmative non-trainee label (faculty, staff,
+    student, alumni) remain ordinary insufficient-evidence cases when no new
+    decision was obtained.
+
+    Returns `(corrected, resolved)`: only resident/fellow -> unknown changes
+    count as a correction, while both those changes and legacy unknowns count
+    as a resolved verification result.
     """
     if not record_ids:
-        return 0
-    changed = 0
+        return 0, 0
+    corrected = resolved = 0
     async with session_scope() as session:
         records = (
             await session.execute(
                 select(Record)
-                .where(Record.id.in_(record_ids), Record.category.in_(_TRAINEE_CATEGORIES))
+                .where(
+                    Record.id.in_(record_ids),
+                    Record.category.in_((*_TRAINEE_CATEGORIES, str(PersonCategory.UNKNOWN))),
+                )
                 .with_for_update()
             )
         ).scalars().all()
         for record in records:
-            await _promote_record(session, record, str(PersonCategory.UNKNOWN))
+            if record.category in _TRAINEE_CATEGORIES:
+                await _promote_record(session, record, str(PersonCategory.UNKNOWN))
+                corrected += 1
             record.verification_outcome = RecordVerificationOutcome.VERIFIED_NON_TRAINEE
-            changed += 1
+            resolved += 1
         await session.commit()
-    return changed
+    return corrected, resolved
 
 
 _CURRENT_ROLE = re.compile(
@@ -769,19 +782,19 @@ async def run_verification(
                     # Read, and the model answered, but grounded nobody on
                     # this page - not the same as "nothing needed correcting".
                     await _write_outcome([p.record_id for p in people], RecordVerificationOutcome.INSUFFICIENT_EVIDENCE)
-                    downgraded = await _downgrade_ungrounded_trainees([p.record_id for p in people])
-                    if downgraded:
+                    downgraded, resolved = await _downgrade_ungrounded_trainees([p.record_id for p in people])
+                    if resolved:
                         async with session_scope() as job_session:
                             await job_session.execute(
                                 update(VerificationJob)
                                 .where(VerificationJob.id == job_id)
                                 .values(
-                                    records_checked=VerificationJob.records_checked + downgraded,
+                                    records_checked=VerificationJob.records_checked + resolved,
                                     records_corrected=VerificationJob.records_corrected + downgraded,
                                     updated_at=func.now(),
                                 )
                             )
-                        checked += downgraded
+                        checked += resolved
                         corrected += downgraded
                     await _audit_attempt(job_id, people, stage="model", outcome="no_decision", url=url, detail=meter.last_failure)
                     return
@@ -792,13 +805,14 @@ async def run_verification(
                     p.record_id for p in people
                     if p.record_id not in roles_by_record and not (model_failed and p in ambiguous)
                 ]
-            downgraded_ungrounded = 0
+            downgraded_ungrounded = resolved_ungrounded = 0
             if ungrounded_ids:
                 await _write_outcome(ungrounded_ids, RecordVerificationOutcome.INSUFFICIENT_EVIDENCE)
-                downgraded_ungrounded = await _downgrade_ungrounded_trainees(ungrounded_ids)
+                downgraded_ungrounded, resolved_ungrounded = await _downgrade_ungrounded_trainees(ungrounded_ids)
             prior = {p.record_id: p.category for p in people}
             now = datetime.now(UTC)
-            page_checked = page_corrected = downgraded_ungrounded
+            page_checked = resolved_ungrounded
+            page_corrected = downgraded_ungrounded
             async with session_scope() as write_session:
                 for record_id, decision in roles_by_record.items():
                     record = await write_session.get(Record, record_id, with_for_update=True)
