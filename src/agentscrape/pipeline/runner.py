@@ -25,6 +25,7 @@ from ..orchestrator.events import EventEmitter, EventType, NullEmitter
 from ..urls import canonicalize, entry_url, host_of
 from .deps import PipelineDeps
 from .graph import build_site_graph
+from .nodes.finalize import queue_verification_for_saved_people
 from .state import SiteState, initial_state
 
 log = logging.getLogger("agentscrape.runner")
@@ -190,6 +191,10 @@ async def _fail(
     emitter: EventEmitter, meter: UsageMeter,
 ) -> SiteState:
     await _mark(site_run_id, SiteRunStatus.FAILED, meter, code=code, message=message)
+    # The crawl saved people before it stopped: they are verified all the same.
+    await queue_verification_for_saved_people(
+        get_sessionmaker(), state["site_id"], state.get("run_id"), state["root_domain"],
+    )
     await emitter.emit(
         EventType.SITE_FAILED,
         site_id=state["site_id"], site_run_id=site_run_id,

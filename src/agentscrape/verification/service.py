@@ -1,10 +1,19 @@
 """Verification of already-scraped role labels, run as an item in the queue.
 
 Started by the "Verify" action in the UI, and automatically once a crawl
-finishes a school. Either way it never starts on its own: it becomes a
-queued run of kind `verify` and waits its turn behind whatever crawl holds
-the model budget, exactly like a crawl. When its turn comes it re-reads each
-record's stored source page and asks the model which roles the page supports.
+has saved people for a school. Either way it never starts on its own: it
+becomes a queued run of kind `verify` and waits its turn behind whatever crawl
+holds the model budget, exactly like a crawl. It works from the records
+already in the database, so a crawl whose directory search failed afterwards
+is verified all the same.
+
+Verification is crawl-first. When its turn comes it re-reads each record's
+stored source page once; a record whose stored role that fresh read plainly
+supports is verified with no model call. Only people whose evidence conflicts
+or looks questionable (an article, a nominee or alumni list, a second role)
+cost one small model call per page, and a person the model cannot settle
+stays unverified. A pass has its own time limit, counted from when it starts;
+records it does not reach stay pending and are checked first next time.
 
 A page is read with a plain HTTP GET first. When that is turned away (many
 hospital sites refuse a script - more so from a cloud server's address than
@@ -22,11 +31,12 @@ import re
 from collections import Counter
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select, update
+from sqlalchemy import case, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..browser.fetcher import Fetcher
 from ..browser.renderer import BrowserPool, render_page
+from ..config import settings
 from ..db.enums import (
     RUN_KIND_VERIFY,
     TERMINAL_RUN_STATUSES,
@@ -44,26 +54,25 @@ from ..domain.matching import VERSIONED_FIELDS
 from ..domain.schemas import VerificationCreate
 from ..extraction.person import sanitize_position
 from ..extraction.text import html_to_model_text
+from ..llm.reader import fold, name_in_text
 from ..llm.usage import LLMUnavailable, UsageMeter
-from ..llm.verify import RoleCheckInput, verify_page_roles
-from ..llm.reader import fold, read_page
+from ..llm.verify import RoleCheckInput, RoleDecision, verify_page_roles
+from .evidence import check_against_crawl
 
 log = logging.getLogger("agentscrape.verification")
 
-# Distinct source pages fetched and read at once.
-# Verification is accuracy-first.  A small number of model calls prevents a
-# provider queue/rate-limit from turning a whole pass into technical errors.
-_PAGE_CONCURRENCY = 2
+# Distinct source pages fetched and checked at once. Most pages settle from
+# the crawl evidence with no model call, so this is mostly I/O.
+_PAGE_CONCURRENCY = 6
+# Tiebreaker model calls at once. Verification is accuracy-first: a small
+# number keeps a provider queue or rate limit from turning a pass into errors.
+_MODEL_CONCURRENCY = 2
 # Browser renders at once: each is a real page in Chromium, far heavier than a GET.
 _RENDER_CONCURRENCY = 2
-# A verification pass must never let one slow source or model request hold a
-# queue worker indefinitely.  This covers the whole page path (HTTP, optional
-# browser render, verification and the crawler-reader fallback), not just one
-# network request.  The affected records are audited and the next page runs.
-# A page may retry a questionable source-grounded decision, but cannot block
-# the rest of the selected people forever.  Bounded model batches keep normal
-# calls well below this three-minute end-to-end budget.
-_PAGE_DEADLINE_SECONDS = 180
+# One page's whole path - fetch, any browser render, and its one tiebreaker
+# model call (itself capped at `verification_model_timeout_seconds`) - so a
+# single slow source costs its own records, never the rest of the pass.
+_PAGE_DEADLINE_SECONDS = 240
 
 # How often a running verification tells the queue it is still alive. Well
 # inside the scheduler's RUN_STALE_SECONDS.
@@ -342,7 +351,14 @@ async def _run_queued(run_id: str, job_id: str | None) -> None:
 
 async def _targets(session: AsyncSession, job: VerificationJob) -> list:
     """(site_id, record_id, full_name, category, position, source_url,
-    page_title, fetch_mode) for every covered record with a source page."""
+    page_title, fetch_mode) for every covered record with a source page.
+
+    Records no pass has confirmed come first (never attempted, left pending
+    by a pass that ran out of time, or unsettled last time), then confirmed
+    ones, longest-unchecked first. So a pass that stops at its time limit
+    is resumed, not restarted, by the next one.
+    """
+    confirmed = case((Record.verification_outcome.in_(_CONFIRMED_OUTCOMES), 1), else_=0)
     statement = (
         select(
             Record.site_id, Record.id, Record.full_name, Record.category, Record.position,
@@ -355,6 +371,9 @@ async def _targets(session: AsyncSession, job: VerificationJob) -> list:
         statement = statement.where(Record.id.in_(job.record_ids))
     else:
         statement = statement.where(Record.site_id == job.site_id)
+    statement = statement.order_by(
+        confirmed, Record.roles_checked_at.asc().nulls_first(), Record.id,
+    )
     return (await session.execute(statement)).all()
 
 
@@ -485,41 +504,6 @@ async def _read_plain(fetcher: Fetcher, url: str) -> tuple[str | None, str | Non
     return (result.text if is_plain_text else html_to_model_text(result.text)), None
 
 
-async def _read_like_crawler(
-    *, url: str, title: str, text: str, people: list[RoleCheckInput], meter: UsageMeter,
-) -> dict:
-    """Re-read this one URL with the normal crawler reader, never the site.
-
-    This is intentionally page-scoped.  Verification can use a stricter role
-    prompt than extraction; if that prompt cannot decide, the affected link is
-    read once with the normal crawl prompt.  It does not rediscover links or
-    enqueue a new crawl of the institution.
-    """
-    try:
-        reading = await read_page(url=url, title=title, text=text, meter=meter)
-    except Exception as exc:
-        log.warning("crawl-reader fallback failed for %s: %s", url, exc)
-        return {}
-    if not reading.ok:
-        return {}
-
-    # Let the crawl reader fill in a more current printed position/category,
-    # then have the verification prompt independently judge it from the page
-    # text.  The reader output is only a hint; the verifier still demands an
-    # exact source quote before accepting a role.
-    extracted = {fold(person.full_name): person for person in reading.people if person.full_name}
-    enriched = [
-        RoleCheckInput(
-            record_id=target.record_id,
-            full_name=target.full_name,
-            category=str(found.category) if (found := extracted.get(fold(target.full_name))) else target.category,
-            position=(found.position or target.position) if found else target.position,
-        )
-        for target in people
-    ]
-    return await verify_page_roles(url=url, title=title, text=text, people=enriched, meter=meter)
-
-
 def _verification_quality(
     *, role: str, evidence: str, position: str | None, url: str, title: str,
     duplicate_name: bool = False,
@@ -567,29 +551,39 @@ async def _write_outcome(record_ids: list[str], outcome: RecordVerificationOutco
         )
 
 
+
+
+def _outcome_for(role: str) -> RecordVerificationOutcome:
+    return {
+        "resident": RecordVerificationOutcome.VERIFIED_RESIDENT,
+        "fellow": RecordVerificationOutcome.VERIFIED_FELLOW,
+    }.get(role, RecordVerificationOutcome.VERIFIED_NON_TRAINEE)
+
+
 async def run_verification(
     job_id: str,
     *,
     concurrency: int = _PAGE_CONCURRENCY,
-    page_attempts: int = 2,
-    use_browser: bool = False,
+    time_limit: float | None = None,
     meter: UsageMeter | None = None,
 ) -> None:
-    """Check every target record's source page. Failures are recorded on the
-    job, never raised, so a job that dies partway still shows what it got.
+    """Check every target record against its source page, crawl first.
 
-    Progress is written as each page finishes, so a client polling a long
-    pass sees it move rather than a zero until the very end.
+    Each source page is read again once. A person whose stored role that
+    fresh read plainly supports is verified with no model call (see
+    `evidence.check_against_crawl`); only the people whose evidence conflicts
+    or looks questionable go to the model, in one small call per page. A
+    person the model cannot settle stays unverified rather than being forced
+    into a role.
 
-    A page is opened in a browser whenever plain HTTP cannot read it, or the
-    crawl itself needed a browser for it. `use_browser` additionally renders
-    a page that plain HTTP read but that grounded nobody - off by default:
-    it is much slower and rarely changes the answer.
-
-    `page_attempts` re-tries a page that came back with nothing before
-    giving up on it.
+    `time_limit` (default `settings.verification_timeout_seconds`) is counted
+    from here, when verification starts. Pages finished by then are saved;
+    records not yet reached keep whatever outcome they had and are checked
+    first by the next pass. Failures are recorded on the job, never raised,
+    so a job that dies partway still shows what it got.
     """
     meter = meter or UsageMeter(scope=f"verify:{job_id}")
+    limit = settings.verification_timeout_seconds if time_limit is None else time_limit
     try:
         async with session_scope() as session:
             job = await session.get(VerificationJob, job_id)
@@ -607,6 +601,8 @@ async def run_verification(
                 )
             )
 
+        # Pages in the order their first record arrives from `_targets`, so
+        # records no pass has confirmed yet are read before ones already done.
         by_page: dict[tuple[str, str, str | None], list[RoleCheckInput]] = {}
         # A role claim cannot be attached safely when the school has multiple
         # active records with the same normalized name. Reconciliation already
@@ -618,10 +614,10 @@ async def run_verification(
             if name_counts[str(full_name).casefold().strip()] > 1
         }
         needs_browser: set[str] = set()
-        # Clean deterministic position noise before asking the model.  A
-        # source can be slow or unavailable, but a stored paper title is never
-        # a job title and should not survive merely because verification could
-        # not complete that page today.
+        # Clean deterministic position noise first.  A source can be slow or
+        # unavailable, but a stored paper title is never a job title and
+        # should not survive merely because verification could not complete
+        # that page today.
         position_repairs = {
             record_id: sanitize_position(position)
             for _, record_id, _, _, position, *_ in rows
@@ -652,16 +648,17 @@ async def run_verification(
 
         checked = 0
         corrected = len(position_repairs)
+        settled_by_crawl = 0
+        settled_by_model = 0
+        # Every record this pass wrote an outcome for. The rest are pending.
+        reached: set[str] = set()
         semaphore = asyncio.Semaphore(concurrency)
+        model_calls = asyncio.Semaphore(_MODEL_CONCURRENCY)
         browser = _Browser()
 
         async def _advance_progress(attempted: int, corrected_count: int = 0) -> None:
-            """Persist progress for every completed page attempt, including skips.
-
-            Previously the visible counter advanced only for records with a
-            grounded model decision.  A batch of unreadable or timed-out pages
-            therefore looked frozen even though it was being handled safely.
-            """
+            """Persist progress for every completed page, whatever its outcome,
+            so a run of unreadable pages never looks like a frozen pass."""
             nonlocal checked, corrected
             async with session_scope() as progress_session:
                 await progress_session.execute(
@@ -676,97 +673,119 @@ async def run_verification(
             checked += attempted
             corrected += corrected_count
 
-        async def _ask(url: str, title: str, text: str, people: list[RoleCheckInput]) -> dict | None:
-            for attempt in range(page_attempts):
-                roles = await verify_page_roles(
-                    url=url, title=title, text=text, people=people, meter=meter,
-                )
-                if roles or attempt + 1 == page_attempts:
-                    return roles
-                await asyncio.sleep(1.5 * (attempt + 1))
-            return {}
+        async def _settle(people: list[RoleCheckInput], outcome: RecordVerificationOutcome) -> None:
+            ids = [p.record_id for p in people]
+            await _write_outcome(ids, outcome)
+            reached.update(ids)
 
-        async def _one_inner(site_id: str, url: str, title: str | None, people: list[RoleCheckInput]) -> None:
-            # Held for the whole page - fetch, model call and any render - so
-            # `concurrency` bounds concurrent model calls too, not just I/O.
-            async with semaphore:
-                roles_by_record: dict | None = {}
-                text, page_title, error = None, title or "", None
-                if url not in needs_browser:
-                    text, error = await _read_plain(fetcher, url)
-                    if text is not None:
-                        roles_by_record = await _ask(url, page_title, text, people)
-                # Plain HTTP was refused, or the crawl only ever read this page
-                # in a browser, or (with use_browser) plain HTML grounded nobody.
-                if text is None or (use_browser and not roles_by_record):
-                    rendered, rendered_title, render_error = await browser.read(url)
-                    if rendered is not None:
-                        text = rendered
-                        roles_by_record = await _ask(
-                            url, title or rendered_title, rendered, people,
-                        )
-                    elif text is None:
-                        error = f"{error}; {render_error}" if error else render_error
-                if text is None:
-                    await _write_outcome(
-                        [p.record_id for p in people], RecordVerificationOutcome.SOURCE_UNAVAILABLE,
+        async def _read(url: str, title: str | None, people: list[RoleCheckInput]):
+            """(text, title, error) for the source page, read once.
+
+            Plain HTTP first; a browser when that is refused, when the crawl
+            itself needed one for this page, or when the plain page prints
+            none of these names (a roster filled in by script)."""
+            text, page_title, error = None, title or "", None
+            if url not in needs_browser:
+                text, error = await _read_plain(fetcher, url)
+            if text is not None:
+                folded = fold(text)
+                if any(name_in_text(p.full_name, folded) for p in people):
+                    return text, page_title, None
+            rendered, rendered_title, render_error = await browser.read(url)
+            if rendered is not None:
+                return rendered, page_title or rendered_title, None
+            if text is None:
+                error = f"{error}; {render_error}" if error else render_error
+            return text, page_title, error
+
+        async def _tiebreak(url: str, title: str, text: str, people: list[RoleCheckInput]):
+            """One small model call for the people the crawl evidence could
+            not settle. None when it produced no usable answer at all."""
+            async with model_calls:
+                try:
+                    return await asyncio.wait_for(
+                        verify_page_roles(
+                            url=url, title=title, text=text, people=people,
+                            meter=meter, attempts=1,
+                        ),
+                        timeout=settings.verification_model_timeout_seconds,
                     )
-                    log.info("verification %s: could not read %s: %s", job_id, url, error)
-                    await _audit_attempt(job_id, people, stage="fetch", outcome="unreadable", url=url, detail=error)
-                    await _advance_progress(len(people))
-                    return
-                if roles_by_record is None:
-                    # The call itself never produced a usable response - a
-                    # hard provider/model failure. Distinct from "answered but
-                    # grounded nobody" below: that is insufficient evidence,
-                    # this is a technical failure to even get an answer.
-                    await _write_outcome(
-                        [p.record_id for p in people], RecordVerificationOutcome.VERIFICATION_ERROR,
+                except TimeoutError:
+                    meter.note_failure(
+                        "verify_roles",
+                        f"no answer within {settings.verification_model_timeout_seconds}s",
                     )
-                    await _audit_attempt(job_id, people, stage="model", outcome="error", url=url, detail=meter.last_failure)
-                    await _advance_progress(len(people))
-                    return
-                if not roles_by_record:
-                    # Revisit this exact source link with the normal crawler
-                    # reader.  This is not a site-wide re-crawl: it neither
-                    # discovers more links nor queues another run.
-                    roles_by_record = await _read_like_crawler(
-                        url=url, title=title or page_title, text=text, people=people, meter=meter,
-                    )
-                    if roles_by_record:
-                        await _audit_attempt(
-                            job_id, people, stage="crawl_reader", outcome="verified", url=url,
-                        )
-                if not roles_by_record:
-                    # Read, but the model never gave an answer that grounded
-                    # anyone - not the same as "nothing needed correcting".
-                    await _write_outcome(
-                        [p.record_id for p in people], RecordVerificationOutcome.INSUFFICIENT_EVIDENCE,
-                    )
-                    await _audit_attempt(job_id, people, stage="model", outcome="no_decision", url=url, detail=meter.last_failure)
-                    await _advance_progress(len(people))
-                    return
-                # The page was readable, but a person without a source-backed
-                # decision remains unverified rather than silently retaining
-                # a possibly wrong crawl label.
-                ungrounded_ids = [p.record_id for p in people if p.record_id not in roles_by_record]
-            if ungrounded_ids:
-                await _write_outcome(ungrounded_ids, RecordVerificationOutcome.INSUFFICIENT_EVIDENCE)
+                    return None
+
+        async def _one_inner(url: str, title: str | None, people: list[RoleCheckInput]) -> None:
+            nonlocal settled_by_crawl, settled_by_model
+            text, page_title, error = await _read(url, title, people)
+            if text is None:
+                await _settle(people, RecordVerificationOutcome.SOURCE_UNAVAILABLE)
+                log.info("verification %s: could not read %s: %s", job_id, url, error)
+                await _audit_attempt(job_id, people, stage="fetch", outcome="unreadable", url=url, detail=error)
+                await _advance_progress(len(people))
+                return
+
+            decisions: dict[str, RoleDecision] = {}
+            unsettled: list[RoleCheckInput] = []
+            ambiguous: list[RoleCheckInput] = []
+            for person in people:
+                if person.record_id in duplicate_ids:
+                    # No page can say which of two same-named records it means.
+                    unsettled.append(person)
+                    continue
+                check = check_against_crawl(
+                    text=text, url=url, title=page_title, full_name=person.full_name,
+                    category=person.category, position=person.position,
+                )
+                if check.verdict == "agree":
+                    decisions[person.record_id] = RoleDecision(person.category, check.evidence or "")
+                elif check.verdict == "absent":
+                    unsettled.append(person)
+                else:
+                    ambiguous.append(person)
+            agreed = len(decisions)
+            if agreed:
+                await _audit_attempt(
+                    job_id, [p for p in people if p.record_id in decisions],
+                    stage="crawl_check", outcome="verified", url=url,
+                )
+
+            if ambiguous:
+                answer = await _tiebreak(url, page_title, text, ambiguous)
+                if answer is None:
+                    await _settle(ambiguous, RecordVerificationOutcome.VERIFICATION_ERROR)
+                    await _audit_attempt(job_id, ambiguous, stage="model", outcome="error", url=url, detail=meter.last_failure)
+                else:
+                    for person in ambiguous:
+                        decision = answer.get(person.record_id)
+                        # "unknown" is the model saying it cannot tell:
+                        # leave the record unverified, never relabel it.
+                        if decision is None or decision.role == "unknown":
+                            unsettled.append(person)
+                        else:
+                            decisions[person.record_id] = decision
+                    decided = [p for p in ambiguous if p.record_id in decisions]
+                    if decided:
+                        await _audit_attempt(job_id, decided, stage="model", outcome="verified", url=url)
+
+            if unsettled:
+                await _settle(unsettled, RecordVerificationOutcome.INSUFFICIENT_EVIDENCE)
+                await _audit_attempt(job_id, unsettled, stage="decision", outcome="no_decision", url=url)
+
             prior = {p.record_id: p.category for p in people}
             now = datetime.now(UTC)
-            page_checked = page_corrected = 0
+            page_corrected = 0
             async with session_scope() as write_session:
-                for record_id, decision in roles_by_record.items():
+                for record_id, decision in decisions.items():
                     record = await write_session.get(Record, record_id, with_for_update=True)
                     if record is None:
                         continue
                     # Prefer a fresh, source-quoted title from the verifier.
-                    # If the verifier cannot prove one, retain only a stored
-                    # value that passes the deterministic title sanity check.
+                    # Otherwise keep only a stored value that passes the
+                    # deterministic title sanity check.
                     clean_position = decision.position or sanitize_position(record.position)
-                    # Re-checking a row is also the safe repair path for old
-                    # bad data: keep valid titles, clear article prose and
-                    # never let it influence the verification decision.
                     record.position = clean_position
                     confidence, risk, reason = _verification_quality(
                         role=decision.role, evidence=decision.evidence, position=clean_position,
@@ -777,45 +796,38 @@ async def run_verification(
                     record.verification_reason = reason
                     record.verification_evidence = decision.evidence
                     # High-risk trainee claims are deliberately not promoted:
-                    # grounded, but not trustworthy enough to confirm. Treated
-                    # as insufficient evidence for accounting purposes, with
-                    # the risk detail above kept for whoever reviews it.
+                    # grounded, but not trustworthy enough to confirm.
                     if risk != "verified" and decision.role in ("resident", "fellow"):
                         record.verification_outcome = RecordVerificationOutcome.INSUFFICIENT_EVIDENCE
-                        page_checked += 1
                         continue
-                    page_checked += 1
                     # `roles` remains an API-compatible stored field, but a
-                    # verified record now has exactly one canonical role.
+                    # verified record has exactly one canonical role.
                     record.roles = [decision.role]
                     record.roles_checked_at = now
-                    record.verification_outcome = {
-                        "resident": RecordVerificationOutcome.VERIFIED_RESIDENT,
-                        "fellow": RecordVerificationOutcome.VERIFIED_FELLOW,
-                    }.get(decision.role, RecordVerificationOutcome.VERIFIED_NON_TRAINEE)
+                    record.verification_outcome = _outcome_for(decision.role)
                     if decision.role != record.category:
                         await _promote_record(write_session, record, decision.role)
                     if decision.role != prior.get(record_id):
                         page_corrected += 1
-                # Added in SQL, so pages finishing out of order can't write
-                # an older total over a newer one.
-            # Every selected record on this source was attempted.  Some may
-            # deliberately be unresolved, but none should disappear from the
-            # live progress counter merely because the evidence was weak.
+            reached.update(decisions)
+            settled_by_crawl += agreed
+            settled_by_model += len(decisions) - agreed
             await _advance_progress(len(people), page_corrected)
-            await _audit_attempt(job_id, people, stage="decision", outcome="verified" if all(p.record_id in roles_by_record for p in people) else "partial", url=url)
 
-        async def _one(site_id: str, url: str, title: str | None, people: list[RoleCheckInput]) -> None:
+        async def _one(url: str, title: str | None, people: list[RoleCheckInput]) -> None:
             try:
-                await asyncio.wait_for(
-                    _one_inner(site_id, url, title, people), timeout=_PAGE_DEADLINE_SECONDS,
-                )
-            except asyncio.TimeoutError:
+                # The deadline starts once the page holds a slot. Started
+                # before, it ran while the page queued behind the others, and
+                # every page still waiting three minutes into a pass timed out
+                # without ever being read.
+                async with semaphore:
+                    await asyncio.wait_for(
+                        _one_inner(url, title, people), timeout=_PAGE_DEADLINE_SECONDS,
+                    )
+            except TimeoutError:
                 detail = f"page exceeded {_PAGE_DEADLINE_SECONDS}-second verification deadline"
                 log.warning("verification %s: %s: %s", job_id, detail, url)
-                await _write_outcome(
-                    [p.record_id for p in people], RecordVerificationOutcome.VERIFICATION_ERROR,
-                )
+                await _settle(people, RecordVerificationOutcome.VERIFICATION_ERROR)
                 await _audit_attempt(job_id, people, stage="timeout", outcome="skipped", url=url, detail=detail)
                 await _advance_progress(len(people))
             except LLMUnavailable:
@@ -828,53 +840,78 @@ async def run_verification(
                 # abort the remaining selected people.
                 log.exception("verification %s: page failed for %s", job_id, url)
                 detail = f"{type(exc).__name__}: {exc}"[:500]
-                await _write_outcome(
-                    [p.record_id for p in people], RecordVerificationOutcome.VERIFICATION_ERROR,
-                )
+                await _settle(people, RecordVerificationOutcome.VERIFICATION_ERROR)
                 await _audit_attempt(job_id, people, stage="page", outcome="error", url=url, detail=detail)
                 await _advance_progress(len(people))
 
+        out_of_time = False
+        tasks: list[asyncio.Task] = []
         try:
             async with Fetcher() as fetcher:
-                await asyncio.gather(*(
-                    _one(site_id, url, title, people)
-                    for (site_id, url, title), people in by_page.items()
-                ))
+                tasks = [
+                    asyncio.create_task(_one(url, title, people))
+                    for (_, url, title), people in by_page.items()
+                ]
+                if tasks:
+                    done, pending = await asyncio.wait(
+                        tasks, timeout=limit, return_when=asyncio.FIRST_EXCEPTION,
+                    )
+                    failed = [t for t in done if not t.cancelled() and t.exception() is not None]
+                    out_of_time = bool(pending) and not failed
+                    for task in pending:
+                        task.cancel()
+                    await asyncio.gather(*pending, return_exceptions=True)
+                    if failed:
+                        raise failed[0].exception()
         finally:
+            # Also on an outside cancel: no page task may outlive its pass.
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
             await browser.stop()
 
-        # Complete accounting: every targeted record's *current*
-        # verification_outcome, tallied fresh rather than from in-process
-        # counters, so it reflects exactly what is on the records regardless
-        # of how far this pass got. Null (never attempted) is reported as
-        # NOT_ATTEMPTED without being a stored enum value.
+        if out_of_time:
+            log.warning(
+                "verification %s: reached the %ss limit with %d of %d records done",
+                job_id, limit, len(reached), len(rows),
+            )
+
+        # Complete accounting of what this pass reached, tallied from the
+        # records themselves. A record it never reached is pending: its
+        # outcome is left as it was, for the next pass to pick up first.
         target_ids = [row[1] for row in rows]
+        reached_ids = [record_id for record_id in target_ids if record_id in reached]
         async with session_scope() as session:
             outcome_counts: dict[str | None, int] = (
                 dict(
                     (
                         await session.execute(
                             select(Record.verification_outcome, func.count())
-                            .where(Record.id.in_(target_ids))
+                            .where(Record.id.in_(reached_ids))
                             .group_by(Record.verification_outcome)
                         )
                     ).all()
                 )
-                if target_ids
+                if reached_ids
                 else {}
             )
-        not_attempted = outcome_counts.pop(None, 0)
-        attempted = sum(outcome_counts.values())
+        pending_count = len(target_ids) - len(reached_ids)
         confirmed = sum(outcome_counts.get(o, 0) for o in _CONFIRMED_OUTCOMES)
-        unresolved_total = attempted - confirmed
-        parts = [f"{count} {outcome}" for outcome, count in sorted(outcome_counts.items())]
-        if not_attempted:
-            parts.append(f"{not_attempted} NOT_ATTEMPTED")
+        unresolved_total = len(reached_ids) - confirmed
+        parts = [f"{count} {outcome}" for outcome, count in sorted(outcome_counts.items(), key=lambda kv: str(kv[0]))]
+        if pending_count:
+            parts.append(f"{pending_count} PENDING")
         summary = ", ".join(parts)
+        if out_of_time:
+            hours = limit / 3600
+            summary = (
+                f"stopped at the {hours:g}-hour verification limit; "
+                f"{pending_count} left pending for the next pass: {summary}"
+            )
 
         # A pass that reached nobody is the checker never running, not a
         # clean bill of health: report it as a failure with the reason.
-        total_failure = attempted == 0 and bool(rows)
+        total_failure = not reached_ids and bool(rows)
         async with session_scope() as session:
             await session.execute(
                 update(VerificationJob)
@@ -888,7 +925,7 @@ async def run_verification(
                         if total_failure
                         else (
                             f"{summary} (of {len(rows)} targeted)"[:500]
-                            if (unresolved_total or not_attempted)
+                            if (unresolved_total or pending_count)
                             else None
                         )
                     ),
@@ -896,8 +933,10 @@ async def run_verification(
                 )
             )
         log.info(
-            "verification %s: %d/%d records checked, %d corrected, %d pages rendered; outcomes: %s",
-            job_id, checked, len(rows), corrected, browser.rendered, summary or "none",
+            "verification %s: %d/%d records reached (%d settled by the crawl evidence, "
+            "%d by the model), %d corrected, %d pages rendered; outcomes: %s",
+            job_id, len(reached_ids), len(rows), settled_by_crawl, settled_by_model,
+            corrected, browser.rendered, summary or "none",
         )
     except Exception as exc:
         log.exception("verification %s failed", job_id)

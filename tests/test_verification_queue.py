@@ -26,7 +26,14 @@ from agentscrape.db.enums import (
     RunStatus,
     VerificationStatus,
 )
-from agentscrape.db.models import Record, RecordVersion, Run, Site, VerificationJob
+from agentscrape.db.models import (
+    Record,
+    RecordVersion,
+    Run,
+    Site,
+    VerificationAttempt,
+    VerificationJob,
+)
 from agentscrape.orchestrator import scheduler
 from agentscrape.orchestrator.pool import active_run_ids, register, unregister
 from agentscrape.verification import service as verification
@@ -248,7 +255,7 @@ class TestReadingPages:
         """The model grounds everyone it was asked about as a fellow."""
         seen: list[str] = []
 
-        async def fake_verify(*, url, title, text, people, meter=None, provider=None):
+        async def fake_verify(*, url, title, text, people, **kwargs):
             seen.append(text)
             from agentscrape.llm.verify import RoleDecision
             return {p.record_id: RoleDecision("fellow", "fellows") for p in people if p.full_name in text}
@@ -354,7 +361,8 @@ class TestReadingPages:
         await session.commit()
 
         async def page(fetcher, url):
-            return "Naomi Goldrich, Chad Caraway", None
+            # Two roles printed beside the names: only the model can settle it.
+            return "## Residents and Faculty\nNaomi Goldrich, Chad Caraway", None
 
         monkeypatch.setattr(verification, "_read_plain", page)
         # The conftest's offline provider fails every model call.
@@ -379,39 +387,277 @@ class TestReadingPages:
         assert job.records_checked == 2
         assert "verification_error" in job.error
 
-    async def test_a_no_decision_revisits_only_that_link_with_crawl_reader(
-        self, session, monkeypatch
-    ):
-        ids = await _seed_people(session)
-        calls = []
+
+async def _seed_on_pages(session, people: list[tuple[str, str, str]]) -> list[str]:
+    """One record per (name, category, source_url)."""
+    site = Site(root_domain="med.example.edu", canonical_url="https://med.example.edu/", name="Example Medical Center")
+    session.add(site)
+    await session.flush()
+    now = datetime.now(UTC)
+    ids = []
+    for name, category, url in people:
+        record = Record(
+            site_id=site.id, identity_key=f"name:{name}", identity_kind="name",
+            full_name=name, category=category, status=RecordStatus.ACTIVE,
+            confidence=0.9, version_count=1, last_changed_at=now,
+        )
+        session.add(record)
+        await session.flush()
+        version = RecordVersion(
+            record_id=record.id, version_no=1, fields={"full_name": name, "category": category},
+            changed_fields={}, source_url=url, page_title=None, captured_at=now,
+            extraction_method=ExtractionMethod.DISCOVERY, fetch_mode=FetchMode.HTML, confidence=0.9,
+        )
+        session.add(version)
+        await session.flush()
+        record.current_version_id = version.id
+        ids.append(record.id)
+    await session.commit()
+    return ids
+
+
+class TestCrawlFirst:
+    """The crawl is the source of truth; the model only breaks ties."""
+
+    class _Calls(list):
+        """The people each model call was asked about, and what it answers."""
+
+        def __init__(self) -> None:
+            super().__init__()
+            self.answers: dict[str, str] = {}
+
+    @pytest.fixture
+    def model_calls(self, monkeypatch):
+        calls = self._Calls()
+        answers = calls.answers
+
+        async def fake_verify(*, url, title, text, people, meter=None, provider=None, attempts=2):
+            calls.append([p.full_name for p in people])
+            from agentscrape.llm.verify import RoleDecision
+            return {
+                p.record_id: RoleDecision(answers[p.full_name], "Residents")
+                for p in people if p.full_name in answers
+            }
+
+        monkeypatch.setattr(verification, "verify_page_roles", fake_verify)
+        return calls
+
+    @pytest.fixture
+    def pages(self, monkeypatch):
+        texts: dict[str, str] = {}
 
         async def page(fetcher, url):
-            return "Naomi Goldrich, Chad Caraway — Cardiology Fellows", None
+            await asyncio.sleep(0)
+            return texts[url], None
 
-        async def verify_again(*, url, title, text, people, meter=None, provider=None):
-            calls.append((url, people))
-            if len(calls) == 1:
-                return {}
-            from agentscrape.llm.verify import RoleDecision
-            return {person.record_id: RoleDecision("fellow", "Cardiology Fellows") for person in people}
-
-        async def crawl_read(*, url, title, text, meter=None, provider=None):
-            from agentscrape.extraction.person import ExtractedPerson
-            from agentscrape.llm.reader import PageReading
-            from agentscrape.db.enums import PersonCategory
-            return PageReading(
-                ok=True,
-                people=[
-                    ExtractedPerson(full_name="Naomi Goldrich", category=PersonCategory.FELLOW, position="Cardiology Fellow"),
-                    ExtractedPerson(full_name="Chad Caraway", category=PersonCategory.FELLOW, position="Cardiology Fellow"),
-                ],
-            )
+        async def no_browser(self, url):
+            return None, "", "browser: not needed in this test"
 
         monkeypatch.setattr(verification, "_read_plain", page)
-        monkeypatch.setattr(verification, "verify_page_roles", verify_again)
-        monkeypatch.setattr(verification, "read_page", crawl_read)
+        monkeypatch.setattr(verification._Browser, "read", no_browser)
+        return texts
+
+    async def _run(self, session, ids, **kwargs) -> VerificationJob:
+        job = VerificationJob(record_ids=ids)
+        session.add(job)
+        await session.commit()
+        await verification.run_verification(job.id, **kwargs)
+        return await _job(session, job.id)
+
+    async def test_agreeing_roster_is_verified_with_no_model_call(self, session, model_calls, pages):
+        url = "https://med.example.edu/im/residents"
+        pages[url] = "## Current Residents\nNaomi Goldrich, PGY-2\nChad Caraway, PGY-1"
+        ids = await _seed_on_pages(session, [
+            ("Naomi Goldrich", "resident", url), ("Chad Caraway", "resident", url),
+        ])
+        job = await self._run(session, ids)
+        assert job.status == VerificationStatus.COMPLETED, job.error
+        assert job.error is None
+        assert model_calls == []
+        for record_id in ids:
+            record = await session.get(Record, record_id)
+            await session.refresh(record)
+            assert record.verification_outcome == "verified_resident"
+            assert record.roles == ["resident"]
+            assert record.verification_risk == "verified"
+            assert "Current Residents" in record.verification_evidence
+            assert record.version_count == 1
+
+    async def test_only_the_questionable_people_reach_the_model(self, session, model_calls, pages):
+        roster = "https://med.example.edu/residents"
+        alumni = "https://med.example.edu/alumni"
+        pages[roster] = "## Current Residents\nNaomi Goldrich, PGY-2"
+        pages[alumni] = "## Former Residents\nChad Caraway, Class of 2019"
+        ids = await _seed_on_pages(session, [
+            ("Naomi Goldrich", "resident", roster), ("Chad Caraway", "resident", alumni),
+        ])
+        model_calls.answers["Chad Caraway"] = "alumni"
+        job = await self._run(session, ids)
+        assert job.status == VerificationStatus.COMPLETED, job.error
+        assert model_calls == [["Chad Caraway"]]
+        chad = await session.get(Record, ids[1])
+        await session.refresh(chad)
+        assert chad.category == "alumni"
+        assert chad.verification_outcome == "verified_non_trainee"
+
+    @pytest.mark.parametrize("text", [
+        "## 2026 Teaching Award Nominees\nChad Caraway, PGY-2 resident",
+        "## Alumni\nChad Caraway, former resident",
+        "## Residents\nChad Caraway, Assistant Professor of Medicine",
+    ])
+    async def test_a_name_in_the_wrong_context_is_never_verified_on_its_own(
+        self, session, model_calls, pages, text
+    ):
+        url = "https://med.example.edu/page"
+        pages[url] = text
+        ids = await _seed_on_pages(session, [("Chad Caraway", "resident", url)])
+        # The model cannot tell either: the record stays unverified, unchanged.
+        model_calls.answers["Chad Caraway"] = "unknown"
         job = await self._run(session, ids)
         assert job.status == VerificationStatus.COMPLETED
-        assert len(calls) == 2
-        assert calls[0][0] == calls[1][0] == "https://med.example.edu/residents"
-        assert all(person.position == "Cardiology Fellow" for person in calls[1][1])
+        assert model_calls == [["Chad Caraway"]]
+        record = await session.get(Record, ids[0])
+        await session.refresh(record)
+        assert record.verification_outcome == "insufficient_evidence"
+        assert record.category == "resident"
+        assert record.roles is None
+
+    async def test_a_news_article_needs_the_model(self, session, model_calls, pages):
+        url = "https://med.example.edu/news/residents-match"
+        pages[url] = "## Current Residents\nChad Caraway, PGY-2"
+        ids = await _seed_on_pages(session, [("Chad Caraway", "resident", url)])
+        await self._run(session, ids)
+        assert model_calls == [["Chad Caraway"]]
+
+    async def test_a_name_no_longer_on_the_page_costs_no_model_call(self, session, model_calls, pages):
+        url = "https://med.example.edu/residents"
+        pages[url] = "## Current Residents\nSomeone Else, PGY-2"
+        ids = await _seed_on_pages(session, [("Chad Caraway", "resident", url)])
+        job = await self._run(session, ids)
+        assert model_calls == []
+        assert "insufficient_evidence" in job.error
+        record = await session.get(Record, ids[0])
+        await session.refresh(record)
+        assert record.verification_outcome == "insufficient_evidence"
+
+    async def test_a_slow_model_answer_is_an_error_for_that_page_only(
+        self, session, monkeypatch, pages
+    ):
+        slow_url = "https://med.example.edu/mixed"
+        fine_url = "https://med.example.edu/residents"
+        pages[slow_url] = "## Residents and Faculty\nChad Caraway"
+        pages[fine_url] = "## Current Residents\nNaomi Goldrich, PGY-2"
+        ids = await _seed_on_pages(session, [
+            ("Chad Caraway", "resident", slow_url), ("Naomi Goldrich", "resident", fine_url),
+        ])
+
+        async def stuck(**kwargs):
+            await asyncio.sleep(5)
+
+        monkeypatch.setattr(verification, "verify_page_roles", stuck)
+        monkeypatch.setattr(verification.settings, "verification_model_timeout_seconds", 0.05)
+        job = await self._run(session, ids)
+        assert job.status == VerificationStatus.COMPLETED
+        chad, naomi = [await session.get(Record, i) for i in ids]
+        await session.refresh(chad)
+        await session.refresh(naomi)
+        assert chad.verification_outcome == "verification_error"
+        assert naomi.verification_outcome == "verified_resident"
+
+    async def test_waiting_for_a_slot_does_not_count_against_the_page_deadline(
+        self, session, model_calls, monkeypatch
+    ):
+        """848 of 903 records once timed out because every page's deadline
+        started while it was still queued behind the others."""
+        urls = [f"https://med.example.edu/residents/{n}" for n in range(4)]
+        names = ["Ann Alpha", "Ben Bravo", "Cal Charlie", "Dee Delta"]
+
+        async def slowish(fetcher, url):
+            await asyncio.sleep(0.1)
+            return f"## Current Residents\n{names[urls.index(url)]}, PGY-1", None
+
+        monkeypatch.setattr(verification, "_read_plain", slowish)
+        monkeypatch.setattr(verification, "_PAGE_DEADLINE_SECONDS", 0.3)
+        ids = await _seed_on_pages(session, [(n, "resident", u) for n, u in zip(names, urls, strict=True)])
+        job = await self._run(session, ids, concurrency=1)
+        assert job.error is None, job.error
+        for record_id in ids:
+            record = await session.get(Record, record_id)
+            await session.refresh(record)
+            assert record.verification_outcome == "verified_resident"
+
+    async def test_the_pass_limit_saves_work_and_leaves_the_rest_pending(
+        self, session, model_calls, monkeypatch
+    ):
+        fast = "https://med.example.edu/residents"
+        slow = "https://med.example.edu/slow"
+
+        async def page(fetcher, url):
+            if url == slow:
+                await asyncio.sleep(5)
+            return "## Current Residents\nNaomi Goldrich, PGY-2\nChad Caraway, PGY-1", None
+
+        monkeypatch.setattr(verification, "_read_plain", page)
+        ids = await _seed_on_pages(session, [
+            ("Naomi Goldrich", "resident", fast), ("Chad Caraway", "resident", slow),
+        ])
+        job = await self._run(session, ids, time_limit=0.5)
+        # Stopping at the limit is a finished pass with work saved, not a failure.
+        assert job.status == VerificationStatus.COMPLETED
+        assert "verification limit" in job.error
+        assert "1 left pending" in job.error
+        naomi, chad = [await session.get(Record, i) for i in ids]
+        await session.refresh(naomi)
+        await session.refresh(chad)
+        assert naomi.verification_outcome == "verified_resident"
+        # Never reached: not marked as an error, just still to do.
+        assert chad.verification_outcome is None
+        attempts = await session.execute(
+            VerificationAttempt.__table__.select().where(VerificationAttempt.record_id == chad.id)
+        )
+        assert attempts.first() is None
+
+        # The next pass reads the pending record before the confirmed one.
+        order = await verification._targets(session, VerificationJob(record_ids=ids))
+        assert [row[1] for row in order] == [chad.id, naomi.id]
+
+
+class TestAutoVerification:
+    @pytest.fixture(autouse=True)
+    def auto_verify_on(self, monkeypatch):
+        from agentscrape.config import settings
+
+        monkeypatch.setattr(settings, "auto_verify_after_crawl", True)
+
+    async def _crawled(self, session, *, run_id: str | None) -> str:
+        ids = await _seed_people(session)
+        record = await session.get(Record, ids[0])
+        record.last_run_id = run_id
+        await session.commit()
+        return record.site_id
+
+    async def test_a_failed_crawl_that_saved_people_is_still_verified(self, session):
+        from agentscrape.db.session import get_sessionmaker
+        from agentscrape.pipeline.nodes.finalize import queue_verification_for_saved_people
+
+        site_id = await self._crawled(session, run_id="run-with-people")
+        await queue_verification_for_saved_people(
+            get_sessionmaker(), site_id, "run-with-people", "med.example.edu",
+        )
+        jobs = (await session.execute(
+            VerificationJob.__table__.select().where(VerificationJob.site_id == site_id)
+        )).all()
+        assert len(jobs) == 1
+
+    async def test_a_crawl_that_saved_nobody_queues_nothing(self, session):
+        from agentscrape.db.session import get_sessionmaker
+        from agentscrape.pipeline.nodes.finalize import queue_verification_for_saved_people
+
+        site_id = await self._crawled(session, run_id="an-older-run")
+        await queue_verification_for_saved_people(
+            get_sessionmaker(), site_id, "this-run", "med.example.edu",
+        )
+        jobs = (await session.execute(
+            VerificationJob.__table__.select().where(VerificationJob.site_id == site_id)
+        )).all()
+        assert jobs == []

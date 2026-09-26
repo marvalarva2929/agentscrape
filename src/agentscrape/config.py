@@ -36,9 +36,17 @@ class Settings(BaseSettings):
     # Pick up runs that were in flight when the API last stopped. Each school
     # resumes from its checkpoint (after mapping, once per batch of pages).
     resume_runs_on_startup: bool = True
-    # Queue a role-verification pass for each school a crawl completes. It
-    # waits its turn in the run queue behind the crawls already there.
+    # Queue a role-verification pass for each school a crawl saved people for,
+    # even when a later stage (directory search) failed. It waits its turn in
+    # the run queue behind the crawls already there.
     auto_verify_after_crawl: bool = True
+    # The most one verification pass may run, counted from when verification
+    # itself starts - never the crawl or directory time before it. Work done
+    # by then is kept; records it never reached stay pending for the next pass.
+    verification_timeout_seconds: int = 14_400
+    # The most one source page may spend on its single tiebreaker model call.
+    # Below the page deadline, so a slow model costs one page, not the pass.
+    verification_model_timeout_seconds: int = 150
     # Where those snapshots live; blank means the repository's demo/ folder.
     demo_snapshot_dir: str = ""
     # The school spreadsheets staff are sent (CSV or .xlsx, one row per

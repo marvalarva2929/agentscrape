@@ -166,3 +166,57 @@ def test_duplicate_name_cannot_auto_confirm_until_disambiguated() -> None:
     )
     assert (score, risk) == (0.15, "high")
     assert "Multiple records" in reason
+
+
+def _check(text: str, category: str = "resident", **kwargs):
+    from agentscrape.verification.evidence import check_against_crawl
+
+    return check_against_crawl(
+        text=text, url=kwargs.pop("url", "https://med.example.edu/people"),
+        title=kwargs.pop("title", ""), full_name="Mina Shah", category=category, **kwargs,
+    )
+
+
+@pytest.mark.parametrize(
+    ("text", "category", "title"),
+    [
+        ("## Current Residents\nMina Shah\nMD, Emory", "resident", ""),
+        ("Mina Shah, PGY-3", "resident", ""),
+        ("## Cardiology Fellows\nMina Shah, PGY-5", "fellow", ""),
+        ("Mina Shah\nMedical School: Emory", "resident", "Internal Medicine Residents"),
+        ("## Alumni\nMina Shah, Class of 2019", "alumni", ""),
+    ],
+)
+def test_a_page_that_plainly_supports_the_crawl_label_agrees(text, category, title) -> None:
+    check = _check(text, category, title=title)
+    assert check.verdict == "agree", check.reason
+    assert check.evidence
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # The next person's PGY year is not this person's evidence.
+        "## Our People\nMina Shah\nOmar Diaz, PGY-2",
+        "## Residents and Faculty\nMina Shah",
+        "## Current Residents\nMina Shah, Chief Resident\n## Former Residents\nMina Shah, 2018",
+        "## Graduating Residents\nMina Shah",
+        "## Resident Award Nominees\nMina Shah, PGY-2",
+        "## Incoming Interns\nMina Shah",
+    ],
+)
+def test_conflicting_or_questionable_context_goes_to_the_model(text) -> None:
+    assert _check(text).verdict == "ambiguous"
+
+
+def test_a_label_with_nothing_to_check_goes_to_the_model() -> None:
+    assert _check("## Current Residents\nMina Shah", "unknown").verdict == "ambiguous"
+
+
+def test_a_conflicting_printed_position_goes_to_the_model() -> None:
+    check = _check("## Current Residents\nMina Shah", position="Assistant Professor")
+    assert check.verdict == "ambiguous"
+
+
+def test_a_name_not_on_the_page_is_absent() -> None:
+    assert _check("## Current Residents\nOmar Diaz").verdict == "absent"

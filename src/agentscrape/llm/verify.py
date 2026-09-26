@@ -112,13 +112,15 @@ async def verify_page_roles(
     people: list[RoleCheckInput],
     meter: UsageMeter | None = None,
     provider: VisionProvider | None = None,
+    attempts: int = 2,
 ) -> dict[str, RoleDecision] | None:
     """One role per record id, grounded against the page text.
 
     A record missing from the model's response, or whose response could not
     be grounded, is left out of the returned dict entirely - the caller keeps
     that record's existing category rather than treating "not returned" as
-    "no roles". Returns `None`, not `{}`, when the call itself never produced
+    "no roles". `attempts` is how many requests one batch
+    gets before unparseable output is given up on. Returns `None`, not `{}`, when the call itself never produced
     a usable response (a hard provider/model failure, or unparseable output
     even after a retry) - the caller must be able to tell that apart from "the
     model answered but grounded nobody", which returns `{}`/a partial dict.
@@ -146,7 +148,7 @@ async def verify_page_roles(
         )
         payload = None
         failure_recorded = False
-        for attempt in range(2):
+        for attempt in range(max(1, attempts)):
             try:
                 response = await provider.complete(
                     system=VERIFY_ROLES_SYSTEM, user=prompt, meter=meter, model=settings.text_model,

@@ -88,8 +88,13 @@ async def finalize(state: SiteState, deps: PipelineDeps) -> SiteState:
         )
         await session.commit()
 
-    if status == SiteRunStatus.COMPLETED and settings.auto_verify_after_crawl:
-        await _start_auto_verification(deps, site_id, state["root_domain"])
+    # Verification works from the people already saved, so a school whose
+    # directory search (or anything after the crawl) failed is verified all
+    # the same. A cancel is someone asking for less work, not more.
+    if status in (SiteRunStatus.COMPLETED, SiteRunStatus.FAILED):
+        await queue_verification_for_saved_people(
+            deps.sessionmaker, site_id, state.get("run_id"), state["root_domain"],
+        )
 
     event = {
         SiteRunStatus.COMPLETED: EventType.SITE_COMPLETED,
@@ -174,14 +179,27 @@ def _final_status(state: SiteState) -> SiteRunStatus:
     return SiteRunStatus.COMPLETED
 
 
-async def _start_auto_verification(deps: PipelineDeps, site_id: str, domain: str) -> None:
+async def queue_verification_for_saved_people(
+    sessionmaker, site_id: str, run_id: str | None, domain: str,
+) -> None:
     """Queue a check of the site's fresh labels against their source pages,
-    same as the manual "Verify" action, so nobody has to remember to. It
-    waits its turn behind the crawls already queued rather than sharing the
-    model budget with them. Never fatal to the crawl: a failure here is this
-    feature's problem, not the crawl's."""
-    async with deps.sessionmaker() as session:
+    same as the manual "Verify" action, so nobody has to remember to.
+
+    Queued whenever this run saved anyone for the site, however the school's
+    crawl ended afterwards. It waits its turn behind the crawls already
+    queued, and its own time limit starts only when it does. Never fatal to
+    the crawl: a failure here is this feature's problem, not the crawl's."""
+    if not settings.auto_verify_after_crawl or run_id is None:
+        return
+    async with sessionmaker() as session:
         try:
+            saved = await session.scalar(
+                select(Record.id)
+                .where(Record.site_id == site_id, Record.last_run_id == run_id)
+                .limit(1)
+            )
+            if saved is None:
+                return
             await create_verification_job(session, VerificationCreate(site_id=site_id))
         except Exception:
             log.exception("could not start auto-verification for %s", domain)
